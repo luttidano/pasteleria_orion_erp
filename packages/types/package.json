@@ -1,0 +1,14 @@
+{
+  "name": "@repo/types",
+  "version": "0.0.0",
+  "description": "./index.ts",
+  "main": "./index.ts",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc" 
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module"
+}

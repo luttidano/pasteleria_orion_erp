@@ -7,10 +7,8 @@ node_modules
 
 # Local env files
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
 # Testing
 coverage
@@ -36,3 +34,31 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+*.key
+*.crt
+*.cert
+*.pfx
+
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# --- PostgreSQL & Docker ---
+*.dump
+*.backup
+*.sql.gz
+dump.sql
+backup.sql
+pgdata/
+postgres-data/
+.docker/
+# --- Logs & Tooling ---
+logs/
+*.log
+pnpm-debug.log*
+*.tsbuildinfo
+# --- Windows & OS ---
+Thumbs.db
+Desktop.ini

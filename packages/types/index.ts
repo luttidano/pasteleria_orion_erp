@@ -1,6 +1,36 @@
+export type UserRole = 'admin' | 'user';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  createdAt?: string;
+}
+
+export type IngredientCategory =
+  | 'Harinas y Polvos'
+  | 'Lácteos y Huevos'
+  | 'Azúcares y Endulzantes'
+  | 'Chocolates y Cacaos'
+  | 'Frutas, Frutos Secos y Esencias'
+  | 'Grasas y Aceites';
+
+export type StockStatus = 'suficiente' | 'bajo' | 'agotado';
+
 export interface Product {
   id: string;
   name: string;
-  price: number;
+  category: string;
   stock: number;
+  minStock: number;
+  unit: string; // 'kg', 'Litros', 'Unidades', 'Gramos', 'Bandejas'
+  price?: number; // Costo referencial de compra por unidad/kg en CLP
+  description?: string;
+  icon?: string; // Emoji o icono visual (ej: 🌾, 🥛, 🥚, 🧈, 🍫)
+  status?: StockStatus;
+  createdAt?: string;
+  updatedAt?: string;
 }
+
+

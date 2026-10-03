@@ -27,6 +27,7 @@ interface InventoryViewProps {
   onRefresh: () => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   externalFilter?: StatusFilterType;
+  onNavigateToShoppingList?: () => void;
 }
 
 const CATEGORIES: Array<{ label: string; value: 'Todas' | IngredientCategory; icon: string }> = [
@@ -43,6 +44,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   onRefresh,
   addToast,
   externalFilter,
+  onNavigateToShoppingList,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'Todas' | IngredientCategory>('Todas');
@@ -352,20 +354,32 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             )}
           </div>
 
-          {/* Botón de Lista de Compras (filtro rápido) y Modo de Vista */}
+          {/* Botón de Lista de Compras (filtro rápido o módulo completo) y Modo de Vista */}
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setStatusFilter(statusFilter === 'comprar' ? 'todos' : 'comprar')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                statusFilter === 'comprar'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'bg-stone-100 dark:bg-[#221713] text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#2E201A]'
-              }`}
-            >
-              <ShoppingBag className="w-3.5 h-3.5" />
-              <span>{statusFilter === 'comprar' ? 'Viendo lista de compras' : 'Ver lo que falta comprar'}</span>
-            </button>
+            {onNavigateToShoppingList ? (
+              <button
+                type="button"
+                onClick={onNavigateToShoppingList}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-all cursor-pointer active:scale-95"
+                title="Abrir la Lista de Compras completa"
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>Ir a Lista de Compras ({metrics.low + metrics.out})</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === 'comprar' ? 'todos' : 'comprar')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  statusFilter === 'comprar'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-stone-100 dark:bg-[#221713] text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#2E201A]'
+                }`}
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>{statusFilter === 'comprar' ? 'Viendo lista de compras' : 'Ver lo que falta comprar'}</span>
+              </button>
+            )}
 
             {/* Alternar tarjetas o tabla */}
             <div className="flex items-center bg-stone-100 dark:bg-[#221713] p-1 rounded-xl">

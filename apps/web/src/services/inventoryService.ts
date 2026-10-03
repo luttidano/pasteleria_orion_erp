@@ -277,6 +277,18 @@ export const inventoryService = {
   },
 
   /**
+   * Registra una compra de insumos, aumentando el stock disponible
+   */
+  async registerPurchase(id: string, amountBought: number): Promise<Product> {
+    const products = await this.getProducts();
+    const item = products.find((p) => p.id === id);
+    if (!item) throw new Error('Ingrediente no encontrado');
+
+    const nextStock = Math.max(0, item.stock + amountBought);
+    return this.updateProduct(id, { stock: nextStock });
+  },
+
+  /**
    * Restablecer despensa a los ingredientes de muestra de la pastelería
    */
   async resetToDefaults(): Promise<Product[]> {

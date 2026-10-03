@@ -2,15 +2,14 @@ import { useState, useMemo } from 'react';
 import {
   Menu,
   Sparkles,
-  Wheat,
   Sun,
-  Moon,
-  ShoppingCart
+  Moon
 } from 'lucide-react';
 import type { User, Product, ToastMessage } from '../../types';
 import { Sidebar } from './Sidebar';
 import type { AdminSection } from './Sidebar';
 import { InventoryView } from './InventoryView';
+import { ShoppingListView } from './ShoppingListView';
 import { useTheme } from '../../context/ThemeContext';
 
 interface AdminLayoutProps {
@@ -58,11 +57,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
       {/* 2. Área de Contenido Principal */}
       <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
-        {/* Top Header con título perfectamente centrado */}
+        {/* Top Header con título y controles ordenados sin superposición */}
         <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#16100E]/95 backdrop-blur-md border-b border-[#EADBCE] dark:border-[#35251F] shadow-xs">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between relative">
-            {/* Lado izquierdo: Botón móvil si aplica */}
-            <div className="flex items-center z-10">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-3">
+            {/* Lado izquierdo: Botón móvil o espaciador equilibrado */}
+            <div className="flex items-center min-w-[36px]">
               <button
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(true)}
@@ -73,25 +72,25 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               </button>
             </div>
 
-            {/* CENTRO: Título del Módulo Siempre Centrado */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-4 sm:px-12">
-              <div className="flex items-center gap-2 pointer-events-auto">
-                <span className="font-serif text-lg sm:text-xl md:text-2xl font-bold text-[#2A1B16] dark:text-[#FDF5EE] text-center tracking-tight">
+            {/* CENTRO: Título del Módulo, amplio y libre de superposiciones */}
+            <div className="flex-1 flex items-center justify-center text-center min-w-0 px-2">
+              <div className="flex items-center justify-center gap-2 flex-wrap">
+                <span className="font-serif text-base sm:text-xl md:text-2xl font-bold text-[#2A1B16] dark:text-[#FDF5EE] tracking-tight leading-snug">
                   {activeSection === 'despensa' && 'Despensa de Insumos'}
                   {activeSection === 'compras' && 'Lista de Compras de Materias Primas'}
                   {activeSection === 'recetas' && 'Recetario & Fichas Técnicas'}
                   {activeSection === 'proveedores' && 'Directorio de Proveedores'}
                   {activeSection === 'ajustes' && 'Configuración de la Despensa'}
                 </span>
-                <span className="hidden lg:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#8C1F25]/10 dark:bg-[#8C1F25]/30 text-[#8C1F25] dark:text-[#E8A598] text-xs font-semibold">
+                <span className="hidden xl:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#8C1F25]/10 dark:bg-[#8C1F25]/30 text-[#8C1F25] dark:text-[#E8A598] text-xs font-semibold shrink-0">
                   <Sparkles className="w-3 h-3" />
                   Pastelería Orión
                 </span>
               </div>
             </div>
 
-            {/* Lado derecho: Botón Dark Mode único y acceso rápido */}
-            <div className="flex items-center gap-2.5 z-10 ml-auto">
+            {/* Lado derecho: Botón Dark Mode único */}
+            <div className="flex items-center justify-end min-w-[36px] shrink-0">
               <button
                 type="button"
                 onClick={toggleDarkMode}
@@ -101,26 +100,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 {isDarkMode ? (
                   <>
                     <Sun className="w-4 h-4 text-amber-400" />
-                    <span>Modo Claro</span>
+                    <span className="hidden sm:inline">Modo Claro</span>
                   </>
                 ) : (
                   <>
                     <Moon className="w-4 h-4 text-stone-700" />
-                    <span>Modo Oscuro</span>
+                    <span className="hidden sm:inline">Modo Oscuro</span>
                   </>
                 )}
               </button>
-
-              {activeSection !== 'despensa' && (
-                <button
-                  type="button"
-                  onClick={() => setActiveSection('despensa')}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                >
-                  <Wheat className="w-3.5 h-3.5" />
-                  <span>Ir a Despensa</span>
-                </button>
-              )}
             </div>
           </div>
         </header>
@@ -135,35 +123,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               onRefresh={onRefresh}
               addToast={addToast}
               externalFilter="todos"
+              onNavigateToShoppingList={() => setActiveSection('compras')}
             />
           )}
 
-          {/* B. Módulo de Lista de Compras (filtra directamente lo que falta) */}
+          {/* B. Módulo de Lista de Compras Especializado */}
           {activeSection === 'compras' && (
-            <div className="space-y-4">
-              <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center justify-between text-xs text-amber-900">
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="w-4 h-4 text-amber-700" />
-                  <span>
-                    Estás viendo únicamente los <strong>insumos que necesitan reposición o compra</strong> para el taller de pastelería.
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveSection('despensa')}
-                  className="font-bold text-[#8C1F25] hover:underline"
-                >
-                  Volver a ver todo
-                </button>
-              </div>
-
-              <InventoryView
-                products={products}
-                onRefresh={onRefresh}
-                addToast={addToast}
-                externalFilter="comprar"
-              />
-            </div>
+            <ShoppingListView
+              products={products}
+              onRefresh={onRefresh}
+              addToast={addToast}
+            />
           )}
 
           {/* C. Módulo de Recetas & Fichas Técnicas (Vista previa conectada a la despensa) */}

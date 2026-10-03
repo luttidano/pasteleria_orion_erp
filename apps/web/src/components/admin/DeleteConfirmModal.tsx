@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { Trash2, AlertTriangle, X } from 'lucide-react';
 import type { Product } from '../../types';
 
@@ -19,7 +20,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 }) => {
   if (!isOpen || !product) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-[#FAF5ED] dark:bg-[#16100E] rounded-3xl max-w-md w-full shadow-2xl border border-[#DFCAA9] dark:border-[#35251F] overflow-hidden animate-modal-pop">
         <div className="p-6">
@@ -82,6 +83,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

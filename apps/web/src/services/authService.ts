@@ -169,11 +169,11 @@ export const authService = {
       }
     }
 
-    // Si Supabase no está configurado en este equipo (falta archivo .env)
+    // Si el servicio no está configurado en este equipo (falta archivo .env)
     return {
       success: false,
       error:
-        'Supabase no está conectado en este equipo (falta el archivo .env en la raíz con VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY). Configura el entorno o reinicia el servidor de desarrollo.',
+        'El sistema se encuentra en modo local sin conexión al servidor central. Configura el archivo de entorno (.env) o reinicia el servidor.',
     };
   },
 

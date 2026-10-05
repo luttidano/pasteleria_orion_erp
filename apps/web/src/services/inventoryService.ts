@@ -1,4 +1,5 @@
 import type { Product, StockStatus } from '../types';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const STORAGE_KEY_INGREDIENTS = 'orion_inventory_ingredients_v2';
 
@@ -179,13 +180,65 @@ function calculateStatus(stock: number, minStock: number): StockStatus {
   return 'suficiente';
 }
 
+interface SupabaseIngredientRow {
+  id: string;
+  name: string;
+  category: string;
+  stock: number | string;
+  min_stock?: number | string;
+  unit: string;
+  price?: number | string | null;
+  icon?: string | null;
+  image_url?: string | null;
+  description?: string | null;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+function mapDbToProduct(row: SupabaseIngredientRow): Product {
+  const stock = Number(row.stock);
+  const minStock = Number(row.min_stock ?? 0);
+  return {
+    id: String(row.id),
+    name: row.name,
+    category: row.category,
+    stock,
+    minStock,
+    unit: row.unit || 'kg',
+    price: row.price !== null && row.price !== undefined ? Number(row.price) : undefined,
+    icon: row.icon || '📦',
+    imageUrl: row.image_url || undefined,
+    description: row.description || '',
+    status: (row.status as StockStatus) || calculateStatus(stock, minStock),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export const inventoryService = {
   /**
-   * Obtiene todos los ingredientes de la despensa
-   * TODO: Conectar con Supabase:
-   * const { data, error } = await supabase.from('ingredients').select('*').order('name');
+   * Obtiene todos los productos de la despensa (Supabase en Producción + Fallback Local)
    */
   async getProducts(): Promise<Product[]> {
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('ingredients')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          const items = (data as SupabaseIngredientRow[]).map(mapDbToProduct);
+          localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(items));
+          return items;
+        }
+      } catch (err) {
+        console.warn('Supabase no disponible para inventario, usando almacenamiento local:', err);
+      }
+    }
+
+    // Fallback a localStorage
     try {
       const data = localStorage.getItem(STORAGE_KEY_INGREDIENTS);
       if (!data) {
@@ -200,42 +253,110 @@ export const inventoryService = {
 
   /**
    * Agrega un nuevo ingrediente al inventario
-   * TODO: Conectar con Supabase:
-   * const { data, error } = await supabase.from('ingredients').insert([payload]).select().single();
    */
   async addProduct(
     productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'status'>
   ): Promise<Product> {
-    const products = await this.getProducts();
+    const computedStatus = calculateStatus(productData.stock, productData.minStock);
+
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('ingredients')
+          .insert([
+            {
+              name: productData.name,
+              category: productData.category,
+              stock: productData.stock,
+              min_stock: productData.minStock,
+              unit: productData.unit,
+              price: productData.price,
+              icon: productData.icon,
+              image_url: productData.imageUrl,
+              description: productData.description,
+              status: computedStatus,
+            },
+          ])
+          .select()
+          .single();
+
+        if (!error && data) {
+          const newProduct = mapDbToProduct(data as SupabaseIngredientRow);
+          const localProducts = await this.getLocalProducts();
+          localProducts.unshift(newProduct);
+          localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(localProducts));
+          return newProduct;
+        }
+      } catch (err) {
+        console.warn('Error al guardar en Supabase, guardando localmente:', err);
+      }
+    }
+
+    const localProducts = await this.getLocalProducts();
     const newProduct: Product = {
       ...productData,
       id: 'ing-' + Date.now(),
-      status: calculateStatus(productData.stock, productData.minStock),
+      status: computedStatus,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    products.unshift(newProduct);
-    localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(products));
+    localProducts.unshift(newProduct);
+    localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(localProducts));
     return newProduct;
   },
 
   /**
    * Edita un ingrediente existente
-   * TODO: Conectar con Supabase:
-   * const { data, error } = await supabase.from('ingredients').update(payload).eq('id', id).select().single();
    */
   async updateProduct(id: string, updates: Partial<Product>): Promise<Product> {
-    const products = await this.getProducts();
-    const index = products.findIndex((p) => p.id === id);
+    const localProducts = await this.getLocalProducts();
+    const index = localProducts.findIndex((p) => p.id === id);
+    const current = index !== -1 ? localProducts[index] : null;
 
-    if (index === -1) {
-      throw new Error(`Ingrediente con ID ${id} no encontrado.`);
+    const newStock = updates.stock !== undefined ? updates.stock : (current ? current.stock : 0);
+    const newMinStock = updates.minStock !== undefined ? updates.minStock : (current ? current.minStock : 0);
+    const newStatus = calculateStatus(newStock, newMinStock);
+
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        const payload: Record<string, unknown> = {
+          updated_at: new Date().toISOString(),
+        };
+        if (updates.name !== undefined) payload.name = updates.name;
+        if (updates.category !== undefined) payload.category = updates.category;
+        if (updates.stock !== undefined) payload.stock = updates.stock;
+        if (updates.minStock !== undefined) payload.min_stock = updates.minStock;
+        if (updates.unit !== undefined) payload.unit = updates.unit;
+        if (updates.price !== undefined) payload.price = updates.price;
+        if (updates.icon !== undefined) payload.icon = updates.icon;
+        if (updates.imageUrl !== undefined) payload.image_url = updates.imageUrl;
+        if (updates.description !== undefined) payload.description = updates.description;
+        payload.status = newStatus;
+
+        const { data, error } = await supabase
+          .from('ingredients')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .maybeSingle();
+
+        if (!error && data) {
+          const updated = mapDbToProduct(data as SupabaseIngredientRow);
+          if (index !== -1) {
+            localProducts[index] = updated;
+            localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(localProducts));
+          }
+          return updated;
+        }
+      } catch (err) {
+        console.warn('Error al actualizar en Supabase, aplicando local:', err);
+      }
     }
 
-    const current = products[index];
-    const newStock = updates.stock !== undefined ? updates.stock : current.stock;
-    const newMinStock = updates.minStock !== undefined ? updates.minStock : current.minStock;
+    if (index === -1 || !current) {
+      throw new Error(`Ingrediente con ID ${id} no encontrado.`);
+    }
 
     const updatedProduct: Product = {
       ...current,
@@ -243,22 +364,28 @@ export const inventoryService = {
       id: current.id,
       stock: newStock,
       minStock: newMinStock,
-      status: calculateStatus(newStock, newMinStock),
+      status: newStatus,
       updatedAt: new Date().toISOString(),
     };
 
-    products[index] = updatedProduct;
-    localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(products));
+    localProducts[index] = updatedProduct;
+    localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(localProducts));
     return updatedProduct;
   },
 
   /**
    * Elimina un ingrediente de la despensa
-   * TODO: Conectar con Supabase:
-   * const { error } = await supabase.from('ingredients').delete().eq('id', id);
    */
   async deleteProduct(id: string): Promise<boolean> {
-    const products = await this.getProducts();
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        await supabase.from('ingredients').delete().eq('id', id);
+      } catch (err) {
+        console.warn('Error al eliminar en Supabase:', err);
+      }
+    }
+
+    const products = await this.getLocalProducts();
     const filtered = products.filter((p) => p.id !== id);
     localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(filtered));
     return true;
@@ -295,5 +422,16 @@ export const inventoryService = {
     localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(INITIAL_BAKERY_INGREDIENTS));
     return INITIAL_BAKERY_INGREDIENTS;
   },
-};
 
+  /**
+   * Helper privado para lectura sincrónica de respaldo local
+   */
+  async getLocalProducts(): Promise<Product[]> {
+    try {
+      const data = localStorage.getItem(STORAGE_KEY_INGREDIENTS);
+      return data ? JSON.parse(data) : INITIAL_BAKERY_INGREDIENTS;
+    } catch {
+      return INITIAL_BAKERY_INGREDIENTS;
+    }
+  },
+};

@@ -11,7 +11,7 @@ import './App.css';
 
 
 function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -47,9 +47,16 @@ function App() {
   }, [addToast]);
 
   useEffect(() => {
-    const user = authService.getCurrentUser();
-    setCurrentUser(user);
     loadProducts().finally(() => setIsLoading(false));
+
+    // Suscripción reactiva a cambios de sesión (login, logout, refresh en Supabase)
+    const { unsubscribe } = authService.subscribeToAuthChanges((updatedUser) => {
+      setCurrentUser(updatedUser);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [loadProducts]);
 
   const handleLoginSuccess = (user: User) => {

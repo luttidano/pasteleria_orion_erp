@@ -5,6 +5,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  avatarUrl?: string; // URL en Cloudflare R2
   createdAt?: string;
 }
 
@@ -28,6 +29,7 @@ export interface Product {
   price?: number; // Costo por unidad/kg en CLP
   description?: string;
   icon?: string;
+  imageUrl?: string; // URL en Cloudflare R2 / CDN
   status?: StockStatus;
   createdAt?: string;
   updatedAt?: string;

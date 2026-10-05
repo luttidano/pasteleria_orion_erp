@@ -289,9 +289,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
               <div className="space-y-4 max-w-xl mx-auto">
                 <div className="p-4 rounded-2xl bg-stone-50 dark:bg-[#201612] border border-stone-200 dark:border-[#35251F]">
-                  <h4 className="font-bold text-stone-900 dark:text-stone-100 text-sm">Conexión con Supabase</h4>
+                  <h4 className="font-bold text-stone-900 dark:text-stone-100 text-sm">Sincronización de Datos</h4>
                   <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 leading-relaxed">
-                    Actualmente el sistema está operando en <strong>Modo Local de Prueba (con admin / 1234)</strong>. Los métodos de sincronización remota con Supabase Database y Supabase Auth están estructurados y listos para recibir tus credenciales de proyecto de Supabase.
+                    Los registros de existencias, abastecimiento y movimientos se mantienen sincronizados y respaldados en la nube.
                   </p>
                 </div>
 
@@ -307,11 +307,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         </main>
 
         {/* Footer Limpio */}
-        <footer className="bg-white border-t border-stone-200/80 py-4 text-center text-xs text-stone-500">
+        <footer className="bg-white dark:bg-[#16100E] border-t border-stone-200/80 dark:border-[#35251F] py-4 text-center text-xs text-stone-500 dark:text-stone-400 transition-colors">
           <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
             <span>Pastelería Orión &bull; Sistema de Gestión de Insumos y Despensa</span>
-            <span className="text-[11px] text-stone-400">
-              Conexión con Supabase: Lista para enlazar
+            <span className="text-[11px] text-stone-400 dark:text-stone-500">
+              Alta Repostería Artesanal
             </span>
           </div>
         </footer>

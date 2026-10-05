@@ -99,8 +99,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         description: description.trim() || undefined,
       });
       onClose();
-    } catch {
-      setError('Ocurrió un error al guardar el ingrediente.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Ocurrió un error al guardar el ingrediente.';
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }

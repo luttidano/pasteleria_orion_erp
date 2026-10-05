@@ -3,177 +3,6 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const STORAGE_KEY_INGREDIENTS = 'orion_inventory_ingredients_v2';
 
-const INITIAL_BAKERY_INGREDIENTS: Product[] = [
-  {
-    id: 'ing-001',
-    name: 'Harina de Trigo Repostera (Sin polvos)',
-    category: 'Harinas y Polvos',
-    stock: 50,
-    minStock: 20,
-    unit: 'kg',
-    price: 1250,
-    icon: '🌾',
-    description: 'Harina fina especial para bizcochos, tortas y masas quebradas.',
-    status: 'suficiente',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ing-002',
-    name: 'Mantequilla sin Sal 82% materia grasa',
-    category: 'Lácteos y Huevos',
-    stock: 8,
-    minStock: 15,
-    unit: 'kg',
-    price: 6800,
-    icon: '🧈',
-    description: 'Fundamental para hojaldres, croissants y cremas de mantequilla.',
-    status: 'bajo',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ing-003',
-    name: 'Leche Entera Natural Pasteurizada',
-    category: 'Lácteos y Huevos',
-    stock: 24,
-    minStock: 10,
-    unit: 'Litros',
-    price: 1100,
-    icon: '🥛',
-    description: 'Para remojo de bizcochos, tres leches y cremas pasteleras.',
-    status: 'suficiente',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ing-004',
-    name: 'Huevos Frescos de Campo (Bandeja 30 un)',
-    category: 'Lácteos y Huevos',
-    stock: 6,
-    minStock: 4,
-    unit: 'Bandejas',
-    price: 6500,
-    icon: '🥚',
-    description: 'Huevos frescos seleccionados para merengues, queques y batidos.',
-    status: 'suficiente',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ing-005',
-    name: 'Crema de Leche para Batir 35%',
-    category: 'Lácteos y Huevos',
-    stock: 3,
-    minStock: 8,
-    unit: 'Litros',
-    price: 4900,
-    icon: '🍶',
-    description: 'Crema espesa para chantilly fresco y ganache de chocolate.',
-    status: 'bajo',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ing-006',
-    name: 'Azúcar Granulada Blanca',
-    category: 'Azúcares y Dulces',
-    stock: 35,
-    minStock: 15,
-    unit: 'kg',
-    price: 1350,
-    icon: '🍬',
-    description: 'Azúcar pura para batidos y almíbares.',
-    status: 'suficiente',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ing-007',
-    name: 'Azúcar Flor / Glacé Cernida',
-    category: 'Azúcares y Dulces',
-    stock: 0,
-    minStock: 6,
-    unit: 'kg',
-    price: 2100,
-    icon: '🍥',
-    description: 'Para glaseados finos, macarons y espolvorear masas.',
-    status: 'agotado',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ing-008',
-    name: 'Chocolate Semi-Amargo 60% Gotas',
-    category: 'Chocolates y Cacaos',
-    stock: 12,
-    minStock: 8,
-    unit: 'kg',
-    price: 8900,
-    icon: '🍫',
-    description: 'Para fundir, ganache, selva negra y volcanes de chocolate.',
-    status: 'suficiente',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ing-009',
-    name: 'Manjar Artesanal de Campo Tradicional',
-    category: 'Azúcares y Dulces',
-    stock: 18,
-    minStock: 10,
-    unit: 'kg',
-    price: 3600,
-    icon: '🍯',
-    description: 'Dulce de leche repostero consistente para relleno de tortas y alfajores.',
-    status: 'suficiente',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ing-010',
-    name: 'Polvo de Hornear Doble Acción',
-    category: 'Harinas y Polvos',
-    stock: 4,
-    minStock: 2,
-    unit: 'kg',
-    price: 4500,
-    icon: '✨',
-    description: 'Leudante químico para queques esponjosos y galletas.',
-    status: 'suficiente',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ing-011',
-    name: 'Extracto Puro de Vainilla Bourbon',
-    category: 'Frutas y Esencias',
-    stock: 1,
-    minStock: 3,
-    unit: 'Litros',
-    price: 18000,
-    icon: '🌸',
-    description: 'Esencia aromática natural para cremas y masas.',
-    status: 'bajo',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ing-012',
-    name: 'Frutos Rojos Mixtos Congelados',
-    category: 'Frutas y Esencias',
-    stock: 10,
-    minStock: 5,
-    unit: 'kg',
-    price: 5200,
-    icon: '🍓',
-    description: 'Frambuesas, moras y arándanos para cheesecakes y coulis.',
-    status: 'suficiente',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
 function calculateStatus(stock: number, minStock: number): StockStatus {
   if (stock <= 0) return 'agotado';
   if (stock <= minStock) return 'bajo';
@@ -230,24 +59,24 @@ export const inventoryService = {
 
         if (!error && data) {
           const items = (data as SupabaseIngredientRow[]).map(mapDbToProduct);
+          // Reflejar exactamente los datos de Supabase en el almacenamiento local
           localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(items));
           return items;
+        }
+        if (error) {
+          console.warn('Error al consultar ingredientes en Supabase:', error.message);
         }
       } catch (err) {
         console.warn('Supabase no disponible para inventario, usando almacenamiento local:', err);
       }
     }
 
-    // Fallback a localStorage
+    // Fallback a localStorage (solo si Supabase no está configurado)
     try {
       const data = localStorage.getItem(STORAGE_KEY_INGREDIENTS);
-      if (!data) {
-        localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(INITIAL_BAKERY_INGREDIENTS));
-        return INITIAL_BAKERY_INGREDIENTS;
-      }
-      return JSON.parse(data);
+      return data ? JSON.parse(data) : [];
     } catch {
-      return INITIAL_BAKERY_INGREDIENTS;
+      return [];
     }
   },
 
@@ -270,17 +99,28 @@ export const inventoryService = {
               stock: productData.stock,
               min_stock: productData.minStock,
               unit: productData.unit,
-              price: productData.price,
+              price: productData.price !== undefined ? productData.price : 0,
               icon: productData.icon,
-              image_url: productData.imageUrl,
-              description: productData.description,
+              image_url: productData.imageUrl || null,
+              description: productData.description || null,
               status: computedStatus,
             },
           ])
           .select()
           .single();
 
-        if (!error && data) {
+        if (error) {
+          console.error('Error al insertar ingrediente en Supabase:', error);
+          let userMsg = error.message;
+          if (error.code === '42P17') {
+            userMsg = 'Error en Supabase: Recursión infinita en políticas RLS. Por favor ejecuta el script supabase/schema.sql actualizado en el SQL Editor de Supabase.';
+          } else if (error.code === '42501') {
+            userMsg = 'No tienes permisos de administrador en Supabase para crear ingredientes. Verifica que tu usuario tenga role = "admin" en la tabla profiles.';
+          }
+          throw new Error(userMsg);
+        }
+
+        if (data) {
           const newProduct = mapDbToProduct(data as SupabaseIngredientRow);
           const localProducts = await this.getLocalProducts();
           localProducts.unshift(newProduct);
@@ -288,14 +128,18 @@ export const inventoryService = {
           return newProduct;
         }
       } catch (err) {
-        console.warn('Error al guardar en Supabase, guardando localmente:', err);
+        console.error('Fallo en addProduct:', err);
+        throw err;
       }
     }
 
+    // Modo local / demo cuando no hay conexión activa
     const localProducts = await this.getLocalProducts();
     const newProduct: Product = {
       ...productData,
-      id: 'ing-' + Date.now(),
+      id: typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0'),
       status: computedStatus,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -318,7 +162,9 @@ export const inventoryService = {
     const newMinStock = updates.minStock !== undefined ? updates.minStock : (current ? current.minStock : 0);
     const newStatus = calculateStatus(newStock, newMinStock);
 
-    if (isSupabaseConfigured() && supabase) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    if (isSupabaseConfigured() && supabase && isUuid) {
       try {
         const payload: Record<string, unknown> = {
           updated_at: new Date().toISOString(),
@@ -341,7 +187,18 @@ export const inventoryService = {
           .select()
           .maybeSingle();
 
-        if (!error && data) {
+        if (error) {
+          console.error('Error al actualizar en Supabase:', error);
+          let userMsg = error.message;
+          if (error.code === '42P17') {
+            userMsg = 'Error en Supabase: Recursión infinita en políticas RLS. Por favor ejecuta el script supabase/schema.sql actualizado en el SQL Editor de Supabase.';
+          } else if (error.code === '42501') {
+            userMsg = 'No tienes permisos de administrador para modificar ingredientes.';
+          }
+          throw new Error(userMsg);
+        }
+
+        if (data) {
           const updated = mapDbToProduct(data as SupabaseIngredientRow);
           if (index !== -1) {
             localProducts[index] = updated;
@@ -350,7 +207,8 @@ export const inventoryService = {
           return updated;
         }
       } catch (err) {
-        console.warn('Error al actualizar en Supabase, aplicando local:', err);
+        console.error('Fallo en updateProduct:', err);
+        throw err;
       }
     }
 
@@ -377,11 +235,23 @@ export const inventoryService = {
    * Elimina un ingrediente de la despensa
    */
   async deleteProduct(id: string): Promise<boolean> {
-    if (isSupabaseConfigured() && supabase) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    // Solo consultar Supabase si el ID es un UUID válido de la base de datos
+    if (isSupabaseConfigured() && supabase && isUuid) {
       try {
-        await supabase.from('ingredients').delete().eq('id', id);
+        const { error } = await supabase.from('ingredients').delete().eq('id', id);
+        if (error) {
+          console.error('Error al eliminar en Supabase:', error);
+          let userMsg = error.message;
+          if (error.code === '42501') {
+            userMsg = 'No tienes permisos de administrador para eliminar ingredientes.';
+          }
+          throw new Error(userMsg);
+        }
       } catch (err) {
-        console.warn('Error al eliminar en Supabase:', err);
+        console.error('Fallo en deleteProduct:', err);
+        throw err;
       }
     }
 
@@ -416,11 +286,11 @@ export const inventoryService = {
   },
 
   /**
-   * Restablecer despensa a los ingredientes de muestra de la pastelería
+   * Restablecer despensa (vaciar inventario local)
    */
   async resetToDefaults(): Promise<Product[]> {
-    localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(INITIAL_BAKERY_INGREDIENTS));
-    return INITIAL_BAKERY_INGREDIENTS;
+    localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify([]));
+    return [];
   },
 
   /**
@@ -429,9 +299,9 @@ export const inventoryService = {
   async getLocalProducts(): Promise<Product[]> {
     try {
       const data = localStorage.getItem(STORAGE_KEY_INGREDIENTS);
-      return data ? JSON.parse(data) : INITIAL_BAKERY_INGREDIENTS;
+      return data ? JSON.parse(data) : [];
     } catch {
-      return INITIAL_BAKERY_INGREDIENTS;
+      return [];
     }
   },
 };

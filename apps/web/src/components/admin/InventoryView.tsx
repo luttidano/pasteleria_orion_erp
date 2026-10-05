@@ -111,10 +111,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         title: 'Existencia actualizada',
         message: `${ingredient.name}: ${Math.max(0, ingredient.stock + delta)} ${ingredient.unit}`,
       });
-    } catch {
+    } catch (err: unknown) {
       addToast({
         type: 'error',
         title: 'Error al ajustar cantidad',
+        message: err instanceof Error ? err.message : 'No se pudo actualizar la cantidad en la base de datos.',
       });
     }
   };
@@ -154,6 +155,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       });
       await onRefresh();
       setIngredientToDelete(null);
+    } catch (err: unknown) {
+      addToast({
+        type: 'error',
+        title: 'Error al eliminar ingrediente',
+        message: err instanceof Error ? err.message : 'No se pudo eliminar el ingrediente.',
+      });
     } finally {
       setIsDeleting(false);
     }
@@ -401,17 +408,36 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
 
       {/* 4. Lista o Cuadrícula de Ingredientes */}
-      {filteredProducts.length === 0 ? (
-        <div className="bg-white p-12 rounded-[24px] border border-stone-200 text-center animate-fade-in">
+      {products.length === 0 ? (
+        <div className="bg-white dark:bg-[#16100E] p-12 rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] text-center animate-fade-in shadow-xs">
+          <div className="text-4xl mb-3">🧁</div>
+          <h3 className="font-bold text-[#1C120D] dark:text-[#FBF4EB] text-base font-serif">
+            La despensa está vacía
+          </h3>
+          <p className="text-xs text-[#7C695C] dark:text-[#B39F93] mt-1 max-w-sm mx-auto">
+            Aún no has registrado ingredientes ni materias primas en la base de datos.
+          </p>
+          <button
+            onClick={() => {
+              setIngredientToEdit(null);
+              setIsModalOpen(true);
+            }}
+            className="mt-4 px-4 py-2.5 bg-[#8C1F25] hover:bg-[#74191E] text-white rounded-xl text-xs font-semibold cursor-pointer shadow-btn transition-colors inline-flex items-center gap-1.5"
+          >
+            <span>+ Agregar primer ingrediente</span>
+          </button>
+        </div>
+      ) : filteredProducts.length === 0 ? (
+        <div className="bg-white dark:bg-[#16100E] p-12 rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] text-center animate-fade-in shadow-xs">
           <div className="text-4xl mb-3">🧺</div>
-          <h3 className="font-bold text-stone-800 text-base">
+          <h3 className="font-bold text-[#1C120D] dark:text-[#FBF4EB] text-base">
             {statusFilter === 'agotado'
               ? '¡No hay ingredientes agotados!'
               : statusFilter === 'bajo'
               ? '¡No hay ingredientes con stock bajo!'
               : 'No hay ingredientes con este criterio'}
           </h3>
-          <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
+          <p className="text-xs text-[#7C695C] dark:text-[#B39F93] mt-1 max-w-sm mx-auto">
             {statusFilter === 'agotado'
               ? 'Todos tus insumos tienen existencias en despensa.'
               : statusFilter === 'bajo'
@@ -424,7 +450,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               setSelectedCategory('Todas');
               setStatusFilter('todos');
             }}
-            className="mt-4 px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-semibold cursor-pointer"
+            className="mt-4 px-4 py-2 bg-stone-100 hover:bg-stone-200 dark:bg-[#251A15] dark:hover:bg-[#32231D] text-[#1C120D] dark:text-[#FBF4EB] rounded-xl text-xs font-semibold cursor-pointer"
           >
             Ver todos los ingredientes
           </button>

@@ -228,7 +228,7 @@ export const inventoryService = {
           .select('*')
           .order('name', { ascending: true });
 
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           const items = (data as SupabaseIngredientRow[]).map(mapDbToProduct);
           localStorage.setItem(STORAGE_KEY_INGREDIENTS, JSON.stringify(items));
           return items;

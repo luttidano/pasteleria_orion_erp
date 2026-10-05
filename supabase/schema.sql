@@ -132,22 +132,6 @@ create policy "Solo administradores pueden eliminar ingredientes"
     )
   );
 
--- 4. POBLAR INGREDIENTES INICIALES DE PASTELERÍA (Opcional)
-insert into public.ingredients (name, category, stock, min_stock, unit, price, icon, description, status)
-values
-  ('Harina de Trigo Repostera (Sin polvos)', 'Harinas y Polvos', 50, 20, 'kg', 1250, '🌾', 'Harina fina especial para bizcochos, tortas y masas quebradas.', 'suficiente'),
-  ('Mantequilla sin Sal 82% materia grasa', 'Lácteos y Huevos', 8, 15, 'kg', 6800, '🧈', 'Fundamental para hojaldres, croissants y cremas de mantequilla.', 'bajo'),
-  ('Leche Entera Natural Pasteurizada', 'Lácteos y Huevos', 24, 10, 'Litros', 1100, '🥛', 'Para remojo de bizcochos, tres leches y cremas pasteleras.', 'suficiente'),
-  ('Huevos Frescos de Campo (Bandeja 30 un)', 'Lácteos y Huevos', 6, 4, 'Bandejas', 6500, '🥚', 'Huevos frescos seleccionados para merengues, queques y batidos.', 'suficiente'),
-  ('Crema de Leche para Batir 35%', 'Lácteos y Huevos', 3, 8, 'Litros', 4900, '🍶', 'Crema espesa para chantilly fresco y ganache de chocolate.', 'bajo'),
-  ('Azúcar Granulada Blanca', 'Azúcares y Dulces', 35, 15, 'kg', 1350, '🍬', 'Azúcar pura para batidos y almíbares.', 'suficiente'),
-  ('Azúcar Flor / Glacé Cernida', 'Azúcares y Dulces', 0, 6, 'kg', 2100, '🍥', 'Para glaseados finos, macarons y espolvorear masas.', 'agotado'),
-  ('Chocolate Semi-Amargo 60% Gotas', 'Chocolates y Cacaos', 12, 8, 'kg', 8900, '🍫', 'Para fundir, ganache, selva negra y volcanes de chocolate.', 'suficiente'),
-  ('Manjar Artesanal de Campo Tradicional', 'Azúcares y Dulces', 18, 10, 'kg', 3600, '🍯', 'Dulce de leche repostero consistente para relleno de tortas y alfajores.', 'suficiente'),
-  ('Polvo de Hornear Doble Acción', 'Harinas y Polvos', 4, 2, 'kg', 4500, '✨', 'Leudante químico para queques esponjosos y galletas.', 'suficiente'),
-  ('Extracto Puro de Vainilla Bourbon', 'Frutas y Esencias', 1, 3, 'Litros', 18000, '🌸', 'Esencia aromática natural para cremas y masas.', 'bajo'),
-  ('Frutos Rojos Mixtos Congelados', 'Frutas y Esencias', 10, 5, 'kg', 5200, '🍓', 'Frambuesas, moras y arándanos para cheesecakes y coulis.', 'suficiente')
-on conflict do nothing;
-
--- 5. COMANDO ÚTIL PARA CONVERTIR UN USUARIO EN ADMINISTRADOR:
+-- 4. COMANDO ÚTIL PARA ASIGNAR ROL DE ADMINISTRADOR MANUALMENTE (Opcional):
 -- update public.profiles set role = 'admin' where email = 'tu_correo@dominio.com';
+

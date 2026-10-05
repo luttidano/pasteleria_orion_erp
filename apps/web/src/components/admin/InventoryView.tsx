@@ -4,7 +4,6 @@ import {
   Plus,
   Edit2,
   Trash2,
-  RotateCcw,
   Minus,
   Plus as PlusIcon,
   LayoutGrid,
@@ -63,7 +62,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [ingredientToEdit, setIngredientToEdit] = useState<Product | null>(null);
   const [ingredientToDelete, setIngredientToDelete] = useState<Product | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
 
   // Accurate bakery metrics
   const metrics = useMemo(() => {
@@ -161,24 +159,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     }
   };
 
-  // Reset to default sample ingredients
-  const handleResetDefaults = async () => {
-    if (window.confirm('¿Quieres volver a cargar la lista de ingredientes iniciales de la pastelería (Harina, Mantequilla, Leche, Huevos, etc.)?')) {
-      setIsResetting(true);
-      try {
-        await inventoryService.resetToDefaults();
-        await onRefresh();
-        addToast({
-          type: 'success',
-          title: 'Despensa reiniciada',
-          message: 'Se cargaron los insumos básicos de pastelería.',
-        });
-      } finally {
-        setIsResetting(false);
-      }
-    }
-  };
-
   return (
     <div className="space-y-6 animate-fade-in max-w-5xl mx-auto">
       {/* 1. Header con título centrado y acogedor */}
@@ -193,17 +173,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         </div>
 
         <div className="flex items-center justify-center gap-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={handleResetDefaults}
-            disabled={isResetting}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-[#201613] text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#2C1F1A] text-xs font-semibold transition-colors cursor-pointer"
-            title="Carga de nuevo los ingredientes básicos de muestra"
-          >
-            <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
-            <span>Recargar Ejemplos</span>
-          </button>
-
           <button
             type="button"
             onClick={() => {

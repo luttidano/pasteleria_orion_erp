@@ -4,14 +4,6 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 const STORAGE_KEY_USER = 'orion_current_user';
 const STORAGE_KEY_REGISTERED_USERS = 'orion_users_db';
 
-// Usuario administrador local para entorno de pruebas / fallback
-const ADMIN_USER: User = {
-  id: 'admin-001',
-  name: 'Administrador Orión',
-  email: 'admin@pasteleriaorion.com',
-  role: 'admin',
-  createdAt: new Date().toISOString(),
-};
 
 export interface LoginResult {
   success: boolean;
@@ -71,35 +63,21 @@ export const authService = {
   },
 
   /**
-   * Iniciar sesión (Producción con Supabase + Fallback local para pruebas)
+   * Iniciar sesión (Supabase Auth)
    */
   async login(identifier: string, password: string): Promise<LoginResult> {
     const cleanId = identifier.trim().toLowerCase();
     const cleanPass = password.trim();
 
     if (!cleanId || !cleanPass) {
-      return { success: false, error: 'Por favor ingresa usuario/correo y contraseña.' };
+      return { success: false, error: 'Por favor ingresa tu correo electrónico y contraseña.' };
     }
 
-    // 1. Verificación rápida de credenciales de prueba locales (admin / 1234)
-    if (
-      (cleanId === 'admin' ||
-        cleanId === 'admin@pasteleriaorion.com' ||
-        cleanId === 'admin@correo.com') &&
-      cleanPass === '1234'
-    ) {
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(ADMIN_USER));
-      return { success: true, user: ADMIN_USER };
-    }
-
-    // 2. Si Supabase está configurado, autenticar en producción con Supabase Auth
+    // 1. Si Supabase está configurado, autenticar con Supabase Auth
     if (this.isUsingSupabase() && supabase) {
       try {
-        // En caso de ingresar "admin", intentar resolver al correo institucional
-        const emailToUse = cleanId === 'admin' ? 'admin@pasteleriaorion.com' : cleanId;
-
         const { data, error } = await supabase.auth.signInWithPassword({
-          email: emailToUse,
+          email: cleanId,
           password: cleanPass,
         });
 
@@ -153,7 +131,7 @@ export const authService = {
         const sessionUser: User = {
           id: data.user.id,
           name: userName,
-          email: data.user.email || emailToUse,
+          email: data.user.email || cleanId,
           role: userRole,
           createdAt: data.user.created_at || new Date().toISOString(),
         };
@@ -193,7 +171,7 @@ export const authService = {
 
     return {
       success: false,
-      error: 'Credenciales inválidas. Usa admin / 1234 para pruebas o registra tu cuenta.',
+      error: 'Correo o contraseña incorrectos. Por favor verifica tus credenciales.',
     };
   },
 
@@ -225,12 +203,6 @@ export const authService = {
       return { success: false, error: 'La contraseña debe tener al menos 6 caracteres.' };
     }
 
-    if (cleanEmail === 'admin' || cleanEmail === 'admin@pasteleriaorion.com') {
-      return {
-        success: false,
-        error: 'El identificador admin está reservado para el administrador del sistema.',
-      };
-    }
 
     // 1. Registro con Supabase en Producción
     if (this.isUsingSupabase() && supabase) {
@@ -365,8 +337,7 @@ export const authService = {
 
     return {
       success: false,
-      message:
-        'En modo local/demo las credenciales de administrador son: admin / 1234.',
+      message: 'No se pudo enviar el correo de recuperación. Verifica la configuración de Supabase.',
     };
   },
 

@@ -6,7 +6,6 @@ import {
   EyeOff,
   User as UserIcon,
   ShieldAlert,
-  Sparkles,
   ArrowRight,
   Sun,
   Moon,
@@ -80,7 +79,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       }
     } else {
       if (!identifier.trim() || !password) {
-        setError('Por favor ingresa tu usuario/correo y contraseña.');
+        setError('Por favor ingresa tu correo electrónico y contraseña.');
         return;
       }
 
@@ -125,13 +124,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleFillAdmin = () => {
-    setIdentifier('admin');
-    setPassword('1234');
-    setError(null);
-    setInfoMessage(null);
-    setResetSuccessMessage(null);
-  };
 
   return (
     <div className="min-h-screen w-full bg-[#FAF5ED] dark:bg-[#0F0B09] flex flex-col items-center justify-center p-4 sm:p-6 text-[#2A1B16] dark:text-[#FBF4EB] transition-colors duration-200 relative">
@@ -218,20 +210,20 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
             </div>
           )}
 
-          {/* Correo electrónico o Usuario */}
+          {/* Correo electrónico */}
           <div>
             <label className="block text-xs sm:text-[13px] font-semibold text-[#3C2A21] dark:text-[#E2D1C5] mb-1.5">
-              Correo electrónico {isRegister ? '' : 'o usuario'}
+              Correo electrónico
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#8A7B70] dark:text-[#766358]">
                 <Mail className="w-4 h-4" />
               </div>
               <input
-                type={isRegister ? 'email' : 'text'}
+                type="email"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder={isRegister ? 'tu@correo.com' : 'tu@correo.com o admin'}
+                placeholder="tu@correo.com"
                 className="w-full pl-10 pr-3.5 py-2.5 sm:py-3 bg-white dark:bg-[#221713] text-[#2A1B16] dark:text-[#FBF4EB] placeholder-[#A8988D] dark:placeholder-[#766358] rounded-xl text-sm border border-transparent dark:border-[#38261F] focus:outline-none focus:ring-2 focus:ring-[#8C1F25] shadow-xs transition-all"
                 required
               />
@@ -358,27 +350,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         </div>
       </div>
 
-      {/* Testing & Admin Notice Helper (Convenient for quick testing) */}
-      <div className="mt-6 max-w-[440px] w-full bg-white/80 dark:bg-[#18110E]/80 backdrop-blur-sm border border-[#EADBCE] dark:border-[#38261F] rounded-2xl p-3.5 sm:p-4 text-xs text-[#5D4C42] dark:text-[#C5B3A6] shadow-sm">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-semibold text-[#2A1B16] dark:text-[#FBF4EB]">Credenciales de prueba:</span>
-          </div>
-          <button
-            type="button"
-            onClick={handleFillAdmin}
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#8C1F25]/10 dark:bg-[#8C1F25]/25 hover:bg-[#8C1F25]/20 dark:hover:bg-[#8C1F25]/40 text-[#8C1F25] dark:text-[#FF8A91] font-semibold text-[11px] rounded-lg transition-colors cursor-pointer"
-            title="Rellena admin y 1234 automáticamente"
-          >
-            <Sparkles className="w-3 h-3" />
-            <span>Auto-completar Admin</span>
-          </button>
-        </div>
-        <div className="mt-2 text-[11px] text-[#7B685C] dark:text-[#B39F93] leading-relaxed">
-          Usa <strong>admin</strong> y contraseña <strong>1234</strong> para acceder al <strong>Panel de Administrador (Inventario ERP)</strong>. Si te registras con otra cuenta, ingresarás con la vista de usuario estándar.
-        </div>
-      </div>
 
       {/* Footer Branding */}
       <div className="mt-6 text-center text-xs text-[#A8988D] dark:text-[#6C584C]">

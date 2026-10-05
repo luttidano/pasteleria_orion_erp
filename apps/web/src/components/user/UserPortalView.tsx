@@ -1,5 +1,5 @@
 import type { User, Product } from '../../types';
-import { LogOut, ShieldAlert, Sparkles, ArrowRight } from 'lucide-react';
+import { LogOut, ShieldAlert, LogIn, ArrowRight } from 'lucide-react';
 
 
 interface UserPortalViewProps {
@@ -70,7 +70,7 @@ export const UserPortalView: React.FC<UserPortalViewProps> = ({
                 </h3>
                 <p className="text-xs sm:text-sm text-amber-800 mt-1 max-w-2xl leading-relaxed">
                   Has iniciado sesión como <strong className="font-semibold text-amber-950">{user.email}</strong>.
-                  El <strong>Panel de Control ERP (Inventario, Edición y Altas)</strong> está reservado exclusivamente para credenciales de Administrador general.
+                  El <strong>Panel de Control ERP (Inventario, Edición y Altas)</strong> está reservado exclusivamente para cuentas con rol de Administrador.
                 </p>
               </div>
             </div>
@@ -80,8 +80,8 @@ export const UserPortalView: React.FC<UserPortalViewProps> = ({
               onClick={onSwitchToAdmin}
               className="shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs sm:text-sm font-semibold shadow-btn transition-all duration-150 cursor-pointer"
             >
-              <Sparkles className="w-4 h-4" />
-              <span>Ingresar como Administrador (admin / 1234)</span>
+              <LogIn className="w-4 h-4" />
+              <span>Cambiar a cuenta de Administrador</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

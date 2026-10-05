@@ -169,9 +169,11 @@ export const authService = {
       }
     }
 
+    // Si Supabase no está configurado en este equipo (falta archivo .env)
     return {
       success: false,
-      error: 'Correo o contraseña incorrectos. Por favor verifica tus credenciales.',
+      error:
+        'Supabase no está conectado en este equipo (falta el archivo .env en la raíz con VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY). Configura el entorno o reinicia el servidor de desarrollo.',
     };
   },
 

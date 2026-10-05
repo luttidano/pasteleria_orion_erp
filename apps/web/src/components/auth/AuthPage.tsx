@@ -350,9 +350,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         </div>
       </div>
 
+      {/* Supabase Connection Status Badge */}
+      <div className="mt-4 flex items-center justify-center">
+        {authService.isUsingSupabase() ? (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-medium text-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Supabase Cloud Conectado</span>
+          </div>
+        ) : (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-medium text-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            <span>Modo Local / Falta configurar .env</span>
+          </div>
+        )}
+      </div>
 
       {/* Footer Branding */}
-      <div className="mt-6 text-center text-xs text-[#A8988D] dark:text-[#6C584C]">
+      <div className="mt-4 text-center text-xs text-[#A8988D] dark:text-[#6C584C]">
         Pastelería Orión ERP &bull; Diseñado para alta repostería artesanal
       </div>
     </div>

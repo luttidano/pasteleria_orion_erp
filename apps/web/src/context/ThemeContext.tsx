@@ -20,6 +20,11 @@ const applyThemeClasses = (dark: boolean) => {
   try {
     const root = document.documentElement;
     const body = document.body;
+
+    // 1. Congelar transiciones para que el cambio sea simultáneo en todos los elementos del DOM
+    root.classList.add('disable-theme-transitions');
+
+    // 2. Aplicar clases de tema de forma atómica
     if (dark) {
       root.classList.add('dark');
       if (body) body.classList.add('dark');
@@ -31,6 +36,16 @@ const applyThemeClasses = (dark: boolean) => {
       root.setAttribute('data-theme', 'light');
       localStorage.setItem('orion_theme', 'light');
     }
+
+    // 3. Forzar reflow para que el navegador aplique todos los colores en el mismo cuadro de renderizado
+    void window.getComputedStyle(root).opacity;
+
+    // 4. Restaurar transiciones en el siguiente frame para no afectar interacciones de usuario (hover, focus, etc.)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        root.classList.remove('disable-theme-transitions');
+      });
+    });
   } catch (e) {
     console.error('Error applying theme:', e);
   }

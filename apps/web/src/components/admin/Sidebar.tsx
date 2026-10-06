@@ -99,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed md:sticky top-0 left-0 z-50 h-screen bg-white dark:bg-[#16100E] border-r border-[#EADBCE] dark:border-[#35251F] shadow-sm flex flex-col justify-between transition-all duration-300 ease-in-out ${
+        className={`fixed md:sticky top-0 left-0 z-50 h-screen bg-white dark:bg-[#16100E] border-r border-[#EADBCE] dark:border-[#35251F] shadow-sm flex flex-col justify-between transition-[width,transform] duration-300 ease-in-out ${
           isMobileOpen
             ? 'translate-x-0 w-72'
             : '-translate-x-full md:translate-x-0'

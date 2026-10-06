@@ -14,7 +14,6 @@
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background-color: #FAF5ED;
     color: #2A1B16;
-    transition: background-color 0.15s ease, color 0.15s ease;
   }
 
   html.dark,
@@ -23,6 +22,18 @@
   [data-theme="dark"] {
     background-color: #0F0B09;
     color: #FBF4EB;
+  }
+
+  /* Desactiva transiciones durante el cambio de tema para evitar cambios escalonados o progresivos */
+  .disable-theme-transitions,
+  .disable-theme-transitions *,
+  .disable-theme-transitions *::before,
+  .disable-theme-transitions *::after {
+    -webkit-transition: none !important;
+    -moz-transition: none !important;
+    -o-transition: none !important;
+    -ms-transition: none !important;
+    transition: none !important;
   }
 }
 

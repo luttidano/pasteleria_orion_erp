@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Menu,
   Sparkles,
@@ -27,7 +28,19 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onRefresh,
   addToast,
 }) => {
-  const [activeSection, setActiveSection] = useState<AdminSection>('despensa');
+  const navigate = useNavigate();
+  const { section } = useParams<{ section?: string }>();
+  const validSections: AdminSection[] = ['despensa', 'compras', 'recetas', 'proveedores', 'ajustes'];
+
+  // Sincronizar sección activa con la URL (/admin/:section)
+  const activeSection: AdminSection = (section && validSections.includes(section as AdminSection))
+    ? (section as AdminSection)
+    : 'despensa';
+
+  const handleSelectSection = (newSection: AdminSection) => {
+    navigate(`/admin/${newSection}`);
+  };
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const { isDarkMode, toggleDarkMode } = useTheme();
@@ -40,12 +53,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   }, [products]);
 
   return (
-    <div className="min-h-screen bg-[#FAF5ED] dark:bg-[#0F0B09] flex text-[#2A1B16] dark:text-[#F5ECE5] transition-colors duration-200">
+    <div className="min-h-screen bg-[#FAF5ED] dark:bg-[#0F0B09] flex text-[#2A1B16] dark:text-[#F5ECE5]">
       {/* 1. Barra Lateral Desplegable / Retráctil */}
       <Sidebar
         user={user}
         activeSection={activeSection}
-        onSelectSection={(sec) => setActiveSection(sec)}
+        onSelectSection={handleSelectSection}
         isOpen={isSidebarOpen}
         onToggleOpen={() => setIsSidebarOpen(!isSidebarOpen)}
         isMobileOpen={isMobileSidebarOpen}
@@ -56,7 +69,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       />
 
       {/* 2. Área de Contenido Principal */}
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header con título y controles ordenados sin superposición */}
         <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#16100E]/95 backdrop-blur-md border-b border-[#EADBCE] dark:border-[#35251F] shadow-xs">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-3">
@@ -123,7 +136,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               onRefresh={onRefresh}
               addToast={addToast}
               externalFilter="todos"
-              onNavigateToShoppingList={() => setActiveSection('compras')}
+              onNavigateToShoppingList={() => handleSelectSection('compras')}
             />
           )}
 
@@ -201,7 +214,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               <div className="pt-2 flex justify-center">
                 <button
                   type="button"
-                  onClick={() => setActiveSection('despensa')}
+                  onClick={() => handleSelectSection('despensa')}
                   className="px-5 py-2.5 bg-[#8C1F25] hover:bg-[#74191E] text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
                 >
                   Volver a Despensa de Insumos
@@ -307,7 +320,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         </main>
 
         {/* Footer Limpio */}
-        <footer className="bg-white dark:bg-[#16100E] border-t border-stone-200/80 dark:border-[#35251F] py-4 text-center text-xs text-stone-500 dark:text-stone-400 transition-colors">
+        <footer className="bg-white dark:bg-[#16100E] border-t border-stone-200/80 dark:border-[#35251F] py-4 text-center text-xs text-stone-500 dark:text-stone-400">
           <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
             <span>Pastelería Orión &bull; Sistema de Gestión de Insumos y Despensa</span>
             <span className="text-[11px] text-stone-400 dark:text-stone-500">

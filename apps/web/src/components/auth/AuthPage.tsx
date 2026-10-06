@@ -126,7 +126,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
 
 
   return (
-    <div className="min-h-screen w-full bg-[#FAF5ED] dark:bg-[#0F0B09] flex flex-col items-center justify-center p-4 sm:p-6 text-[#2A1B16] dark:text-[#FBF4EB] transition-colors duration-200 relative">
+    <div className="min-h-screen w-full bg-[#FAF5ED] dark:bg-[#0F0B09] flex flex-col items-center justify-center p-4 sm:p-6 text-[#2A1B16] dark:text-[#FBF4EB] relative">
       {/* Dark / Light Theme Toggle */}
       <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-20">
         <button
@@ -350,16 +350,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         </div>
       </div>
 
-      {/* Connection Status Badge */}
-      <div className="mt-4 flex items-center justify-center">
+      {/* Indicador de Estado de Conexión (Alineado a la estética artesanal de Pastelería Orión) */}
+      <div className="mt-4 flex items-center justify-center animate-fade-in">
         {authService.isUsingSupabase() ? (
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-medium text-xs">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Conectado</span>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#EFE3CF]/80 dark:bg-[#201612] border border-[#DFCBB0] dark:border-[#38261F] text-[#6E594D] dark:text-[#C5B3A6] text-xs font-medium shadow-2xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#8C6D46] dark:bg-[#D4A373] animate-pulse" />
+            <span>Conectado al Servidor</span>
           </div>
         ) : (
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-medium text-xs">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#EFE3CF]/80 dark:bg-[#201612] border border-[#DFCBB0] dark:border-[#38261F] text-[#7B685C] dark:text-[#B39F93] text-xs font-medium shadow-2xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#B28754]" />
             <span>Modo Local</span>
           </div>
         )}

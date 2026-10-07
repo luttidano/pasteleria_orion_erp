@@ -30,10 +30,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 }) => {
   const navigate = useNavigate();
   const { section } = useParams<{ section?: string }>();
-  const validSections: AdminSection[] = ['despensa', 'compras', 'recetas', 'proveedores', 'ajustes'];
+  const allowedSections: AdminSection[] = user.role === 'admin' 
+  ? ['despensa', 'compras', 'recetas', 'proveedores', 'ajustes']
+  : ['despensa', 'recetas'];
 
   // Sincronizar sección activa con la URL (/admin/:section)
-  const activeSection: AdminSection = (section && validSections.includes(section as AdminSection))
+  const activeSection: AdminSection = (section && allowedSections.includes(section as AdminSection))
     ? (section as AdminSection)
     : 'despensa';
 
@@ -132,6 +134,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           {/* A. Módulo Principal: Despensa de Insumos */}
           {activeSection === 'despensa' && (
             <InventoryView
+              user={user}
               products={products}
               onRefresh={onRefresh}
               addToast={addToast}

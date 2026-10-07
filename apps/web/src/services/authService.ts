@@ -102,7 +102,7 @@ export const authService = {
         // Intentar consultar tabla `profiles` si existe en Supabase
         try {
           const { data: profile } = await supabase
-            .from('profiles')
+            .from('profile')
             .select('name, role')
             .eq('id', data.user.id)
             .maybeSingle();
@@ -244,7 +244,7 @@ export const authService = {
 
         // Intentar registrar perfil en tabla `profiles` si existe
         try {
-          await supabase.from('profiles').upsert({
+          await supabase.from('profile').upsert({
             id: data.user.id,
             name: cleanName,
             email: cleanEmail,

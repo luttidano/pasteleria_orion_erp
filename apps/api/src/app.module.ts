@@ -1,19 +1,33 @@
 import { Module } from '@nestjs/common';
-import { createObserveModule } from '@nestjs/observe';
+import {ConfigModule} from '@nestjs/config';
+import {PrismaModule} from './database/prisma.module';
+import {InventoryModule} from './modules/inventory/inventory.module';
+import {PosModule} from './modules/pos/pos.module';
+import {AccountingModule} from './modules/accounting/accounting.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
+import * as path from 'path';
 
 @Module({
   imports: [
     // Distributed tracing, auto-correlated logs, request/job metrics, error
     // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'api',
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: [
+        path.resolve(process.cwd(), '.env'),
+        path.resolve(process.cwd(), '../../.env'),
+        path.resolve(__dirname, '../../../.env'),
+        path.resolve(__dirname, '../../.env'),
+        '.env',
+        '../../.env',
+      ],
     }),
+    PrismaModule,
+    InventoryModule,
+    PosModule,
+    AccountingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

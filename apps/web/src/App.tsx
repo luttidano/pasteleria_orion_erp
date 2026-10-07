@@ -51,8 +51,14 @@ function AppContent() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Carga inicial de catálogo de materias primas
+  // Carga de catálogo de materias primas solo para usuarios autenticados
   const loadProducts = useCallback(async () => {
+    const user = authService.getCurrentUser();
+    if (!user) {
+      setProducts([]);
+      return;
+    }
+
     try {
       const items = await inventoryService.getProducts();
       setProducts(items);
@@ -67,20 +73,30 @@ function AppContent() {
   }, [addToast]);
 
   useEffect(() => {
-    loadProducts().finally(() => setIsLoading(false));
+    if (currentUser) {
+      loadProducts().finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
+    }
 
     // Suscripción reactiva a cambios de sesión (login, logout, refresh en Supabase)
     const { unsubscribe } = authService.subscribeToAuthChanges((updatedUser) => {
       setCurrentUser(updatedUser);
+      if (updatedUser) {
+        loadProducts();
+      } else {
+        setProducts([]);
+      }
     });
 
     return () => {
       unsubscribe();
     };
-  }, [loadProducts]);
+  }, [currentUser, loadProducts]);
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
+    loadProducts();
     addToast({
       type: 'success',
       title: `¡Bienvenido/a, ${user.name}!`,

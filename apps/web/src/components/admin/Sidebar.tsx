@@ -40,6 +40,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   outOfStockCount,
 }) => {
 
+  const allowedSectionsForRole: Record<string, AdminSection[]> = {
+    admin: ['despensa', 'compras', 'recetas', 'proveedores', 'ajustes'],
+    baker: ['despensa', 'recetas'],
+    cashier: ['despensa'],
+  };
+
+  const currentAllowed = allowedSectionsForRole[user.role] || ['despensa'];
+
   const menuItems = [
     {
       id: 'despensa' as AdminSection,
@@ -79,7 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Settings,
       badge: null,
     },
-  ];
+  ].filter((item) => currentAllowed.includes(item.id));
 
 
   const handleItemClick = (id: AdminSection) => {

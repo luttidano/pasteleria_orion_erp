@@ -1,0 +1,45 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+enum Role {
+  admin
+  cashier
+  baker
+  user
+}
+
+model Profile {
+  id        String   @id @db.Uuid
+  name      String
+  email     String?
+  role      Role     @default(baker)
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("profile")
+}
+
+model Ingredient {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  category    String
+  stock       Decimal  @default(0) @db.Decimal(12, 3)
+  minStock    Decimal  @default(0) @map("min_stock") @db.Decimal(12, 3)
+  unit        String   @default("kg")
+  price       Decimal? @default(0) @db.Decimal(12, 2)
+  icon        String?
+  imageUrl    String?  @map("image_url")
+  description String?
+  status      String   @default("suficiente")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("ingredient")
+}

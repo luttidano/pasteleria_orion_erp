@@ -14,7 +14,7 @@ import {
   ShoppingBag,
   X
 } from 'lucide-react';
-import type { Product, IngredientCategory, ToastMessage } from '../../types';
+import type { Product, IngredientCategory, ToastMessage, User } from '../../types';
 import { inventoryService } from '../../services/inventoryService';
 import { ProductModal } from './ProductModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
@@ -22,6 +22,7 @@ import { DeleteConfirmModal } from './DeleteConfirmModal';
 export type StatusFilterType = 'todos' | 'bajo' | 'agotado' | 'comprar';
 
 interface InventoryViewProps {
+  user: User;
   products: Product[];
   onRefresh: () => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
@@ -39,6 +40,7 @@ const CATEGORIES: Array<{ label: string; value: 'Todas' | IngredientCategory; ic
 ];
 
 export const InventoryView: React.FC<InventoryViewProps> = ({
+  user,
   products,
   onRefresh,
   addToast,
@@ -49,6 +51,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<'Todas' | IngredientCategory>('Todas');
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>('todos');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const isAdmin = user.role === 'admin';
 
   // Sync external filter from sidebar if provided
   useEffect(() => {
@@ -179,19 +182,21 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center justify-center gap-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => {
-              setIngredientToEdit(null);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] active:scale-[0.98] text-white text-xs sm:text-sm font-semibold shadow-btn transition-all duration-150 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Agregar Ingrediente</span>
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="flex items-center justify-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setIngredientToEdit(null);
+                setIsModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] active:scale-[0.98] text-white text-xs sm:text-sm font-semibold shadow-btn transition-all duration-150 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Agregar Ingrediente</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 2. Resumen visual en 3 estados claros (Semáforo de Despensa) */}
@@ -584,28 +589,30 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     </button>
                   </div>
 
-                  {/* Acciones Editar y Borrar */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIngredientToEdit(item);
-                        setIsModalOpen(true);
-                      }}
-                      className="p-2 rounded-xl text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-[#221713] transition-colors cursor-pointer"
-                      title="Modificar ingrediente"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIngredientToDelete(item)}
-                      className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                      title="Eliminar de la despensa"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {/* Acciones Editar y Borrar (Solo Administrador) */}
+                  {isAdmin && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIngredientToEdit(item);
+                          setIsModalOpen(true);
+                        }}
+                        className="p-2 rounded-xl text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-[#221713] transition-colors cursor-pointer"
+                        title="Modificar ingrediente"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIngredientToDelete(item)}
+                        className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                        title="Eliminar de la despensa"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -621,7 +628,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 <th className="py-4 px-4">Categoría</th>
                 <th className="py-4 px-4 text-center">Existencia</th>
                 <th className="py-4 px-4">Estado</th>
-                <th className="py-4 px-6 text-right">Opciones</th>
+                {isAdmin && <th className="py-4 px-6 text-right">Opciones</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100 dark:divide-[#281C17]">
@@ -683,25 +690,27 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         </span>
                       )}
                     </td>
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setIngredientToEdit(item);
-                            setIsModalOpen(true);
-                          }}
-                          className="p-1.5 text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white rounded-lg hover:bg-stone-100 dark:hover:bg-[#201613] cursor-pointer"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setIngredientToDelete(item)}
-                          className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+                    {isAdmin && (
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setIngredientToEdit(item);
+                              setIsModalOpen(true);
+                            }}
+                            className="p-1.5 text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white rounded-lg hover:bg-stone-100 dark:hover:bg-[#201613] cursor-pointer"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setIngredientToDelete(item)}
+                            className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

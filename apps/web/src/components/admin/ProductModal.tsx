@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles } from 'lucide-react';
 import type { Product, IngredientCategory } from '../../types';
+import { categoryService } from '../../services/categoryService';
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -43,8 +44,19 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const [minStock, setMinStock] = useState<number | ''>(5);
   const [price, setPrice] = useState<number | ''>(1500);
   const [description, setDescription] = useState('');
+  const [dynamicCategories, setDynamicCategories] = useState<string[]>(CATEGORIES);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      categoryService.getAll('ingredient').then((cats) => {
+        if (cats.length > 0) {
+          setDynamicCategories(cats.map((c) => c.name));
+        }
+      }).catch(() => {});
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (productToEdit) {
@@ -183,7 +195,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               onChange={(e) => setCategory(e.target.value as IngredientCategory)}
               className="w-full mt-2 px-3.5 py-2.5 rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] bg-white dark:bg-[#1E1512] text-sm font-medium text-[#1C120D] dark:text-[#FBF4EB] focus:outline-none focus:ring-2 focus:ring-[#8C1F25]"
             >
-              {CATEGORIES.map((cat) => (
+              {dynamicCategories.map((cat) => (
                 <option key={cat} value={cat}>
                   {cat}
                 </option>

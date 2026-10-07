@@ -97,16 +97,21 @@ function AppContent() {
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     loadProducts();
+    const roleMessages: Record<string, string> = {
+      admin: 'Has ingresado al Panel ERP como Administrador.',
+      baker: 'Has ingresado al Módulo de Inventario como Maestro Pastelero.',
+      cashier: 'Has ingresado al Módulo de Punto de Venta como Cajero.',
+    };
     addToast({
       type: 'success',
       title: `¡Bienvenido/a, ${user.name}!`,
-      message:
-        user.role === 'admin'
-          ? 'Has ingresado al Panel de Control ERP como Administrador.'
-          : 'Has ingresado como usuario estándar.',
+      message: roleMessages[user.role] || 'Has ingresado como usuario del sistema.',
     });
-    if (user.role === 'admin') {
+
+    if (user.role === 'admin' || user.role === 'baker') {
       navigate('/admin/despensa');
+    } else if (user.role === 'cashier') {
+      navigate('/admin/pos-caja');
     } else {
       navigate('/portal');
     }
@@ -144,19 +149,25 @@ function AppContent() {
           }
         />
 
-        {/* 2. Redirección base de administración */}
+        {/* 2. Redirección base de administración según rol */}
         <Route
           path="/admin"
-          element={<Navigate to="/admin/despensa" replace />}
+          element={
+            currentUser?.role === 'cashier' ? (
+              <Navigate to="/admin/pos-caja" replace />
+            ) : (
+              <Navigate to="/admin/despensa" replace />
+            )
+          }
         />
 
-        {/* 3. Rutas Exclusivas de Administrador (Protegidas por RoleGuard para 'admin') */}
+        {/* 3. Rutas de Administración y Módulos ERP (Admin, Pastelero y Cajero) */}
         <Route
           path="/admin/:section"
           element={
             <RoleGuard
               user={currentUser}
-              allowedRoles={['admin']}
+              allowedRoles={['admin', 'baker', 'cashier']}
               isLoading={isLoading}
               onLogout={handleLogout}
             >

@@ -12,12 +12,14 @@ import {
   CheckCircle,
   XCircle,
   ShoppingBag,
-  X
+  X,
+  Tag,
 } from 'lucide-react';
 import type { Product, IngredientCategory, ToastMessage, User } from '../../types';
 import { inventoryService } from '../../services/inventoryService';
 import { ProductModal } from './ProductModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { CategoryManagerModal } from './CategoryManagerModal';
 
 export type StatusFilterType = 'todos' | 'bajo' | 'agotado' | 'comprar';
 
@@ -62,6 +64,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [ingredientToEdit, setIngredientToEdit] = useState<Product | null>(null);
   const [ingredientToDelete, setIngredientToDelete] = useState<Product | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -184,6 +187,15 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
         {isAdmin && (
           <div className="flex items-center justify-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#35251F] bg-white dark:bg-[#201612] hover:bg-stone-50 dark:hover:bg-[#2C1D18] active:scale-[0.98] text-stone-700 dark:text-stone-300 text-xs sm:text-sm font-semibold shadow-xs transition-all duration-150 cursor-pointer"
+              title="Gestionar Categorías"
+            >
+              <Tag className="w-4 h-4 text-[#8C1F25] dark:text-[#E07A5F]" />
+              <span>Categorías</span>
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -737,6 +749,15 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         onClose={() => setIngredientToDelete(null)}
         onConfirm={handleConfirmDelete}
         isDeleting={isDeleting}
+      />
+
+      {/* Modal de Gestión de Categorías */}
+      <CategoryManagerModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        type="ingredient"
+        onCategoriesChanged={onRefresh}
+        addToast={addToast}
       />
     </div>
   );

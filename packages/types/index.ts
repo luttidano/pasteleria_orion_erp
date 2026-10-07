@@ -9,6 +9,17 @@ export interface User {
   createdAt?: string;
 }
 
+export type CategoryType = 'ingredient' | 'recipe' | 'pos';
+export interface Category {
+  id: string;
+  name: string;
+  type: CategoryType;
+  description?: string;
+  icon?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type IngredientCategory =
   | 'Harinas y Polvos'
   | 'Lácteos y Huevos'
@@ -31,6 +42,35 @@ export interface Product {
   icon?: string; // Emoji o icono visual (ej: 🌾, 🥛, 🥚, 🧈, 🍫)
   imageUrl?: string; // URL en Cloudflare R2 / CDN
   status?: StockStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RecipeIngredientItem {
+  id?: string;
+  ingredientId: string;
+  ingredientName?: string;
+  quantity: number;
+  unit: string;
+  avaibleStock?: number;
+}
+
+export interface Recipe {
+  id: string;
+  name: string;
+  description?: string;
+  yieldServings: number;
+  category?: string;
+  imageUrl?: string;
+  ingredients: RecipeIngredientItem[];
+  canProduce?: boolean;
+  maxBatches?: number;
+  missingIngredients?: Array<{
+    name: string;
+    required: number;
+    available: number;
+    unit: string;
+  }>;
   createdAt?: string;
   updatedAt?: string;
 }

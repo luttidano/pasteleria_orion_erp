@@ -6,8 +6,12 @@ export class CreateIngredientDto {
   name: string;
 
   @IsString()
-  @IsNotEmpty()
-  category: string;
+  @IsOptional()
+  categoryId?: string;
+
+  @IsString()
+  @IsOptional()
+  category?: string;
 
   @IsNumber()
   @Min(0)

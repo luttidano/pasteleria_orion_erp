@@ -105,7 +105,8 @@ export class RecipeService {
       name: recipe.name,
       description: recipe.description,
       yieldServings: recipe.yieldServings ?? recipe.yield_servings ?? 1,
-      category: recipe.category,
+      category: recipe.categoryRef?.name || recipe.category || 'Pastelería',
+      categoryId: recipe.categoryId || recipe.category_id,
       imageUrl: recipe.imageUrl ?? recipe.image_url,
       ingredients: formattedIngredients,
       canProduce: formattedIngredients.length > 0 ? canProduce : false,
@@ -120,6 +121,7 @@ export class RecipeService {
     try {
       const recipes = await this.prisma.recipe.findMany({
         include: {
+          categoryRef: true,
           ingredients: {
             include: {
               ingredients: true,
@@ -133,7 +135,7 @@ export class RecipeService {
       // Fallback a Supabase REST
       const { data, error } = await this.supabase
         .from('recipe')
-        .select('*, ingredients:recipe_ingredient(*, ingredients:ingredient(*))')
+        .select('*, categoryRef:category(*), ingredients:recipe_ingredient(*, ingredients:ingredient(*))')
         .order('name', { ascending: true });
 
       if (error) throw new BadRequestException(error.message);
@@ -146,6 +148,7 @@ export class RecipeService {
       const recipe = await this.prisma.recipe.findUnique({
         where: { id },
         include: {
+          categoryRef: true,
           ingredients: {
             include: {
               ingredients: true,
@@ -160,7 +163,7 @@ export class RecipeService {
 
     const { data, error } = await this.supabase
       .from('recipe')
-      .select('*, ingredients:recipe_ingredient(*, ingredients:ingredient(*))')
+      .select('*, categoryRef:category(*), ingredients:recipe_ingredient(*, ingredients:ingredient(*))')
       .eq('id', id)
       .maybeSingle();
 
@@ -171,26 +174,53 @@ export class RecipeService {
   async create(createRecipeDto: CreateRecipeDto) {
     const { ingredients, ...recipeData } = createRecipeDto;
 
+    let categoryId = recipeData.categoryId;
+    if (!categoryId && recipeData.category) {
+      try {
+        const cat = await this.prisma.category.findFirst({
+          where: { name: recipeData.category, type: 'recipe' },
+        });
+        if (cat) {
+          categoryId = cat.id;
+        } else {
+          const newCat = await this.prisma.category.create({
+            data: { name: recipeData.category, type: 'recipe' },
+          });
+          categoryId = newCat.id;
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
     try {
-      const newRecipe = await this.prisma.recipe.create({
-        data: {
-          ...recipeData,
-          ingredients: {
-            create: ingredients.map((item) => ({
-              ingredientId: item.ingredientId,
-              quantity: item.quantity,
-              unit: item.unit,
-            })),
-          },
-        },
-        include: {
-          ingredients: {
-            include: {
-              ingredients: true,
+      const newRecipe = await this.prisma.$transaction(async (tx) => {
+        return tx.recipe.create({
+          data: {
+            name: recipeData.name,
+            description: recipeData.description,
+            yieldServings: recipeData.yieldServings || 1,
+            categoryId,
+            imageUrl: recipeData.imageUrl,
+            ingredients: {
+              create: ingredients.map((item) => ({
+                ingredientId: item.ingredientId,
+                quantity: item.quantity,
+                unit: item.unit,
+              })),
             },
           },
-        },
-      });
+          include: {
+            categoryRef: true,
+            ingredients: {
+              include: {
+                ingredients: true
+              }
+            }
+          }
+        });
+      })
+       
       return this.enrichWithAvailability(newRecipe);
     } catch {
       // Fallback a Supabase REST
@@ -200,7 +230,7 @@ export class RecipeService {
           name: recipeData.name,
           description: recipeData.description,
           yield_servings: recipeData.yieldServings || 1,
-          category: recipeData.category,
+          category_id: categoryId,
           image_url: recipeData.imageUrl,
         })
         .select()
@@ -225,10 +255,36 @@ export class RecipeService {
   async update(id: string, updateRecipeDto: UpdateRecipeDto) {
     const { ingredients, ...recipeData } = updateRecipeDto;
 
+    let categoryId = recipeData.categoryId;
+    if (!categoryId && recipeData.category) {
+      try {
+        const cat = await this.prisma.category.findFirst({
+          where: { name: recipeData.category, type: 'recipe' },
+        });
+        if (cat) {
+          categoryId = cat.id;
+        } else {
+          const newCat = await this.prisma.category.create({
+            data: { name: recipeData.category, type: 'recipe' },
+          });
+          categoryId = newCat.id;
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
+    const updatePayload: Record<string, any> = {};
+    if (recipeData.name !== undefined) updatePayload.name = recipeData.name;
+    if (recipeData.description !== undefined) updatePayload.description = recipeData.description;
+    if (recipeData.yieldServings !== undefined) updatePayload.yieldServings = recipeData.yieldServings;
+    if (categoryId !== undefined) updatePayload.categoryId = categoryId;
+    if (recipeData.imageUrl !== undefined) updatePayload.imageUrl = recipeData.imageUrl;
+
     try {
       await this.prisma.recipe.update({
         where: { id },
-        data: recipeData,
+        data: updatePayload,
       });
 
       if (ingredients) {
@@ -252,7 +308,7 @@ export class RecipeService {
           name: recipeData.name,
           description: recipeData.description,
           yield_servings: recipeData.yieldServings,
-          category: recipeData.category,
+          category_id: categoryId,
           image_url: recipeData.imageUrl,
           updated_at: new Date().toISOString(),
         })

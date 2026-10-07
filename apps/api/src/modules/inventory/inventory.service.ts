@@ -12,19 +12,22 @@ import { AdjustStockDto } from './dto/adjust-stock.dto';
 
 export type StockStatus = 'suficiente' | 'bajo' | 'agotado';
 
-function mapSupabaseIngredient(row: any) {
+function mapSupabaseIngredient(row: any, computeStatusFn: (s:number, m: number) => StockStatus) {
+  const stock = Number(row.stock);
+  const minStock = Number(row.min_stock !== undefined ? row.min_stock : row.minStock); 
   return {
     id: row.id,
     name: row.name,
-    category: row.category,
-    stock: Number(row.stock),
-    minStock: Number(row.min_stock !== undefined ? row.min_stock : row.minStock),
+    categoryId: row.category_id || row.categoryId,
+    category: row.categoryRef?.name || row.category?.name || 'General',
+    stock,
+    minStock,
     unit: row.unit,
     price: row.price !== null && row.price !== undefined ? Number(row.price) : 0,
     icon: row.icon,
     imageUrl: row.image_url !== undefined ? row.image_url : row.imageUrl,
     description: row.description,
-    status: row.status,
+    status: computeStatusFn(stock, minStock),
     createdAt: row.created_at || row.createdAt,
     updatedAt: row.updated_at || row.updatedAt,
   };
@@ -64,35 +67,54 @@ export class InventoryService {
 
   async findAll() {
     try {
-      return await this.prisma.ingredient.findMany({
-        orderBy: { name: 'asc' },
+      const items = await this.prisma.ingredient.findMany({
+        include: { categoryRef: true},
+        orderBy: {name: 'asc'},
       });
+      return items.map((item) => ({
+        ...item,
+        stock: Number(item.stock),
+        minStock: Number(item.minStock),
+        price: Number(item.price),
+        category: item.categoryRef?.name || 'General',
+        status: this.computeStatus(Number(item.stock), Number(item.minStock))
+      }));
     } catch {
       const { data, error } = await this.supabase
         .from('ingredient')
-        .select('*')
+        .select('*, categoryRef:category(*)')
         .order('name', { ascending: true });
 
       if (error) {
         throw new BadRequestException(error.message);
       }
-      return (data || []).map(mapSupabaseIngredient);
+      return (data || []).map((row) => mapSupabaseIngredient(row, this.computeStatus.bind(this)));
     }
   }
 
   async findOne(id: string) {
     try {
-      const ingredient = await this.prisma.ingredient.findUnique({
+      const item = await this.prisma.ingredient.findUnique({
         where: { id },
+        include: { categoryRef: true },
       });
-      if (ingredient) return ingredient;
+      if (item) {
+        return {
+          ...item,
+          stock: Number(item.stock),
+          minStock: Number(item.minStock),
+          price: item.price !== null && item.price !== undefined ? Number(item.price) : 0,
+          category: item.categoryRef?.name || 'General',
+          status: this.computeStatus(Number(item.stock), Number(item.minStock)),
+        };
+      }
     } catch {
       // Fallback a Supabase REST
     }
 
     const { data, error } = await this.supabase
       .from('ingredient')
-      .select('*')
+      .select('*, categoryRef:category(*)')
       .eq('id', id)
       .maybeSingle();
 
@@ -100,17 +122,34 @@ export class InventoryService {
       throw new NotFoundException(`Ingredient with ID ${id} not found`);
     }
 
-    return mapSupabaseIngredient(data);
+    return mapSupabaseIngredient(data, this.computeStatus.bind(this));
   }
 
   async create(dto: CreateIngredientDto) {
-    const status = this.computeStatus(dto.stock, dto.minStock);
+    let categoryId = (dto as any).categoryId;
+    if (!categoryId && dto.category) {
+      try {
+        const cat = await this.prisma.category.findFirst({
+          where: { name: dto.category, type: 'ingredient' },
+        });
+        if (cat) {
+          categoryId = cat.id;
+        } else {
+          const newCat = await this.prisma.category.create({
+            data: { name: dto.category, type: 'ingredient' },
+          });
+          categoryId = newCat.id;
+        }
+      } catch {
+        // Fallback si falla
+      }
+    }
 
     try {
-      return await this.prisma.ingredient.create({
+      const created = await this.prisma.ingredient.create({
         data: {
           name: dto.name,
-          category: dto.category,
+          categoryId,
           stock: dto.stock,
           minStock: dto.minStock,
           unit: dto.unit,
@@ -118,15 +157,15 @@ export class InventoryService {
           icon: dto.icon,
           imageUrl: dto.imageUrl,
           description: dto.description,
-          status,
         },
       });
+      return await this.findOne(created.id);
     } catch {
       const { data, error } = await this.supabase
         .from('ingredient')
         .insert({
           name: dto.name,
-          category: dto.category,
+          category_id: categoryId,
           stock: dto.stock,
           min_stock: dto.minStock,
           unit: dto.unit,
@@ -134,40 +173,62 @@ export class InventoryService {
           icon: dto.icon,
           image_url: dto.imageUrl,
           description: dto.description,
-          status,
         })
-        .select()
+        .select('*, categoryRef:category(*)')
         .single();
 
       if (error) {
         throw new BadRequestException(error.message);
       }
-      return mapSupabaseIngredient(data);
+      return mapSupabaseIngredient(data, this.computeStatus.bind(this));
     }
   }
 
   async update(id: string, dto: UpdateIngredientDto) {
-    const current = await this.findOne(id);
+    await this.findOne(id);
 
-    const newStock = dto.stock !== undefined ? dto.stock : Number(current.stock);
-    const newMinStock = dto.minStock !== undefined ? dto.minStock : Number(current.minStock);
-    const status = this.computeStatus(newStock, newMinStock);
+    let categoryId = (dto as any).categoryId;
+    if (!categoryId && dto.category) {
+      try {
+        const cat = await this.prisma.category.findFirst({
+          where: { name: dto.category, type: 'ingredient' },
+        });
+        if (cat) {
+          categoryId = cat.id;
+        } else {
+          const newCat = await this.prisma.category.create({
+            data: { name: dto.category, type: 'ingredient' },
+          });
+          categoryId = newCat.id;
+        }
+      } catch {
+        // Fallback
+      }
+    }
 
     try {
-      return await this.prisma.ingredient.update({
+      const updateData: Record<string, any> = {};
+      if (dto.name !== undefined) updateData.name = dto.name;
+      if (categoryId !== undefined) updateData.categoryId = categoryId;
+      if (dto.stock !== undefined) updateData.stock = dto.stock;
+      if (dto.minStock !== undefined) updateData.minStock = dto.minStock;
+      if (dto.unit !== undefined) updateData.unit = dto.unit;
+      if (dto.price !== undefined) updateData.price = dto.price;
+      if (dto.icon !== undefined) updateData.icon = dto.icon;
+      if (dto.imageUrl !== undefined) updateData.imageUrl = dto.imageUrl;
+      if (dto.description !== undefined) updateData.description = dto.description;
+
+      await this.prisma.ingredient.update({
         where: { id },
-        data: {
-          ...dto,
-          status,
-        },
+        data: updateData,
       });
+      return await this.findOne(id);
     } catch {
       const payload: Record<string, any> = {
-        status,
         updated_at: new Date().toISOString(),
       };
       if (dto.name !== undefined) payload.name = dto.name;
-      if (dto.category !== undefined) payload.category = dto.category;
+      if (categoryId !== undefined) payload.category_id = categoryId;
       if (dto.stock !== undefined) payload.stock = dto.stock;
       if (dto.minStock !== undefined) payload.min_stock = dto.minStock;
       if (dto.unit !== undefined) payload.unit = dto.unit;
@@ -180,13 +241,13 @@ export class InventoryService {
         .from('ingredient')
         .update(payload)
         .eq('id', id)
-        .select()
+        .select('*, categoryRef:category(*)')
         .single();
 
       if (error) {
         throw new BadRequestException(error.message);
       }
-      return mapSupabaseIngredient(data);
+      return mapSupabaseIngredient(data, this.computeStatus.bind(this));
     }
   }
 
@@ -194,32 +255,30 @@ export class InventoryService {
     const ingredient = await this.findOne(id);
     const currentStock = Number(ingredient.stock);
     const nextStock = Math.max(0, currentStock + dto.delta);
-    const nextStatus = this.computeStatus(nextStock, Number(ingredient.minStock));
 
     try {
-      return await this.prisma.ingredient.update({
+      await this.prisma.ingredient.update({
         where: { id },
         data: {
           stock: nextStock,
-          status: nextStatus,
         },
       });
+      return await this.findOne(id);
     } catch {
       const { data, error } = await this.supabase
         .from('ingredient')
         .update({
           stock: nextStock,
-          status: nextStatus,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .select()
+        .select('*, categoryRef:category(*)')
         .single();
 
       if (error) {
         throw new BadRequestException(error.message);
       }
-      return mapSupabaseIngredient(data);
+      return mapSupabaseIngredient(data, this.computeStatus.bind(this));
     }
   }
 

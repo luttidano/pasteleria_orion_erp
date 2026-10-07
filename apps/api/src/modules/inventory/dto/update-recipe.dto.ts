@@ -25,6 +25,10 @@ export class UpdateRecipeDto {
 
   @IsString()
   @IsOptional()
+  categoryId?: string;
+
+  @IsString()
+  @IsOptional()
   category?: string;
 
   @IsString()

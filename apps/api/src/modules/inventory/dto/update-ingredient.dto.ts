@@ -7,6 +7,10 @@ export class UpdateIngredientDto {
 
   @IsString()
   @IsOptional()
+  categoryId?: string;
+
+  @IsString()
+  @IsOptional()
   category?: string;
 
   @IsNumber()

@@ -41,6 +41,10 @@ export class CreateRecipeDto {
 
   @IsString()
   @IsOptional()
+  categoryId?: string;
+
+  @IsString()
+  @IsOptional()
   category?: string;
 
   @IsString()

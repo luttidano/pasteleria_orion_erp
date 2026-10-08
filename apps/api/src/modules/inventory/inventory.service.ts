@@ -66,50 +66,57 @@ export class InventoryService {
   }
 
   async findAll() {
-    try {
-      const items = await this.prisma.ingredient.findMany({
-        include: { categoryRef: true},
-        orderBy: {name: 'asc'},
-      });
-      return items.map((item) => ({
-        ...item,
-        stock: Number(item.stock),
-        minStock: Number(item.minStock),
-        price: Number(item.price),
-        category: item.categoryRef?.name || 'General',
-        status: this.computeStatus(Number(item.stock), Number(item.minStock))
-      }));
-    } catch {
-      const { data, error } = await this.supabase
-        .from('ingredient')
-        .select('*, categoryRef:category(*)')
-        .order('name', { ascending: true });
-
-      if (error) {
-        throw new BadRequestException(error.message);
-      }
-      return (data || []).map((row) => mapSupabaseIngredient(row, this.computeStatus.bind(this)));
-    }
-  }
-
-  async findOne(id: string) {
-    try {
-      const item = await this.prisma.ingredient.findUnique({
-        where: { id },
-        include: { categoryRef: true },
-      });
-      if (item) {
-        return {
+    if (this.prisma.isAvailable) {
+      try {
+        const items = await this.prisma.ingredient.findMany({
+          include: { categoryRef: true },
+          orderBy: { name: 'asc' },
+        });
+        return items.map((item) => ({
           ...item,
           stock: Number(item.stock),
           minStock: Number(item.minStock),
-          price: item.price !== null && item.price !== undefined ? Number(item.price) : 0,
+          price: Number(item.price),
           category: item.categoryRef?.name || 'General',
           status: this.computeStatus(Number(item.stock), Number(item.minStock)),
-        };
+        }));
+      } catch (err) {
+        this.prisma.disable(err instanceof Error ? err.message : String(err));
+        console.warn('[InventoryService] Prisma findAll falló, recurriendo a Supabase REST:', err);
       }
-    } catch {
-      // Fallback a Supabase REST
+    }
+
+    const { data, error } = await this.supabase
+      .from('ingredient')
+      .select('*, categoryRef:category(*)')
+      .order('name', { ascending: true });
+
+    if (error) {
+      throw new BadRequestException(error.message);
+    }
+    return (data || []).map((row) => mapSupabaseIngredient(row, this.computeStatus.bind(this)));
+  }
+
+  async findOne(id: string) {
+    if (this.prisma.isAvailable) {
+      try {
+        const item = await this.prisma.ingredient.findUnique({
+          where: { id },
+          include: { categoryRef: true },
+        });
+        if (item) {
+          return {
+            ...item,
+            stock: Number(item.stock),
+            minStock: Number(item.minStock),
+            price: item.price !== null && item.price !== undefined ? Number(item.price) : 0,
+            category: item.categoryRef?.name || 'General',
+            status: this.computeStatus(Number(item.stock), Number(item.minStock)),
+          };
+        }
+      } catch {
+        // Fallback a Supabase REST
+      }
     }
 
     const { data, error } = await this.supabase
@@ -128,60 +135,87 @@ export class InventoryService {
   async create(dto: CreateIngredientDto) {
     let categoryId = (dto as any).categoryId;
     if (!categoryId && dto.category) {
-      try {
-        const cat = await this.prisma.category.findFirst({
-          where: { name: dto.category, type: 'ingredient' },
-        });
-        if (cat) {
-          categoryId = cat.id;
-        } else {
-          const newCat = await this.prisma.category.create({
-            data: { name: dto.category, type: 'ingredient' },
+      if (this.prisma.isAvailable) {
+        try {
+          const cat = await this.prisma.category.findFirst({
+            where: { name: dto.category, type: 'ingredient' },
           });
-          categoryId = newCat.id;
+          if (cat) {
+            categoryId = cat.id;
+          } else {
+            const newCat = await this.prisma.category.create({
+              data: { name: dto.category, type: 'ingredient' },
+            });
+            categoryId = newCat.id;
+          }
+        } catch {
+          // Fallback
         }
+      } else {
+        try {
+          const { data: cat } = await this.supabase
+            .from('category')
+            .select('id')
+            .eq('name', dto.category)
+            .eq('type', 'ingredient')
+            .maybeSingle();
+          if (cat) {
+            categoryId = cat.id;
+          } else {
+            const { data: newCat } = await this.supabase
+              .from('category')
+              .insert({ name: dto.category, type: 'ingredient' })
+              .select('id')
+              .single();
+            if (newCat) categoryId = newCat.id;
+          }
+        } catch {
+          // Fallback
+        }
+      }
+    }
+
+    if (this.prisma.isAvailable) {
+      try {
+        const created = await this.prisma.ingredient.create({
+          data: {
+            name: dto.name,
+            categoryId,
+            stock: dto.stock,
+            minStock: dto.minStock,
+            unit: dto.unit,
+            price: dto.price ?? 0,
+            icon: dto.icon,
+            imageUrl: dto.imageUrl,
+            description: dto.description,
+          },
+        });
+        return await this.findOne(created.id);
       } catch {
-        // Fallback si falla
+        // Fallback a Supabase
       }
     }
 
-    try {
-      const created = await this.prisma.ingredient.create({
-        data: {
-          name: dto.name,
-          categoryId,
-          stock: dto.stock,
-          minStock: dto.minStock,
-          unit: dto.unit,
-          price: dto.price ?? 0,
-          icon: dto.icon,
-          imageUrl: dto.imageUrl,
-          description: dto.description,
-        },
-      });
-      return await this.findOne(created.id);
-    } catch {
-      const { data, error } = await this.supabase
-        .from('ingredient')
-        .insert({
-          name: dto.name,
-          category_id: categoryId,
-          stock: dto.stock,
-          min_stock: dto.minStock,
-          unit: dto.unit,
-          price: dto.price ?? 0,
-          icon: dto.icon,
-          image_url: dto.imageUrl,
-          description: dto.description,
-        })
-        .select('*, categoryRef:category(*)')
-        .single();
+    const { data, error } = await this.supabase
+      .from('ingredient')
+      .insert({
+        name: dto.name,
+        category_id: categoryId,
+        stock: dto.stock,
+        min_stock: dto.minStock,
+        unit: dto.unit,
+        price: dto.price ?? 0,
+        icon: dto.icon,
+        image_url: dto.imageUrl,
+        description: dto.description,
+      })
+      .select('*, categoryRef:category(*)')
+      .single();
 
-      if (error) {
-        throw new BadRequestException(error.message);
-      }
-      return mapSupabaseIngredient(data, this.computeStatus.bind(this));
+    if (error) {
+      throw new BadRequestException(error.message);
     }
+    return mapSupabaseIngredient(data, this.computeStatus.bind(this));
   }
 
   async update(id: string, dto: UpdateIngredientDto) {
@@ -189,66 +223,93 @@ export class InventoryService {
 
     let categoryId = (dto as any).categoryId;
     if (!categoryId && dto.category) {
-      try {
-        const cat = await this.prisma.category.findFirst({
-          where: { name: dto.category, type: 'ingredient' },
-        });
-        if (cat) {
-          categoryId = cat.id;
-        } else {
-          const newCat = await this.prisma.category.create({
-            data: { name: dto.category, type: 'ingredient' },
+      if (this.prisma.isAvailable) {
+        try {
+          const cat = await this.prisma.category.findFirst({
+            where: { name: dto.category, type: 'ingredient' },
           });
-          categoryId = newCat.id;
+          if (cat) {
+            categoryId = cat.id;
+          } else {
+            const newCat = await this.prisma.category.create({
+              data: { name: dto.category, type: 'ingredient' },
+            });
+            categoryId = newCat.id;
+          }
+        } catch {
+          // Fallback
         }
+      } else {
+        try {
+          const { data: cat } = await this.supabase
+            .from('category')
+            .select('id')
+            .eq('name', dto.category)
+            .eq('type', 'ingredient')
+            .maybeSingle();
+          if (cat) {
+            categoryId = cat.id;
+          } else {
+            const { data: newCat } = await this.supabase
+              .from('category')
+              .insert({ name: dto.category, type: 'ingredient' })
+              .select('id')
+              .single();
+            if (newCat) categoryId = newCat.id;
+          }
+        } catch {
+          // Fallback
+        }
+      }
+    }
+
+    if (this.prisma.isAvailable) {
+      try {
+        const updateData: Record<string, any> = {};
+        if (dto.name !== undefined) updateData.name = dto.name;
+        if (categoryId !== undefined) updateData.categoryId = categoryId;
+        if (dto.stock !== undefined) updateData.stock = dto.stock;
+        if (dto.minStock !== undefined) updateData.minStock = dto.minStock;
+        if (dto.unit !== undefined) updateData.unit = dto.unit;
+        if (dto.price !== undefined) updateData.price = dto.price;
+        if (dto.icon !== undefined) updateData.icon = dto.icon;
+        if (dto.imageUrl !== undefined) updateData.imageUrl = dto.imageUrl;
+        if (dto.description !== undefined) updateData.description = dto.description;
+
+        await this.prisma.ingredient.update({
+          where: { id },
+          data: updateData,
+        });
+        return await this.findOne(id);
       } catch {
         // Fallback
       }
     }
 
-    try {
-      const updateData: Record<string, any> = {};
-      if (dto.name !== undefined) updateData.name = dto.name;
-      if (categoryId !== undefined) updateData.categoryId = categoryId;
-      if (dto.stock !== undefined) updateData.stock = dto.stock;
-      if (dto.minStock !== undefined) updateData.minStock = dto.minStock;
-      if (dto.unit !== undefined) updateData.unit = dto.unit;
-      if (dto.price !== undefined) updateData.price = dto.price;
-      if (dto.icon !== undefined) updateData.icon = dto.icon;
-      if (dto.imageUrl !== undefined) updateData.imageUrl = dto.imageUrl;
-      if (dto.description !== undefined) updateData.description = dto.description;
+    const payload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (dto.name !== undefined) payload.name = dto.name;
+    if (categoryId !== undefined) payload.category_id = categoryId;
+    if (dto.stock !== undefined) payload.stock = dto.stock;
+    if (dto.minStock !== undefined) payload.min_stock = dto.minStock;
+    if (dto.unit !== undefined) payload.unit = dto.unit;
+    if (dto.price !== undefined) payload.price = dto.price;
+    if (dto.icon !== undefined) payload.icon = dto.icon;
+    if (dto.imageUrl !== undefined) payload.image_url = dto.imageUrl;
+    if (dto.description !== undefined) payload.description = dto.description;
 
-      await this.prisma.ingredient.update({
-        where: { id },
-        data: updateData,
-      });
-      return await this.findOne(id);
-    } catch {
-      const payload: Record<string, any> = {
-        updated_at: new Date().toISOString(),
-      };
-      if (dto.name !== undefined) payload.name = dto.name;
-      if (categoryId !== undefined) payload.category_id = categoryId;
-      if (dto.stock !== undefined) payload.stock = dto.stock;
-      if (dto.minStock !== undefined) payload.min_stock = dto.minStock;
-      if (dto.unit !== undefined) payload.unit = dto.unit;
-      if (dto.price !== undefined) payload.price = dto.price;
-      if (dto.icon !== undefined) payload.icon = dto.icon;
-      if (dto.imageUrl !== undefined) payload.image_url = dto.imageUrl;
-      if (dto.description !== undefined) payload.description = dto.description;
+    const { data, error } = await this.supabase
+      .from('ingredient')
+      .update(payload)
+      .eq('id', id)
+      .select('*, categoryRef:category(*)')
+      .single();
 
-      const { data, error } = await this.supabase
-        .from('ingredient')
-        .update(payload)
-        .eq('id', id)
-        .select('*, categoryRef:category(*)')
-        .single();
-
-      if (error) {
-        throw new BadRequestException(error.message);
-      }
-      return mapSupabaseIngredient(data, this.computeStatus.bind(this));
+    if (error) {
+      throw new BadRequestException(error.message);
     }
+    return mapSupabaseIngredient(data, this.computeStatus.bind(this));
   }
 
   async adjustStock(id: string, dto: AdjustStockDto) {
@@ -256,44 +317,52 @@ export class InventoryService {
     const currentStock = Number(ingredient.stock);
     const nextStock = Math.max(0, currentStock + dto.delta);
 
-    try {
-      await this.prisma.ingredient.update({
-        where: { id },
-        data: {
-          stock: nextStock,
-        },
-      });
-      return await this.findOne(id);
-    } catch {
-      const { data, error } = await this.supabase
-        .from('ingredient')
-        .update({
-          stock: nextStock,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select('*, categoryRef:category(*)')
-        .single();
-
-      if (error) {
-        throw new BadRequestException(error.message);
+    if (this.prisma.isAvailable) {
+      try {
+        await this.prisma.ingredient.update({
+          where: { id },
+          data: {
+            stock: nextStock,
+          },
+        });
+        return await this.findOne(id);
+      } catch {
+        // Fallback
       }
-      return mapSupabaseIngredient(data, this.computeStatus.bind(this));
     }
+
+    const { data, error } = await this.supabase
+      .from('ingredient')
+      .update({
+        stock: nextStock,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*, categoryRef:category(*)')
+      .single();
+
+    if (error) {
+      throw new BadRequestException(error.message);
+    }
+    return mapSupabaseIngredient(data, this.computeStatus.bind(this));
   }
 
   async remove(id: string) {
     await this.findOne(id);
-    try {
-      return await this.prisma.ingredient.delete({
-        where: { id },
-      });
-    } catch {
-      const { error } = await this.supabase.from('ingredient').delete().eq('id', id);
-      if (error) {
-        throw new BadRequestException(error.message);
+    if (this.prisma.isAvailable) {
+      try {
+        return await this.prisma.ingredient.delete({
+          where: { id },
+        });
+      } catch {
+        // Fallback
       }
-      return { success: true, id };
     }
+
+    const { error } = await this.supabase.from('ingredient').delete().eq('id', id);
+    if (error) {
+      throw new BadRequestException(error.message);
+    }
+    return { success: true, id };
   }
 }

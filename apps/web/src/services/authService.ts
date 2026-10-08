@@ -4,6 +4,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 const STORAGE_KEY_USER = 'orion_current_user';
 const STORAGE_KEY_REGISTERED_USERS = 'orion_users_db';
 
+let inMemoryAuthToken: string | null = null;
 
 export interface LoginResult {
   success: boolean;
@@ -43,6 +44,76 @@ function translateSupabaseAuthError(message: string): string {
 }
 
 export const authService = {
+  /**
+   * Obtiene de forma síncrona el token de autenticación activo
+   */
+  getAccessToken(): string | null {
+    if (inMemoryAuthToken) return inMemoryAuthToken;
+
+    // 1. Probar clave de persistencia dedicada
+    try {
+      const stored = localStorage.getItem('pasteleria_orion_auth_token');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.access_token) {
+          inMemoryAuthToken = parsed.access_token;
+          return inMemoryAuthToken;
+        }
+      }
+    } catch {
+      // Ignorar
+    }
+
+    // 2. Probar claves automáticas de Supabase en localStorage (sb-*-auth-token)
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+          const item = localStorage.getItem(key);
+          if (item) {
+            const parsed = JSON.parse(item);
+            if (parsed?.access_token) {
+              inMemoryAuthToken = parsed.access_token;
+              return inMemoryAuthToken;
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignorar
+    }
+
+    return null;
+  },
+
+  /**
+   * Obtiene el token garantizando hidratación de sesión de Supabase si aún no está en memoria
+   */
+  async getValidToken(): Promise<string | null> {
+    if (inMemoryAuthToken) return inMemoryAuthToken;
+
+    if (this.isUsingSupabase() && supabase) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.access_token) {
+          inMemoryAuthToken = data.session.access_token;
+          return inMemoryAuthToken;
+        }
+      } catch {
+        // Ignorar
+      }
+    }
+
+    return this.getAccessToken();
+  },
+
+  /**
+   * Actualiza el token en memoria
+   */
+  setAccessToken(token: string | null): void {
+    inMemoryAuthToken = token;
+  },
+
   /**
    * Indica si Supabase está activo y conectado en el entorno
    */
@@ -90,6 +161,16 @@ export const authService = {
 
         if (!data.user) {
           return { success: false, error: 'No se encontró la sesión del usuario.' };
+        }
+
+        // Asegurar persistencia inmediata del token para peticiones síncronas/inmediatas
+        if (data.session) {
+          inMemoryAuthToken = data.session.access_token;
+          try {
+            localStorage.setItem('pasteleria_orion_auth_token', JSON.stringify(data.session));
+          } catch {
+            // Ignorar
+          }
         }
 
         // Obtener rol y nombre del usuario desde tabla `profiles` o `user_metadata`
@@ -354,7 +435,9 @@ export const authService = {
     } catch (err) {
       console.error('Error al cerrar sesión en Supabase:', err);
     } finally {
+      inMemoryAuthToken = null;
       localStorage.removeItem(STORAGE_KEY_USER);
+      localStorage.removeItem('pasteleria_orion_auth_token');
     }
   },
 
@@ -367,9 +450,13 @@ export const authService = {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_OUT' || !session?.user) {
+          inMemoryAuthToken = null;
           localStorage.removeItem(STORAGE_KEY_USER);
           callback(null);
         } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (session?.access_token) {
+            inMemoryAuthToken = session.access_token;
+          }
           // Actualizar datos de usuario
           const currentUser = this.getCurrentUser();
           if (currentUser) {

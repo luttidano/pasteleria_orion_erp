@@ -22,6 +22,7 @@ interface AdminLayoutProps {
   onLogout: () => void;
   onRefresh: () => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
+  isLoading?: boolean;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
@@ -30,6 +31,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onLogout,
   onRefresh,
   addToast,
+  isLoading = false,
 }) => {
   const navigate = useNavigate();
   const { section } = useParams<{ section?: string }>();
@@ -199,6 +201,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               addToast={addToast}
               externalFilter="todos"
               onNavigateToShoppingList={() => handleSelectSection('compras')}
+              isLoading={isLoading}
             />
           )}
 

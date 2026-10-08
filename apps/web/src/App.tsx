@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import type { User, Product, ToastMessage } from './types';
 import { authService } from './services/authService';
@@ -34,7 +34,9 @@ function AppContent() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProductsLoading, setIsProductsLoading] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const isFetchingRef = useRef(false);
 
   // Notificaciones Toast flotantes
   const addToast = useCallback((toast: Omit<ToastMessage, 'id'>) => {
@@ -59,44 +61,72 @@ function AppContent() {
       return;
     }
 
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    setIsProductsLoading(true);
+
     try {
       const items = await inventoryService.getProducts();
       setProducts(items);
     } catch (err) {
       console.error('Error al cargar inventario:', err);
+      const detail = err instanceof Error ? err.message : String(err);
       addToast({
         type: 'error',
         title: 'Error de inventario',
-        message: 'No se pudieron cargar los productos.',
+        message: detail || 'No se pudieron cargar los productos.',
       });
+    } finally {
+      isFetchingRef.current = false;
+      setIsProductsLoading(false);
     }
   }, [addToast]);
 
+  // 1. Suscripción única al estado de autenticación (se monta una sola vez)
   useEffect(() => {
-    if (currentUser) {
-      loadProducts().finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
-
-    // Suscripción reactiva a cambios de sesión (login, logout, refresh en Supabase)
     const { unsubscribe } = authService.subscribeToAuthChanges((updatedUser) => {
-      setCurrentUser(updatedUser);
-      if (updatedUser) {
-        loadProducts();
-      } else {
-        setProducts([]);
-      }
+      setCurrentUser((prev) => {
+        if (prev?.id === updatedUser?.id && prev?.role === updatedUser?.role) {
+          return prev;
+        }
+        return updatedUser;
+      });
     });
 
     return () => {
       unsubscribe();
     };
-  }, [currentUser, loadProducts]);
+  }, []);
+
+  // 2. Carga reactiva de catálogo únicamente cuando cambia el id del usuario
+  useEffect(() => {
+    if (currentUser?.id) {
+      loadProducts().finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
+      setProducts([]);
+    }
+  }, [currentUser?.id, loadProducts]);
+
+  // 3. Re-sincronizar automáticamente si la ventana recupera el foco tras reiniciar el servidor
+  useEffect(() => {
+    const handleRecheck = () => {
+      if (currentUser?.id && !isFetchingRef.current) {
+        loadProducts();
+      }
+    };
+
+    window.addEventListener('focus', handleRecheck);
+    window.addEventListener('online', handleRecheck);
+
+    return () => {
+      window.removeEventListener('focus', handleRecheck);
+      window.removeEventListener('online', handleRecheck);
+    };
+  }, [currentUser?.id, loadProducts]);
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
-    loadProducts();
     const roleMessages: Record<string, string> = {
       admin: 'Has ingresado al Panel ERP como Administrador.',
       baker: 'Has ingresado al Módulo de Inventario como Maestro Pastelero.',
@@ -177,6 +207,7 @@ function AppContent() {
                 onLogout={handleLogout}
                 onRefresh={loadProducts}
                 addToast={addToast}
+                isLoading={isProductsLoading}
               />
             </RoleGuard>
           }

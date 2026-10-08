@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { authService } from '../services/authService';
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '') + '/api';
 
@@ -11,45 +12,64 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
-  // Obtener el token JWT activo de la sesión de Supabase
-  let token: string | undefined;
-  if (supabase) {
-    try {
-      const { data } = await supabase.auth.getSession();
-      token = data.session?.access_token;
-    } catch {
-      // Ignorar fallo puntual de lectura
-    }
-  }
+  // 1. Obtener el token JWT activo garantizando hidratación de sesión
+  let token: string | undefined = (await authService.getValidToken()) || undefined;
 
-  // Fallback si la sesión en memoria aún no ha terminado de hidratar
   if (!token) {
-    try {
-      const stored = localStorage.getItem('pasteleria_orion_auth_token');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        token = parsed?.access_token;
-      }
-    } catch {
-      // Ignorar fallo de parseo
-    }
+    console.warn('[apiFetch] Sin token de autenticación para:', endpoint);
+    throw new Error('Sesión expirada o no sincronizada. Haz clic en "Cerrar sesión" y vuelve a ingresar.');
   }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`,
     ...(options.headers as Record<string, string> || {}),
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  let response: Response;
+  const maxRetries = 2;
+  let attempt = 0;
+
+  while (true) {
+    try {
+      response = await fetch(url, {
+        cache: 'no-store',
+        ...options,
+        headers,
+      });
+      break;
+    } catch (networkErr) {
+      attempt++;
+      if (attempt <= maxRetries) {
+        // Si el backend aún está iniciando tras un reinicio, reintentar en 1s
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+      throw networkErr;
+    }
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
   if (!response.ok) {
+    // Si la sesión expiró o fue revocada (HTTP 401), intentar auto-refrescar
+    if (response.status === 401 && supabase) {
+      try {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (!refreshError && refreshData.session?.access_token) {
+          const newToken = refreshData.session.access_token;
+          authService.setAccessToken(newToken);
+          localStorage.setItem('pasteleria_orion_auth_token', JSON.stringify(refreshData.session));
+          headers['Authorization'] = `Bearer ${newToken}`;
+          const retryRes = await fetch(url, { ...options, headers });
+          if (retryRes.ok) {
+            if (retryRes.status === 204) return null as T;
+            return retryRes.json();
+          }
+        }
+      } catch {
+        // Ignorar fallo en el refresh silencioso
+      }
+    }
+
     let errorMessage = `API Error: ${response.status} ${response.statusText}`;
     try {
       const errorBody = await response.json();

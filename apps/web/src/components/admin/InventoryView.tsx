@@ -30,6 +30,7 @@ interface InventoryViewProps {
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   externalFilter?: StatusFilterType;
   onNavigateToShoppingList?: () => void;
+  isLoading?: boolean;
 }
 
 const CATEGORIES: Array<{ label: string; value: 'Todas' | IngredientCategory; icon: string }> = [
@@ -48,6 +49,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   addToast,
   externalFilter,
   onNavigateToShoppingList,
+  isLoading = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'Todas' | IngredientCategory>('Todas');
@@ -425,7 +427,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
 
       {/* 4. Lista o Cuadrícula de Ingredientes */}
-      {products.length === 0 ? (
+      {isLoading ? (
+        <div className="bg-white dark:bg-[#16100E] p-12 rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] text-center animate-pulse shadow-xs">
+          <div className="w-10 h-10 border-3 border-[#8C1F25]/20 border-t-[#8C1F25] rounded-full animate-spin mx-auto mb-3"></div>
+          <h3 className="font-bold text-[#1C120D] dark:text-[#FBF4EB] text-sm font-serif">
+            Cargando despensa de insumos...
+          </h3>
+          <p className="text-xs text-[#7C695C] dark:text-[#B39F93] mt-1 max-w-sm mx-auto">
+            Sincronizando existencias de materias primas con el almacén central.
+          </p>
+        </div>
+      ) : products.length === 0 ? (
         <div className="bg-white dark:bg-[#16100E] p-12 rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] text-center animate-fade-in shadow-xs">
           <div className="text-4xl mb-3">🧁</div>
           <h3 className="font-bold text-[#1C120D] dark:text-[#FBF4EB] text-base font-serif">
@@ -434,15 +446,24 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           <p className="text-xs text-[#7C695C] dark:text-[#B39F93] mt-1 max-w-sm mx-auto">
             Aún no has registrado ingredientes ni materias primas en la base de datos.
           </p>
-          <button
-            onClick={() => {
-              setIngredientToEdit(null);
-              setIsModalOpen(true);
-            }}
-            className="mt-4 px-4 py-2.5 bg-[#8C1F25] hover:bg-[#74191E] text-white rounded-xl text-xs font-semibold cursor-pointer shadow-btn transition-colors inline-flex items-center gap-1.5"
-          >
-            <span>+ Agregar primer ingrediente</span>
-          </button>
+          <div className="mt-4 flex items-center justify-center gap-2.5 flex-wrap">
+            <button
+              onClick={() => onRefresh()}
+              className="px-4 py-2.5 bg-stone-100 hover:bg-stone-200 dark:bg-[#251A15] dark:hover:bg-[#32231D] text-[#1C120D] dark:text-[#FBF4EB] rounded-xl text-xs font-semibold cursor-pointer transition-colors inline-flex items-center gap-1.5"
+              title="Volver a sincronizar insumos con el servidor"
+            >
+              <span>🔄 Sincronizar despensa</span>
+            </button>
+            <button
+              onClick={() => {
+                setIngredientToEdit(null);
+                setIsModalOpen(true);
+              }}
+              className="px-4 py-2.5 bg-[#8C1F25] hover:bg-[#74191E] text-white rounded-xl text-xs font-semibold cursor-pointer shadow-btn transition-colors inline-flex items-center gap-1.5"
+            >
+              <span>+ Agregar primer ingrediente</span>
+            </button>
+          </div>
         </div>
       ) : filteredProducts.length === 0 ? (
         <div className="bg-white dark:bg-[#16100E] p-12 rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] text-center animate-fade-in shadow-xs">

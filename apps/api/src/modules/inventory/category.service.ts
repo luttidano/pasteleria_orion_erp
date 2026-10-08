@@ -34,28 +34,34 @@ export class CategoryService {
 
   async findAll(type?: CategoryType) {
     const where = type ? { type } : {};
-    try {
-      return await this.prisma.category.findMany({
-        where,
-        orderBy: { name: 'asc' },
-      });
-    } catch {
-      let query = this.supabase.from('category').select('*').order('name', { ascending: true });
-      if (type) {
-        query = query.eq('type', type);
+    if (this.prisma.isAvailable) {
+      try {
+        return await this.prisma.category.findMany({
+          where,
+          orderBy: { name: 'asc' },
+        });
+      } catch (err) {
+        this.prisma.disable(err instanceof Error ? err.message : String(err));
       }
-      const { data, error } = await query;
-      if (error) throw new BadRequestException(error.message);
-      return data || [];
     }
+
+    let query = this.supabase.from('category').select('*').order('name', { ascending: true });
+    if (type) {
+      query = query.eq('type', type);
+    }
+    const { data, error } = await query;
+    if (error) throw new BadRequestException(error.message);
+    return data || [];
   }
 
   async findOne(id: string) {
-    try {
-      const category = await this.prisma.category.findUnique({ where: { id } });
-      if (category) return category;
-    } catch {
-      // Fallback
+    if (this.prisma.isAvailable) {
+      try {
+        const category = await this.prisma.category.findUnique({ where: { id } });
+        if (category) return category;
+      } catch {
+        // Fallback
+      }
     }
 
     const { data, error } = await this.supabase
@@ -69,45 +75,57 @@ export class CategoryService {
   }
 
   async create(dto: CreateCategoryDto) {
-    try {
-      return await this.prisma.category.create({ data: dto });
-    } catch {
-      const { data, error } = await this.supabase
-        .from('category')
-        .insert(dto)
-        .select()
-        .single();
-      if (error) throw new BadRequestException(error.message);
-      return data;
+    if (this.prisma.isAvailable) {
+      try {
+        return await this.prisma.category.create({ data: dto });
+      } catch {
+        // Fallback
+      }
     }
+
+    const { data, error } = await this.supabase
+      .from('category')
+      .insert(dto)
+      .select()
+      .single();
+    if (error) throw new BadRequestException(error.message);
+    return data;
   }
 
   async update(id: string, dto: UpdateCategoryDto) {
-    try {
-      return await this.prisma.category.update({
-        where: { id },
-        data: dto,
-      });
-    } catch {
-      const { data, error } = await this.supabase
-        .from('category')
-        .update(dto)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw new BadRequestException(error.message);
-      return data;
+    if (this.prisma.isAvailable) {
+      try {
+        return await this.prisma.category.update({
+          where: { id },
+          data: dto,
+        });
+      } catch {
+        // Fallback
+      }
     }
+
+    const { data, error } = await this.supabase
+      .from('category')
+      .update(dto)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new BadRequestException(error.message);
+    return data;
   }
 
   async remove(id: string) {
-    try {
-      await this.prisma.category.delete({ where: { id } });
-      return { message: 'Categoría eliminada', id };
-    } catch {
-      const { error } = await this.supabase.from('category').delete().eq('id', id);
-      if (error) throw new BadRequestException(error.message);
-      return { message: 'Categoría eliminada', id };
+    if (this.prisma.isAvailable) {
+      try {
+        await this.prisma.category.delete({ where: { id } });
+        return { message: 'Categoría eliminada', id };
+      } catch {
+        // Fallback
+      }
     }
+
+    const { error } = await this.supabase.from('category').delete().eq('id', id);
+    if (error) throw new BadRequestException(error.message);
+    return { message: 'Categoría eliminada', id };
   }
 }

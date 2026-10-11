@@ -85,4 +85,18 @@ export interface Recipe {
   updatedAt?: string;
 }
 
-
+export interface Supplier {
+  id: string;
+  name: string; // Nombre del proveedor o empresa
+  phone: string; // Teléfono o WhatsApp
+  deliverySchedule: string; // Cuándo entrega (días, horarios o frecuencia)
+  category: string; // Proveedor de qué es (rubro o insumos principales)
+  approximatePrices: string; // Precios aproximados o lista de precios de referencia
+  contactPerson?: string; // Nombre de persona de contacto o vendedor
+  icon?: string; // Emoji de avatar (🌾, 🧈, 🍫, 📦, 🍓, etc.)
+  email?: string;
+  address?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}

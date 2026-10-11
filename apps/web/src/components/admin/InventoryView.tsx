@@ -64,6 +64,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     }
   }, [externalFilter]);
 
+  // Si la despensa se monta con 0 insumos, disparar sincronización inmediata
+  useEffect(() => {
+    if (products.length === 0) {
+      onRefresh();
+    }
+  }, []);
+
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);

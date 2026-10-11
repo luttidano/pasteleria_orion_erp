@@ -35,6 +35,9 @@ function AppContent() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProductsLoading, setIsProductsLoading] = useState(false);
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const isFetchingRef = useRef(false);
 
@@ -82,33 +85,51 @@ function AppContent() {
     }
   }, [addToast]);
 
-  // 1. Suscripción única al estado de autenticación (se monta una sola vez)
+  // 1. Suscripción única y garantía de hidratación de sesión de Supabase al arrancar
   useEffect(() => {
+    let isMounted = true;
+
+    // Suscribirse a cambios continuos (login, logout, token refresh, initial session)
     const { unsubscribe } = authService.subscribeToAuthChanges((updatedUser) => {
+      if (!isMounted) return;
       setCurrentUser((prev) => {
         if (prev?.id === updatedUser?.id && prev?.role === updatedUser?.role) {
           return prev;
         }
         return updatedUser;
       });
+
+      if (updatedUser) {
+        loadProducts().finally(() => {
+          if (isMounted) setIsLoading(false);
+        });
+      } else {
+        setProducts([]);
+        if (isMounted) setIsLoading(false);
+      }
+    });
+
+    // Garantizar resolución asíncrona de sesión y token antes de la primera carga
+    authService.ensureAuthReady().then((user) => {
+      if (!isMounted) return;
+      if (user) {
+        setCurrentUser(user);
+        loadProducts().finally(() => {
+          if (isMounted) setIsLoading(false);
+        });
+      } else {
+        setIsLoading(false);
+        setProducts([]);
+      }
     });
 
     return () => {
+      isMounted = false;
       unsubscribe();
     };
-  }, []);
+  }, [loadProducts]);
 
-  // 2. Carga reactiva de catálogo únicamente cuando cambia el id del usuario
-  useEffect(() => {
-    if (currentUser?.id) {
-      loadProducts().finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-      setProducts([]);
-    }
-  }, [currentUser?.id, loadProducts]);
-
-  // 3. Re-sincronizar automáticamente si la ventana recupera el foco tras reiniciar el servidor
+  // 3. Re-sincronizar automáticamente ante eventos de red (online/offline) y recuperación de foco
   useEffect(() => {
     const handleRecheck = () => {
       if (currentUser?.id && !isFetchingRef.current) {
@@ -116,17 +137,46 @@ function AppContent() {
       }
     };
 
+    const handleOnline = () => {
+      setIsOnline(true);
+      addToast({
+        type: 'success',
+        title: 'Conexión Restablecida',
+        message: 'El sistema vuelve a estar en línea. Sincronizando catálogo con el servidor...',
+      });
+      handleRecheck();
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      addToast({
+        type: 'warning',
+        title: 'Modo Sin Conexión',
+        message: 'Has perdido la conexión de red. La despensa operará con la copia local resiliente.',
+      });
+    };
+
     window.addEventListener('focus', handleRecheck);
-    window.addEventListener('online', handleRecheck);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     return () => {
       window.removeEventListener('focus', handleRecheck);
-      window.removeEventListener('online', handleRecheck);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
+  }, [currentUser?.id, loadProducts, addToast]);
+
+  // 4. Sincronización reactiva del catálogo ante cualquier cambio de sesión o usuario
+  useEffect(() => {
+    if (currentUser?.id) {
+      loadProducts();
+    }
   }, [currentUser?.id, loadProducts]);
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
+    loadProducts();
     const roleMessages: Record<string, string> = {
       admin: 'Has ingresado al Panel ERP como Administrador.',
       baker: 'Has ingresado al Módulo de Inventario como Maestro Pastelero.',
@@ -208,6 +258,7 @@ function AppContent() {
                 onRefresh={loadProducts}
                 addToast={addToast}
                 isLoading={isProductsLoading}
+                isOnline={isOnline}
               />
             </RoleGuard>
           }

@@ -37,7 +37,7 @@ export class InventoryController {
   }
 
   // Ajuste de stock (ej. registrar uso en cocina o compras): admin y pastelero
-  @Post(':id/adjust-stock')
+  @Post([':id/adjust-stock', ':id/stock'])
   @Roles(Role.admin, Role.baker)
   adjustStock(
     @Param('id', ParseUUIDPipe) id: string,

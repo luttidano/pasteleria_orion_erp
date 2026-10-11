@@ -14,6 +14,7 @@ import { RecipesView } from './RecipesView';
 import { ShoppingListView } from './ShoppingListView';
 import { PosView } from './PosView';
 import { AccountingView } from './AccountingView';
+import { SuppliersView } from './SuppliersView';
 import { useTheme } from '../../context/ThemeContext';
 
 interface AdminLayoutProps {
@@ -23,6 +24,7 @@ interface AdminLayoutProps {
   onRefresh: () => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   isLoading?: boolean;
+  isOnline?: boolean;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
@@ -32,6 +34,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onRefresh,
   addToast,
   isLoading = false,
+  isOnline = true,
 }) => {
   const navigate = useNavigate();
   const { section } = useParams<{ section?: string }>();
@@ -166,8 +169,31 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               </div>
             </div>
 
-            {/* Lado derecho: Botón Dark Mode */}
-            <div className="flex items-center justify-end min-w-[36px] shrink-0">
+            {/* Lado derecho: Estado de Conexión + Botón Dark Mode */}
+            <div className="flex items-center justify-end gap-2.5 min-w-[36px] shrink-0">
+              {/* Indicador de conexión Online / Offline */}
+              <div
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold select-none transition-all shadow-2xs ${
+                  isOnline
+                    ? 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                    : 'border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200'
+                }`}
+                title={
+                  isOnline
+                    ? 'En línea: Comunicación activa con el servidor ERP y Supabase'
+                    : 'Sin conexión: Mostrando datos locales resilientes'
+                }
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                  }`}
+                />
+                <span className="hidden sm:inline">
+                  {isOnline ? 'En línea' : 'Sin conexión'}
+                </span>
+              </div>
+
               <button
                 type="button"
                 onClick={toggleDarkMode}
@@ -222,46 +248,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           )}
 
           {activeSection === 'proveedores' && (
-            <div className="bg-white dark:bg-[#16100E] rounded-[26px] p-6 sm:p-8 border border-stone-200/80 dark:border-[#35251F] shadow-xs space-y-6 animate-fade-in">
-              <div className="flex flex-col items-center text-center border-b border-stone-100 dark:border-[#2C1D18] pb-4">
-                <h3 className="text-xl sm:text-2xl font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif text-center">
-                  Proveedores de Materias Primas
-                </h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-md mx-auto text-center">
-                  Contactos para reposición directa de harina, lácteos, chocolates y frutos secos.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="p-4 rounded-2xl bg-stone-50 dark:bg-[#201612] border border-stone-200/80 dark:border-[#35251F] flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center text-lg">🌾</div>
-                    <div>
-                      <h4 className="font-bold text-stone-900 dark:text-stone-100 text-sm">Molino Central Harinas</h4>
-                      <p className="text-xs text-stone-500">Insumos: Harina repostera sin polvos, Harina con polvos, Polvo leudante</p>
-                    </div>
-                  </div>
-                  <div className="text-right text-xs text-stone-600 dark:text-stone-400">
-                    <span className="font-semibold block">+56 9 8765 4321</span>
-                    <span className="text-stone-400">Entregas los martes y jueves</span>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-stone-50 dark:bg-[#201612] border border-stone-200/80 dark:border-[#35251F] flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center text-lg">🧈</div>
-                    <div>
-                      <h4 className="font-bold text-stone-900 dark:text-stone-100 text-sm">Distribuidora Lácteos del Sur</h4>
-                      <p className="text-xs text-stone-500">Insumos: Mantequilla 82%, Crema para batir 35%, Leche entera natural</p>
-                    </div>
-                  </div>
-                  <div className="text-right text-xs text-stone-600 dark:text-stone-400">
-                    <span className="font-semibold block">+56 9 1234 5678</span>
-                    <span className="text-stone-400">Entrega en frío los lunes</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <SuppliersView addToast={addToast} />
           )}
 
           {/* MÓDULO 2: PUNTO DE VENTA (POS) */}

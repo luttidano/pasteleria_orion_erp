@@ -16,6 +16,12 @@ export async function apiFetch<T>(
   let token: string | undefined = (await authService.getValidToken()) || undefined;
 
   if (!token) {
+    // Si la sesión se está hidratando en frío, dar una oportunidad breve de resolución
+    await new Promise((r) => setTimeout(r, 400));
+    token = (await authService.getValidToken()) || undefined;
+  }
+
+  if (!token) {
     console.warn('[apiFetch] Sin token de autenticación para:', endpoint);
     throw new Error('Sesión expirada o no sincronizada. Haz clic en "Cerrar sesión" y vuelve a ingresar.');
   }
@@ -32,17 +38,24 @@ export async function apiFetch<T>(
 
   while (true) {
     try {
-      response = await fetch(url, {
-        cache: 'no-store',
-        ...options,
-        headers,
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      try {
+        response = await fetch(url, {
+          cache: 'no-store',
+          ...options,
+          signal: options.signal || controller.signal,
+          headers,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
       break;
     } catch (networkErr) {
       attempt++;
       if (attempt <= maxRetries) {
-        // Si el backend aún está iniciando tras un reinicio, reintentar en 1s
-        await new Promise((r) => setTimeout(r, 1000));
+        // Si el backend aún está iniciando tras un reinicio, reintentar en 600ms
+        await new Promise((r) => setTimeout(r, 600));
         continue;
       }
       throw networkErr;

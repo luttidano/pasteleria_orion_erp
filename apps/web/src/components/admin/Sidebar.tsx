@@ -120,8 +120,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Proveedores',
           description: 'Molinos, lácteos y materias',
           icon: Truck,
-          badge: 'Pronto',
-          badgeColor: 'bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300',
           allowedRoles: ['admin'],
         },
       ],

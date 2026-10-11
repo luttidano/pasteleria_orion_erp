@@ -146,6 +146,56 @@ create policy "Solo administradores pueden eliminar ingredientes"
   using (public.is_admin());
 
 
--- 5. COMANDO ÚTIL PARA ASIGNAR O CONFIRMAR ROL DE ADMINISTRADOR MANUALMENTE (Opcional):
+-- 5. TABLA DE PROVEEDORES DE MATERIAS PRIMAS (public.suppliers)
+create table if not exists public.suppliers (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  phone text not null,
+  delivery_schedule text not null,
+  category text not null,
+  approximate_prices text not null,
+  contact_person text,
+  icon text default '🚚',
+  email text,
+  address text,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Habilitar RLS en suppliers
+alter table public.suppliers enable row level security;
+
+-- Eliminar políticas previas si existieran
+drop policy if exists "Cualquier usuario autenticado puede leer proveedores" on public.suppliers;
+drop policy if exists "Solo administradores pueden crear proveedores" on public.suppliers;
+drop policy if exists "Solo administradores pueden modificar proveedores" on public.suppliers;
+drop policy if exists "Solo administradores pueden eliminar proveedores" on public.suppliers;
+
+-- Políticas de seguridad para suppliers
+create policy "Cualquier usuario autenticado puede leer proveedores"
+  on public.suppliers for select
+  to authenticated
+  using (true);
+
+create policy "Solo administradores pueden crear proveedores"
+  on public.suppliers for insert
+  to authenticated
+  with check (public.is_admin());
+
+create policy "Solo administradores pueden modificar proveedores"
+  on public.suppliers for update
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+create policy "Solo administradores pueden eliminar proveedores"
+  on public.suppliers for delete
+  to authenticated
+  using (public.is_admin());
+
+
+-- 6. COMANDO ÚTIL PARA ASIGNAR O CONFIRMAR ROL DE ADMINISTRADOR MANUALMENTE (Opcional):
 -- update public.profiles set role = 'admin' where email = 'admin@admin.cl';
+
 

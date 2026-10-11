@@ -23,7 +23,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     try {
       await Promise.race([
         this.$queryRaw`SELECT 1`,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Prisma connection timeout (3s)')), 3000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Prisma connection timeout (1.2s)')), 1200)),
       ]);
       this.isAvailable = true;
       console.log('[PrismaService] Connected to PostgreSQL successfully via Prisma Pooler');

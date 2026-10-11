@@ -86,17 +86,71 @@ export const authService = {
     return null;
   },
 
+  _authReadyPromise: null as Promise<User | null> | null,
+
+  /**
+   * Garantiza que la sesión de Supabase esté hidratada y el token listo antes de realizar peticiones
+   */
+  async ensureAuthReady(): Promise<User | null> {
+    if (this._authReadyPromise) return this._authReadyPromise;
+
+    this._authReadyPromise = (async () => {
+      if (this.isUsingSupabase() && supabase) {
+        try {
+          const { data, error } = await supabase.auth.getSession();
+          if (!error && data.session) {
+            const expiresAt = data.session.expires_at ? data.session.expires_at * 1000 : 0;
+            const now = Date.now();
+
+            // Si el token ya expiró o expirará en menos de 60 segundos, auto-refrescar
+            if (expiresAt && expiresAt - now < 60_000) {
+              const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
+              if (!refreshErr && refreshData.session?.access_token) {
+                inMemoryAuthToken = refreshData.session.access_token;
+              } else if (data.session.access_token) {
+                inMemoryAuthToken = data.session.access_token;
+              }
+            } else if (data.session.access_token) {
+              inMemoryAuthToken = data.session.access_token;
+            }
+          }
+        } catch (e) {
+          console.warn('[authService] Error al verificar sesión en arranque:', e);
+        }
+      }
+
+      if (!inMemoryAuthToken) {
+        this.getAccessToken();
+      }
+
+      return this.getCurrentUser();
+    })();
+
+    return this._authReadyPromise;
+  },
+
   /**
    * Obtiene el token garantizando hidratación de sesión de Supabase si aún no está en memoria
    */
   async getValidToken(): Promise<string | null> {
     if (inMemoryAuthToken) return inMemoryAuthToken;
 
+    // 1. Esperar a que la hidratación de arranque termine si está en curso
+    await this.ensureAuthReady();
+    if (inMemoryAuthToken) return inMemoryAuthToken;
+
+    // 2. Si aún no está en memoria pero Supabase está configurado, reintentar sesión o refresh
     if (this.isUsingSupabase() && supabase) {
       try {
         const { data } = await supabase.auth.getSession();
         if (data.session?.access_token) {
           inMemoryAuthToken = data.session.access_token;
+          return inMemoryAuthToken;
+        }
+
+        const { data: refData } = await supabase.auth.refreshSession();
+        if (refData.session?.access_token) {
+          inMemoryAuthToken = refData.session.access_token;
           return inMemoryAuthToken;
         }
       } catch {
@@ -166,6 +220,7 @@ export const authService = {
         // Asegurar persistencia inmediata del token para peticiones síncronas/inmediatas
         if (data.session) {
           inMemoryAuthToken = data.session.access_token;
+          this._authReadyPromise = null;
           try {
             localStorage.setItem('pasteleria_orion_auth_token', JSON.stringify(data.session));
           } catch {
@@ -451,9 +506,14 @@ export const authService = {
       } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_OUT' || !session?.user) {
           inMemoryAuthToken = null;
+          this._authReadyPromise = null;
           localStorage.removeItem(STORAGE_KEY_USER);
           callback(null);
-        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        } else if (
+          event === 'SIGNED_IN' ||
+          event === 'TOKEN_REFRESHED' ||
+          event === 'INITIAL_SESSION'
+        ) {
           if (session?.access_token) {
             inMemoryAuthToken = session.access_token;
           }

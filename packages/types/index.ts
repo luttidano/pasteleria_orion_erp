@@ -75,4 +75,18 @@ export interface Recipe {
   updatedAt?: string;
 }
 
-
+export interface Supplier {
+  id: string;
+  name: string; // Nombre del proveedor / empresa
+  phone: string; // Teléfono o número de WhatsApp
+  deliverySchedule: string; // Cuándo entrega (días, horarios o frecuencia)
+  category: string; // Proveedor de qué es (rubro o insumos principales)
+  approximatePrices: string; // Precios aproximados o lista de referencia
+  contactPerson?: string; // Nombre de la persona o vendedor de contacto
+  icon?: string; // Emoji representativo
+  email?: string;
+  address?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}

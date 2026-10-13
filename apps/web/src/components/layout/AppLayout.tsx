@@ -6,20 +6,23 @@ import {
   Sun,
   Moon,
 } from 'lucide-react';
-import type { User, Product, ToastMessage } from '../../types';
+import type { User, Ingredient, ToastMessage } from '../../types';
 import { Sidebar } from './Sidebar';
 import type { AdminSection } from './Sidebar';
-import { InventoryView } from './InventoryView';
-import { RecipesView } from './RecipesView';
-import { ShoppingListView } from './ShoppingListView';
-import { PosView } from './PosView';
-import { AccountingView } from './AccountingView';
-import { SuppliersView } from './SuppliersView';
+import { IngredientsView } from '../inventory/IngredientsView';
+
+import { ManufacturedProductsView } from '../inventory/ManufacturedProductView';
+import { ResaleProductsView } from '../inventory/ResaleProductView';
+import { RecipesView } from '../inventory/RecipesView';
+import { ShoppingListView } from '../inventory/ShoppingListView';
+import { SuppliersView } from '../inventory/SuppliersView';
+import { PosView } from '../pos/PosView';
+import { AccountingView } from '../accounting/AccountingView';
 import { useTheme } from '../../context/ThemeContext';
 
 interface AdminLayoutProps {
   user: User;
-  products: Product[];
+  ingredients: Ingredient[];
   onLogout: () => void;
   onRefresh: () => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
@@ -29,7 +32,7 @@ interface AdminLayoutProps {
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   user,
-  products,
+  ingredients,
   onLogout,
   onRefresh,
   addToast,
@@ -43,8 +46,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const allowedSectionsByRole: Record<string, AdminSection[]> = {
     admin: [
       'despensa',
-      'compras',
       'recetas',
+      'productos-elaborados',
+      'productos-reventa',
+      'compras',
       'proveedores',
       'pos-caja',
       'pos-historial',
@@ -54,7 +59,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       'contabilidad-reportes',
       'ajustes',
     ],
-    baker: ['despensa', 'recetas'],
+    baker: ['despensa', 'recetas', 'productos-elaborados'],
     cashier: ['pos-caja', 'pos-historial', 'pos-cierre'],
   };
 
@@ -89,19 +94,23 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
   // Contadores para insignias de la barra lateral
   const { restockCount, outOfStockCount } = useMemo(() => {
-    const low = products.filter((p) => p.stock > 0 && p.stock <= p.minStock).length;
-    const out = products.filter((p) => p.stock <= 0).length;
+    const low = ingredients.filter((p) => p.stock > 0 && p.stock <= p.minStock).length;
+    const out = ingredients.filter((p) => p.stock <= 0).length;
     return { restockCount: low, outOfStockCount: out };
-  }, [products]);
+  }, [ingredients]);
 
   const getHeaderTitle = (sec: AdminSection): string => {
     switch (sec) {
       case 'despensa':
         return 'Despensa de Insumos';
+      case 'recetas':
+        return 'Recetario & Fichas Técnicas'; 
+      case 'productos-elaborados':
+        return 'Productos de elaboración propia';
+      case 'productos-reventa':
+        return 'Productos de Reventa';         
       case 'compras':
         return 'Lista de Compras de Materias Primas';
-      case 'recetas':
-        return 'Recetario & Fichas Técnicas';
       case 'proveedores':
         return 'Directorio de Proveedores';
       case 'pos-caja':
@@ -220,9 +229,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
           {/* MÓDULO 1: INVENTARIO */}
           {activeSection === 'despensa' && (
-            <InventoryView
+            <IngredientsView
               user={user}
-              products={products}
+              ingredients={ingredients}
               onRefresh={onRefresh}
               addToast={addToast}
               externalFilter="todos"
@@ -231,21 +240,32 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             />
           )}
 
+          {activeSection === 'recetas' && (
+            <RecipesView
+            user={user}
+            ingredients={ingredients}
+            addToast={addToast}
+            />
+          )}
+
+          {activeSection === 'productos-elaborados' && (
+            <ManufacturedProductsView user={user} addToast={addToast} />
+          )}
+
+          {activeSection === 'productos-reventa' && (
+            <ResaleProductsView user={user} addToast={addToast} />
+          )}
+          
+
           {activeSection === 'compras' && (
             <ShoppingListView
-              products={products}
+              ingredients={ingredients}
               onRefresh={onRefresh}
               addToast={addToast}
             />
           )}
 
-          {activeSection === 'recetas' && (
-            <RecipesView
-            user={user}
-            products={products}
-            addToast={addToast}
-            />
-          )}
+
 
           {activeSection === 'proveedores' && (
             <SuppliersView addToast={addToast} />

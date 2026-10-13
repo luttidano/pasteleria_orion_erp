@@ -1,11 +1,10 @@
 import { createPortal } from 'react-dom';
 import { Trash2, AlertTriangle, X } from 'lucide-react';
-import type { Product } from '../../types';
-
+import type { Ingredient } from '../../types';
 
 interface DeleteConfirmModalProps {
   isOpen: boolean;
-  product: Product | null;
+  ingredient: Ingredient | null;
   onClose: () => void;
   onConfirm: () => Promise<void>;
   isDeleting: boolean;
@@ -13,12 +12,12 @@ interface DeleteConfirmModalProps {
 
 export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   isOpen,
-  product,
+  ingredient,
   onClose,
   onConfirm,
   isDeleting,
 }) => {
-  if (!isOpen || !product) return null;
+  if (!isOpen || !ingredient) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -42,7 +41,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           </h3>
           <p className="text-sm text-[#5D4A3D] dark:text-[#C5B3A6] mt-2 text-center">
             Estás a punto de quitar{' '}
-            <strong className="text-[#1C120D] dark:text-[#FBF4EB] font-bold">"{product.name}"</strong>.
+            <strong className="text-[#1C120D] dark:text-[#FBF4EB] font-bold">"{ingredient.name}"</strong>.
             Esta materia prima ya no figurará en la lista de insumos.
           </p>
 
@@ -51,7 +50,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             <div>
               Cantidad registrada:{' '}
               <span className="font-bold">
-                {product.stock} {product.unit}
+                {ingredient.stock} {ingredient.unit}
               </span>
               . Si solo se agotó temporalmente, te recomendamos dejar su cantidad en 0 en lugar de eliminarlo.
             </div>

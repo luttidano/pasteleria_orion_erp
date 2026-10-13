@@ -24,8 +24,10 @@ import type { User, UserRole } from '../../types';
 export type AdminSection =
   // Módulo Inventario
   | 'despensa'
-  | 'compras'
   | 'recetas'
+  | 'productos-elaborados'
+  | 'productos-reventa'
+  | 'compras'
   | 'proveedores'
   // Módulo Punto de Venta
   | 'pos-caja'
@@ -93,11 +95,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
       subItems: [
         {
           id: 'despensa',
-          label: 'Despensa de Insumos',
+          label: 'Despensa de Ingredientes',
           description: 'Existencias y stock',
           icon: Wheat,
           allowedRoles: ['admin', 'baker'],
         },
+        {
+          id: 'recetas',
+          label: 'Gestión de Recetas',
+          description: 'Fórmulas y uso de insumos',
+          icon: BookOpen,
+          badgeColor: 'bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300',
+          allowedRoles: ['admin', 'baker'],
+        },
+        {
+          id: 'productos-elaborados',
+          label: 'Productos de Elaboración',
+          description: 'Pasteles, Tortas y producción',
+          icon: Sparkles,
+          badgeColor: 'bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300',
+          allowedRoles: ['admin', 'baker'],
+        },
+        {
+          id: 'productos-reventa',
+          label: 'Productos de Reventa',
+          description: 'Bebidas, abarrotes y terceros',
+          icon: Store,
+          badgeColor: 'bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300',
+          allowedRoles: ['admin'],
+        },                
         {
           id: 'compras',
           label: 'Lista de Compras',
@@ -107,18 +133,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           badgeColor: outOfStockCount > 0 ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white',
           allowedRoles: ['admin'],
         },
-        {
-          id: 'recetas',
-          label: 'Recetas',
-          description: 'Fórmulas y uso de insumos',
-          icon: BookOpen,
-          badgeColor: 'bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300',
-          allowedRoles: ['admin', 'baker'],
-        },
+
         {
           id: 'proveedores',
-          label: 'Proveedores',
-          description: 'Molinos, lácteos y materias',
+          label: 'Gestión de Proveedores',
+          description: 'Directorio de abastecimiento',
           icon: Truck,
           allowedRoles: ['admin'],
         },

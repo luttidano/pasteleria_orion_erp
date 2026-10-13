@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import type { User, Product, ToastMessage } from './types';
+import type { User, Ingredient, ToastMessage } from './types';
 import { authService } from './services/authService';
-import { inventoryService } from './services/inventoryService';
+import { ingredientService } from './services/ingredientService';
 import { AuthPage } from './components/auth/AuthPage';
-import { AdminLayout } from './components/admin/AdminLayout';
+import { AdminLayout } from './components/layout/AppLayout';
 import { UserPortalView } from './components/user/UserPortalView';
 import { ToastContainer } from './components/common/Toast';
 import { ThemeProvider } from './context/ThemeContext';
@@ -32,9 +32,9 @@ const LoadingScreen = () => (
 function AppContent() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
-  const [products, setProducts] = useState<Product[]>([]);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isProductsLoading, setIsProductsLoading] = useState(false);
+  const [isIngredientsLoading, setIsIngredientsLoading] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
@@ -57,31 +57,31 @@ function AppContent() {
   }, []);
 
   // Carga de catálogo de materias primas solo para usuarios autenticados
-  const loadProducts = useCallback(async () => {
+  const loadIngredients = useCallback(async () => {
     const user = authService.getCurrentUser();
     if (!user) {
-      setProducts([]);
+      setIngredients([]);
       return;
     }
 
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
-    setIsProductsLoading(true);
+    setIsIngredientsLoading(true);
 
     try {
-      const items = await inventoryService.getProducts();
-      setProducts(items);
+      const items = await ingredientService.getIngredients();
+      setIngredients(items);
     } catch (err) {
-      console.error('Error al cargar inventario:', err);
+      console.error('Error al cargar insumos:', err);
       const detail = err instanceof Error ? err.message : String(err);
       addToast({
         type: 'error',
         title: 'Error de inventario',
-        message: detail || 'No se pudieron cargar los productos.',
+        message: detail || 'No se pudieron cargar los insumos.',
       });
     } finally {
       isFetchingRef.current = false;
-      setIsProductsLoading(false);
+      setIsIngredientsLoading(false);
     }
   }, [addToast]);
 
@@ -100,11 +100,11 @@ function AppContent() {
       });
 
       if (updatedUser) {
-        loadProducts().finally(() => {
+        loadIngredients().finally(() => {
           if (isMounted) setIsLoading(false);
         });
       } else {
-        setProducts([]);
+        setIngredients([]);
         if (isMounted) setIsLoading(false);
       }
     });
@@ -114,12 +114,12 @@ function AppContent() {
       if (!isMounted) return;
       if (user) {
         setCurrentUser(user);
-        loadProducts().finally(() => {
+        loadIngredients().finally(() => {
           if (isMounted) setIsLoading(false);
         });
       } else {
         setIsLoading(false);
-        setProducts([]);
+        setIngredients([]);
       }
     });
 
@@ -127,13 +127,13 @@ function AppContent() {
       isMounted = false;
       unsubscribe();
     };
-  }, [loadProducts]);
+  }, [loadIngredients]);
 
   // 3. Re-sincronizar automáticamente ante eventos de red (online/offline) y recuperación de foco
   useEffect(() => {
     const handleRecheck = () => {
       if (currentUser?.id && !isFetchingRef.current) {
-        loadProducts();
+        loadIngredients();
       }
     };
 
@@ -165,18 +165,18 @@ function AppContent() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [currentUser?.id, loadProducts, addToast]);
+  }, [currentUser?.id, loadIngredients, addToast]);
 
   // 4. Sincronización reactiva del catálogo ante cualquier cambio de sesión o usuario
   useEffect(() => {
     if (currentUser?.id) {
-      loadProducts();
+      loadIngredients();
     }
-  }, [currentUser?.id, loadProducts]);
+  }, [currentUser?.id, loadIngredients]);
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
-    loadProducts();
+    loadIngredients();
     const roleMessages: Record<string, string> = {
       admin: 'Has ingresado al Panel ERP como Administrador.',
       baker: 'Has ingresado al Módulo de Inventario como Maestro Pastelero.',
@@ -253,11 +253,11 @@ function AppContent() {
             >
               <AdminLayout
                 user={currentUser!}
-                products={products}
+                ingredients={ingredients}
                 onLogout={handleLogout}
-                onRefresh={loadProducts}
+                onRefresh={loadIngredients}
                 addToast={addToast}
-                isLoading={isProductsLoading}
+                isLoading={isIngredientsLoading}
                 isOnline={isOnline}
               />
             </RoleGuard>
@@ -276,7 +276,7 @@ function AppContent() {
             >
               <UserPortalView
                 user={currentUser!}
-                products={products}
+                ingredients={ingredients}
                 onLogout={handleLogout}
                 onSwitchToAdmin={handleSwitchToAdmin}
               />

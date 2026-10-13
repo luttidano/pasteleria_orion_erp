@@ -10,18 +10,18 @@ import {
   Cake,
   Tag,
 } from 'lucide-react';
-import type { User, Product, ToastMessage, Recipe, Category } from '../../types';
+import type { User, Ingredient, ToastMessage, Recipe, Category } from '../../types';
 import { recipeService } from '../../services/recipeService';
 import { categoryService } from '../../services/categoryService';
 import { CategoryManagerModal } from './CategoryManagerModal';
 
 interface RecipesViewProps {
   user: User;
-  products: Product[];
+  ingredients: Ingredient[];
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
 }
 
-export const RecipesView: React.FC<RecipesViewProps> = ({ user, products, addToast }) => {
+export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, addToast }) => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -101,10 +101,10 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, products, addToa
 
   // Agregar insumo al formulario
   const handleAddIngredientRow = () => {
-    if (products.length === 0) return;
+    if (ingredients.length === 0) return;
     setSelectedIngredients([
       ...selectedIngredients,
-      { ingredientId: products[0].id, quantity: 100, unit: 'g' },
+      { ingredientId: ingredients[0].id, quantity: 100, unit: 'g' },
     ]);
   };
 
@@ -452,7 +452,7 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, products, addToa
                         }}
                         className="flex-1 p-1.5 text-xs rounded-lg border border-stone-200 dark:border-[#35251F] bg-stone-50 dark:bg-[#201612]"
                       >
-                        {products.map((p) => (
+                        {ingredients.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name} ({p.unit})
                           </option>

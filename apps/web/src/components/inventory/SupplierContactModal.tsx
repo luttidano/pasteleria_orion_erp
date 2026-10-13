@@ -10,13 +10,10 @@ import {
   Copy,
   Check,
   ExternalLink,
-  Clock,
-  Sparkles,
   Info,
 } from 'lucide-react';
 import type { Supplier } from '../../types';
 import {
-  formatPhoneForWhatsApp,
   getWhatsAppUrl,
   getCallUrl,
 } from '../../services/supplierService';
@@ -35,11 +32,10 @@ export const SupplierContactModal: React.FC<SupplierContactModalProps> = ({
   onEdit,
 }) => {
   const [copied, setCopied] = useState(false);
-  const [customNote, setCustomNote] = useState('');
+  const [customNote] = useState('');
 
   if (!isOpen || !supplier) return null;
 
-  const cleanPhone = formatPhoneForWhatsApp(supplier.phone);
   const callUrl = getCallUrl(supplier.phone);
 
   const handleCopyPhone = () => {

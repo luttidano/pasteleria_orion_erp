@@ -15,17 +15,17 @@ import {
   X,
   Tag,
 } from 'lucide-react';
-import type { Product, IngredientCategory, ToastMessage, User } from '../../types';
-import { inventoryService } from '../../services/inventoryService';
-import { ProductModal } from './ProductModal';
+import type { Ingredient, IngredientCategory, ToastMessage, User } from '../../types';
+import { ingredientService } from '../../services/ingredientService';
+import { IngredientModal } from './IngredientModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { CategoryManagerModal } from './CategoryManagerModal';
 
 export type StatusFilterType = 'todos' | 'bajo' | 'agotado' | 'comprar';
 
-interface InventoryViewProps {
+interface IngredientsViewProps {
   user: User;
-  products: Product[];
+  ingredients: Ingredient[];
   onRefresh: () => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   externalFilter?: StatusFilterType;
@@ -42,9 +42,9 @@ const CATEGORIES: Array<{ label: string; value: 'Todas' | IngredientCategory; ic
   { label: 'Frutas y Esencias', value: 'Frutas y Esencias', icon: '🍓' },
 ];
 
-export const InventoryView: React.FC<InventoryViewProps> = ({
+export const IngredientsView: React.FC<IngredientsViewProps> = ({
   user,
-  products,
+  ingredients,
   onRefresh,
   addToast,
   externalFilter,
@@ -66,7 +66,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
   // Si la despensa se monta con 0 insumos, disparar sincronización inmediata
   useEffect(() => {
-    if (products.length === 0) {
+    if (ingredients.length === 0) {
       onRefresh();
     }
   }, []);
@@ -74,22 +74,22 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [ingredientToEdit, setIngredientToEdit] = useState<Product | null>(null);
-  const [ingredientToDelete, setIngredientToDelete] = useState<Product | null>(null);
+  const [ingredientToEdit, setIngredientToEdit] = useState<Ingredient | null>(null);
+  const [ingredientToDelete, setIngredientToDelete] = useState<Ingredient | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Accurate bakery metrics
   const metrics = useMemo(() => {
-    const total = products.length;
-    const ok = products.filter((p) => p.stock > p.minStock).length;
-    const low = products.filter((p) => p.stock > 0 && p.stock <= p.minStock).length;
-    const out = products.filter((p) => p.stock <= 0).length;
+    const total = ingredients.length;
+    const ok = ingredients.filter((p) => p.stock > p.minStock).length;
+    const low = ingredients.filter((p) => p.stock > 0 && p.stock <= p.minStock).length;
+    const out = ingredients.filter((p) => p.stock <= 0).length;
     return { total, ok, low, out };
-  }, [products]);
+  }, [ingredients]);
 
   // Filtered ingredients
   const filteredProducts = useMemo(() => {
-    return products.filter((item) => {
+    return ingredients.filter((item) => {
       // 1. Text Search
       const matchesSearch =
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -114,12 +114,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
       return matchesSearch && matchesCategory && matchesStatus;
     });
-  }, [products, searchTerm, selectedCategory, statusFilter]);
+  }, [ingredients, searchTerm, selectedCategory, statusFilter]);
 
   // Quick stock adjustment
-  const handleStockDelta = async (ingredient: Product, delta: number) => {
+  const handleStockDelta = async (ingredient: Ingredient, delta: number) => {
     try {
-      await inventoryService.adjustStock(ingredient.id, delta);
+      await ingredientService.adjustStock(ingredient.id, delta);
       await onRefresh();
       addToast({
         type: 'info',
@@ -137,17 +137,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
   // Add / Edit
   const handleSaveIngredient = async (
-    data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'status'>
+    data: Omit<Ingredient, 'id' | 'createdAt' | 'updatedAt' | 'status'>
   ) => {
     if (ingredientToEdit) {
-      await inventoryService.updateProduct(ingredientToEdit.id, data);
+      await ingredientService.updateIngredient(ingredientToEdit.id, data);
       addToast({
         type: 'success',
         title: 'Ingrediente actualizado',
         message: `Guardamos los cambios de "${data.name}".`,
       });
     } else {
-      await inventoryService.addProduct(data);
+      await ingredientService.addIngredient(data);
       addToast({
         type: 'success',
         title: 'Ingrediente agregado',
@@ -162,7 +162,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     if (!ingredientToDelete) return;
     setIsDeleting(true);
     try {
-      await inventoryService.deleteProduct(ingredientToDelete.id);
+      await ingredientService.deleteIngredient(ingredientToDelete.id);
       addToast({
         type: 'warning',
         title: 'Ingrediente eliminado',
@@ -444,7 +444,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             Sincronizando existencias de materias primas con el almacén central.
           </p>
         </div>
-      ) : products.length === 0 ? (
+      ) : ingredients.length === 0 ? (
         <div className="bg-white dark:bg-[#16100E] p-12 rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] text-center animate-fade-in shadow-xs">
           <div className="text-4xl mb-3">🧁</div>
           <h3 className="font-bold text-[#1C120D] dark:text-[#FBF4EB] text-base font-serif">
@@ -761,19 +761,19 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
 
       {/* Modales */}
-      <ProductModal
+      <IngredientModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
           setIngredientToEdit(null);
         }}
         onSave={handleSaveIngredient}
-        productToEdit={ingredientToEdit}
+        ingredientToEdit={ingredientToEdit}
       />
 
       <DeleteConfirmModal
         isOpen={Boolean(ingredientToDelete)}
-        product={ingredientToDelete}
+        ingredient={ingredientToDelete}
         onClose={() => setIngredientToDelete(null)}
         onConfirm={handleConfirmDelete}
         isDeleting={isDeleting}

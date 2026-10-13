@@ -30,7 +30,7 @@ export type IngredientCategory =
 
 export type StockStatus = 'suficiente' | 'bajo' | 'agotado';
 
-export interface Product {
+export interface Ingredient {
   id: string;
   name: string;
   category: string;
@@ -75,6 +75,8 @@ export interface Recipe {
   updatedAt?: string;
 }
 
+export type SupplierType = 'materia_prima' | 'reventa' | 'ambos';
+
 export interface Supplier {
   id: string;
   name: string; // Nombre del proveedor / empresa
@@ -82,6 +84,7 @@ export interface Supplier {
   deliverySchedule: string; // Cuándo entrega (días, horarios o frecuencia)
   category: string; // Proveedor de qué es (rubro o insumos principales)
   approximatePrices: string; // Precios aproximados o lista de referencia
+  supplierType?: SupplierType;
   contactPerson?: string; // Nombre de la persona o vendedor de contacto
   icon?: string; // Emoji representativo
   email?: string;
@@ -90,3 +93,29 @@ export interface Supplier {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export type ProductKind = 'manufactured' | 'resale';
+
+export interface CatalogProduct {
+  id: string;
+  name: string;
+  description?: string;
+  productType: ProductKind;
+  stock: number;
+  minStock: number;
+  unit: string; // 'un', 'porción', 'docena', etc.
+  salePrice: number; // Precio de venta en CLP
+  costPrice?: number; // Costo referencial / compra en CLP
+  recipeId?: string;
+  recipeName?: string;
+  supplierId?: string;
+  supplierName?: string;
+  categoryId?: string;
+  categoryName?: string;
+  imageUrl?: string;
+  icon?: string;
+  status?: StockStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+

@@ -1,17 +1,16 @@
-import type { User, Product } from '../../types';
+import type { User, Ingredient } from '../../types';
 import { LogOut, ShieldAlert, LogIn, ArrowRight } from 'lucide-react';
-
 
 interface UserPortalViewProps {
   user: User;
-  products: Product[];
+  ingredients: Ingredient[];
   onLogout: () => void;
   onSwitchToAdmin: () => void;
 }
 
 export const UserPortalView: React.FC<UserPortalViewProps> = ({
   user,
-  products,
+  ingredients,
   onLogout,
   onSwitchToAdmin,
 }) => {
@@ -38,9 +37,9 @@ export const UserPortalView: React.FC<UserPortalViewProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="text-right hidden sm:block">
-              <span className="text-xs font-bold text-stone-900 block">{user.name}</span>
-              <span className="text-[11px] text-stone-500 font-mono">Usuario Estándar</span>
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-stone-100 text-stone-700 text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>{user.name}</span>
             </div>
 
             <button
@@ -78,44 +77,44 @@ export const UserPortalView: React.FC<UserPortalViewProps> = ({
             <button
               type="button"
               onClick={onSwitchToAdmin}
-              className="shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs sm:text-sm font-semibold shadow-btn transition-all duration-150 cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs sm:text-sm font-bold shadow-xs transition-colors cursor-pointer shrink-0"
             >
               <LogIn className="w-4 h-4" />
-              <span>Cambiar a cuenta de Administrador</span>
+              <span>Cambiar a Cuenta Administradora</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Customer / Colleague Showcase Preview */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
+        {/* Read-Only Product Showcase for standard users */}
+        <div className="bg-white rounded-3xl border border-[#EADBCE] p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-stone-100 pb-4">
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold font-serif text-[#2A1B16]">
-                Vitrina de Productos de Pastelería Orión
+              <h2 className="text-lg font-serif font-bold text-stone-900">
+                Catálogo de Insumos y Repostería
               </h2>
-              <p className="text-xs sm:text-sm text-stone-600">
-                Visualización en tiempo real de nuestra carta de repostería artesanal.
+              <p className="text-xs text-stone-500">
+                Vista de sólo lectura disponible para tu perfil
               </p>
             </div>
             <span className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-              {products.filter((p) => p.stock > 0).length} productos disponibles hoy
+              {ingredients.filter((p) => p.stock > 0).length} productos disponibles hoy
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {products.map((product) => {
-              const isAvailable = product.stock > 0;
+            {ingredients.map((item) => {
+              const isAvailable = item.stock > 0;
 
               return (
                 <div
-                  key={product.id}
+                  key={item.id}
                   className="bg-white rounded-2xl p-4 border border-stone-200 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <span className="text-[11px] font-semibold text-[#8C1F25] bg-[#8C1F25]/10 px-2 py-0.5 rounded-md">
-                        {product.category}
+                        {item.category}
                       </span>
                       {isAvailable ? (
                         <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
@@ -128,21 +127,20 @@ export const UserPortalView: React.FC<UserPortalViewProps> = ({
                       )}
                     </div>
 
-                    <h4 className="font-bold text-stone-900 text-sm">{product.name}</h4>
-                    {product.description && (
+                    <h4 className="font-bold text-stone-900 text-sm">{item.name}</h4>
+                    {item.description && (
                       <p className="text-xs text-stone-500 mt-1 line-clamp-2">
-                        {product.description}
+                        {item.description}
                       </p>
                     )}
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between">
                     <span className="text-base font-bold font-mono text-[#2A1B16]">
-                      {product.price ? formatCurrency(product.price) : 'Sin precio'}
+                      {item.price ? formatCurrency(item.price) : 'Consultar'}
                     </span>
-
-                    <span className="text-xs text-stone-500">
-                      Unidad: {product.unit}
+                    <span className="text-xs text-stone-400 font-medium">
+                      Stock: {item.stock} {item.unit}
                     </span>
                   </div>
                 </div>
@@ -151,11 +149,6 @@ export const UserPortalView: React.FC<UserPortalViewProps> = ({
           </div>
         </div>
       </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-stone-200 py-4 text-center text-xs text-stone-500">
-        Pastelería Orión &bull; Vista de Usuario Estándar
-      </footer>
     </div>
   );
 };

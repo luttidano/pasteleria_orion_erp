@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, CheckCircle2, ShoppingCart, AlertTriangle, AlertCircle, Plus, Minus } from 'lucide-react';
-import type { Product } from '../../types';
+import type { Ingredient } from '../../types';
 
 interface PurchaseItemModalProps {
   isOpen: boolean;
-  product: Product | null;
+  ingredient: Ingredient | null;
   onClose: () => void;
-  onConfirmPurchase: (product: Product, quantityBought: number) => Promise<void>;
+  onConfirmPurchase: (ingredient: Ingredient, quantityBought: number) => Promise<void>;
 }
 
 export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   isOpen,
-  product,
+  ingredient,
   onClose,
   onConfirmPurchase,
 }) => {
@@ -21,21 +21,21 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   // Cantidad faltante sugerida para cubrir el mínimo
-  const deficit = product ? Math.max(0, product.minStock - product.stock) : 0;
+  const deficit = ingredient ? Math.max(0, ingredient.minStock - ingredient.stock) : 0;
 
   useEffect(() => {
-    if (product) {
+    if (ingredient) {
       setQuantityBought(deficit > 0 ? deficit : 1);
       setError(null);
     }
-  }, [product, deficit]);
+  }, [ingredient, deficit]);
 
-  if (!isOpen || !product) return null;
+  if (!isOpen || !ingredient) return null;
 
-  const currentStock = product.stock;
-  const minStock = product.minStock;
+  const currentStock = ingredient.stock;
+  const minStock = ingredient.minStock;
   const isOutOfStock = currentStock <= 0;
-  const unit = product.unit || 'un';
+  const unit = ingredient.unit || 'un';
 
   const numericBought = typeof quantityBought === 'number' ? quantityBought : 0;
   const resultingStock = Math.max(0, currentStock + numericBought);
@@ -44,7 +44,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   const remainingDeficit = Math.max(0, minStock - resultingStock);
 
   // Cálculo de costo estimado referencial
-  const unitPrice = product.price || 0;
+  const unitPrice = ingredient.price || 0;
   const estimatedCost = unitPrice > 0 && numericBought > 0 ? unitPrice * numericBought : 0;
 
   const formatCurrency = (val: number) => {
@@ -71,7 +71,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
     setIsSubmitting(true);
     setError(null);
     try {
-      await onConfirmPurchase(product, Number(quantityBought));
+      await onConfirmPurchase(ingredient, Number(quantityBought));
       onClose();
     } catch {
       setError('Ocurrió un error al actualizar el inventario. Inténtalo nuevamente.');
@@ -89,12 +89,12 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
         <div className="relative px-6 py-4 border-b border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7] dark:bg-[#1F1512] shrink-0">
           <div className="flex items-center gap-3 pr-8">
             <div className="w-12 h-12 rounded-2xl bg-white dark:bg-[#2A1B16] border border-[#DFCAA9]/70 dark:border-[#422B22] flex items-center justify-center text-2xl shadow-xs shrink-0">
-              {product.icon || '🌾'}
+              {ingredient.icon || '🌾'}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-[#DFCAA9]/70 dark:border-stone-700">
-                  {product.category}
+                  {ingredient.category}
                 </span>
                 {isOutOfStock ? (
                   <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800">
@@ -107,7 +107,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                 )}
               </div>
               <h3 className="text-lg sm:text-xl font-bold text-[#1C120D] dark:text-[#FBF4EB] font-serif leading-tight mt-0.5 truncate">
-                {product.name}
+                {ingredient.name}
               </h3>
             </div>
           </div>
@@ -137,13 +137,13 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
               📋 Descripción del Insumo
             </h4>
             <p className="text-xs sm:text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
-              {product.description || 'Materia prima indispensable para la producción y repostería artesanal de Pastelería Orión.'}
+              {ingredient.description || 'Materia prima indispensable para la producción y repostería artesanal de Pastelería Orión.'}
             </p>
-            {product.price && product.price > 0 && (
+            {ingredient.price && ingredient.price > 0 && (
               <div className="mt-2 pt-2 border-t border-stone-100 dark:border-[#2C1D18] flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
                 <span>Costo unitario aprox:</span>
                 <span className="font-bold text-stone-800 dark:text-stone-200 font-mono">
-                  {formatCurrency(product.price)} por {unit}
+                  {formatCurrency(ingredient.price)} por {unit}
                 </span>
               </div>
             )}

@@ -1,4 +1,4 @@
-import type { Product } from '../types';
+import type { Ingredient } from '../types';
 import { apiFetch } from '../lib/api';
 import { supabase } from '../lib/supabase';
 
@@ -20,7 +20,7 @@ interface ApiIngredient {
   updatedAt?: string;
 }
 
-function mapApiToProduct(item: ApiIngredient): Product {
+function mapApiToIngredient(item: ApiIngredient): Ingredient {
   return {
     id: item.id,
     name: item.name,
@@ -38,11 +38,11 @@ function mapApiToProduct(item: ApiIngredient): Product {
   };
 }
 
-export const inventoryService = {
+export const ingredientService = {
   /**
    * Obtiene la caché local de ingredientes
    */
-  getCachedProducts(): Product[] {
+  getCachedIngredients(): Ingredient[] {
     try {
       const data = localStorage.getItem(CACHE_KEY);
       if (data) {
@@ -60,27 +60,27 @@ export const inventoryService = {
   /**
    * Guarda los ingredientes en caché local
    */
-  setCachedProducts(products: Product[]): void {
+  setCachedIngredients(ingredients: Ingredient[]): void {
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(products));
+      localStorage.setItem(CACHE_KEY, JSON.stringify(ingredients));
     } catch {
       // Ignorar fallo de escritura de caché
     }
   },
 
   /**
-   * Obtiene todos los insumos desde el backend NestJS (GET /api/inventory)
-   * con recuperación transparente vía Supabase REST directo y caché local ante desconexión temporal
+   * Obtiene todos los insumos desde el backend NestJS (GET /api/ingredients)
+   * con recuperación transparente vía Supabase REST directo y caché local ante desconexión
    */
-  async getProducts(): Promise<Product[]> {
+  async getIngredients(): Promise<Ingredient[]> {
     // 1. Intentar backend NestJS
     try {
-      const data = await apiFetch<ApiIngredient[]>('/inventory');
-      const products = data.map(mapApiToProduct);
-      this.setCachedProducts(products);
-      return products;
+      const data = await apiFetch<ApiIngredient[]>('/ingredients');
+      const ingredients = data.map(mapApiToIngredient);
+      this.setCachedIngredients(ingredients);
+      return ingredients;
     } catch (err) {
-      console.warn('[inventoryService] API backend demoró o falló. Intentando fallback Supabase directo:', err);
+      console.warn('[ingredientService] API backend demoró o falló. Intentando fallback Supabase directo:', err);
 
       // 2. Fallback directo a Supabase vía HTTPS desde el navegador
       if (supabase) {
@@ -91,7 +91,7 @@ export const inventoryService = {
             .order('name', { ascending: true });
 
           if (!error && Array.isArray(data) && data.length > 0) {
-            const products: Product[] = data.map((row: any) => {
+            const ingredients: Ingredient[] = data.map((row: any) => {
               const stock = Number(row.stock);
               const minStock = Number(row.min_stock ?? row.minStock ?? 0);
               const status: 'suficiente' | 'bajo' | 'agotado' =
@@ -114,18 +114,18 @@ export const inventoryService = {
               };
             });
 
-            this.setCachedProducts(products);
-            return products;
+            this.setCachedIngredients(ingredients);
+            return ingredients;
           }
         } catch (sbErr) {
-          console.warn('[inventoryService] Fallback Supabase directo arrojó error:', sbErr);
+          console.warn('[ingredientService] Fallback Supabase directo arrojó error:', sbErr);
         }
       }
 
       // 3. Fallback a caché local persistente
-      const cached = this.getCachedProducts();
+      const cached = this.getCachedIngredients();
       if (cached.length > 0) {
-        console.warn('[inventoryService] Mostrando catálogo desde caché local resiliente');
+        console.warn('[ingredientService] Mostrando catálogo desde caché local resiliente');
         return cached;
       }
       throw err;
@@ -133,50 +133,50 @@ export const inventoryService = {
   },
 
   /**
-   * Registra un nuevo insumo (POST /api/inventory)
+   * Registra un nuevo insumo (POST /api/ingredients)
    */
-  async addProduct(
-    productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'status'>,
-  ): Promise<Product> {
+  async addIngredient(
+    ingredientData: Omit<Ingredient, 'id' | 'createdAt' | 'updatedAt' | 'status'>,
+  ): Promise<Ingredient> {
     try {
-      const data = await apiFetch<ApiIngredient>('/inventory', {
+      const data = await apiFetch<ApiIngredient>('/ingredients', {
         method: 'POST',
         body: JSON.stringify({
-          name: productData.name,
-          category: productData.category,
-          stock: productData.stock,
-          minStock: productData.minStock,
-          unit: productData.unit,
-          price: productData.price ?? 0,
-          icon: productData.icon,
-          imageUrl: productData.imageUrl,
-          description: productData.description,
+          name: ingredientData.name,
+          category: ingredientData.category,
+          stock: ingredientData.stock,
+          minStock: ingredientData.minStock,
+          unit: ingredientData.unit,
+          price: ingredientData.price ?? 0,
+          icon: ingredientData.icon,
+          imageUrl: ingredientData.imageUrl,
+          description: ingredientData.description,
         }),
       });
-      const product = mapApiToProduct(data);
-      const cached = this.getCachedProducts();
-      this.setCachedProducts([product, ...cached]);
-      return product;
+      const ingredient = mapApiToIngredient(data);
+      const cached = this.getCachedIngredients();
+      this.setCachedIngredients([ingredient, ...cached]);
+      return ingredient;
     } catch (err) {
       // Fallback local si no hay conexión al backend
-      const fallbackProduct: Product = {
-        ...productData,
+      const fallbackIngredient: Ingredient = {
+        ...ingredientData,
         id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'ing-' + Date.now(),
-        status: (productData.stock <= 0) ? 'agotado' : (productData.stock <= productData.minStock) ? 'bajo' : 'suficiente',
+        status: (ingredientData.stock <= 0) ? 'agotado' : (ingredientData.stock <= ingredientData.minStock) ? 'bajo' : 'suficiente',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      const cached = this.getCachedProducts();
-      this.setCachedProducts([fallbackProduct, ...cached]);
+      const cached = this.getCachedIngredients();
+      this.setCachedIngredients([fallbackIngredient, ...cached]);
       throw err;
     }
   },
 
   /**
-   * Actualiza datos de un insumo existente (PATCH /api/inventory/:id)
+   * Actualiza datos de un insumo existente (PATCH /api/ingredients/:id)
    */
-  async updateProduct(id: string, updates: Partial<Product>): Promise<Product> {
-    const data = await apiFetch<ApiIngredient>(`/inventory/${id}`, {
+  async updateIngredient(id: string, updates: Partial<Ingredient>): Promise<Ingredient> {
+    const data = await apiFetch<ApiIngredient>(`/ingredients/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({
         ...(updates.name !== undefined && { name: updates.name }),
@@ -190,50 +190,50 @@ export const inventoryService = {
         ...(updates.description !== undefined && { description: updates.description }),
       }),
     });
-    const product = mapApiToProduct(data);
-    const cached = this.getCachedProducts();
+    const ingredient = mapApiToIngredient(data);
+    const cached = this.getCachedIngredients();
     const idx = cached.findIndex((p) => p.id === id);
     if (idx !== -1) {
-      cached[idx] = product;
-      this.setCachedProducts(cached);
+      cached[idx] = ingredient;
+      this.setCachedIngredients(cached);
     }
-    return product;
+    return ingredient;
   },
 
   /**
-   * Elimina un insumo (DELETE /api/inventory/:id)
+   * Elimina un insumo (DELETE /api/ingredients/:id)
    */
-  async deleteProduct(id: string): Promise<boolean> {
-    await apiFetch(`/inventory/${id}`, {
+  async deleteIngredient(id: string): Promise<boolean> {
+    await apiFetch(`/ingredients/${id}`, {
       method: 'DELETE',
     });
-    const cached = this.getCachedProducts();
-    this.setCachedProducts(cached.filter((p) => p.id !== id));
+    const cached = this.getCachedIngredients();
+    this.setCachedIngredients(cached.filter((p) => p.id !== id));
     return true;
   },
 
   /**
-   * Ajuste rápido de stock / consumo (POST /api/inventory/:id/adjust-stock)
+   * Ajuste rápido de stock / consumo (POST /api/ingredients/:id/adjust-stock)
    */
-  async adjustStock(id: string, delta: number): Promise<Product> {
-    const data = await apiFetch<ApiIngredient>(`/inventory/${id}/adjust-stock`, {
+  async adjustStock(id: string, delta: number): Promise<Ingredient> {
+    const data = await apiFetch<ApiIngredient>(`/ingredients/${id}/adjust-stock`, {
       method: 'POST',
       body: JSON.stringify({ delta }),
     });
-    const product = mapApiToProduct(data);
-    const cached = this.getCachedProducts();
+    const ingredient = mapApiToIngredient(data);
+    const cached = this.getCachedIngredients();
     const idx = cached.findIndex((p) => p.id === id);
     if (idx !== -1) {
-      cached[idx] = product;
-      this.setCachedProducts(cached);
+      cached[idx] = ingredient;
+      this.setCachedIngredients(cached);
     }
-    return product;
+    return ingredient;
   },
 
   /**
    * Registra una compra aumentando el stock disponible
    */
-  async registerPurchase(id: string, amountBought: number): Promise<Product> {
+  async registerPurchase(id: string, amountBought: number): Promise<Ingredient> {
     return this.adjustStock(id, amountBought);
   },
 };

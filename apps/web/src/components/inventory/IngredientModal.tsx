@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles } from 'lucide-react';
-import type { Product, IngredientCategory } from '../../types';
+import type { Ingredient, IngredientCategory } from '../../types';
 import { categoryService } from '../../services/categoryService';
 
-interface ProductModalProps {
+interface IngredientModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => Promise<void>;
-  productToEdit?: Product | null;
+  onSave: (ingredientData: Omit<Ingredient, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => Promise<void>;
+  ingredientToEdit?: Ingredient | null;
 }
 
 const CATEGORIES: IngredientCategory[] = [
@@ -30,11 +30,11 @@ const COMMON_UNITS = [
 
 const SUGGESTED_ICONS = ['🌾', '🧈', '🥛', '🥚', '🍫', '🍬', '🍯', '🍓', '✨', '🍶', '🍥', '🌸'];
 
-export const ProductModal: React.FC<ProductModalProps> = ({
+export const IngredientModal: React.FC<IngredientModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  productToEdit,
+  ingredientToEdit,
 }) => {
   const [name, setName] = useState('');
   const [category, setCategory] = useState<IngredientCategory>('Harinas y Polvos');
@@ -59,15 +59,15 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
-    if (productToEdit) {
-      setName(productToEdit.name);
-      setCategory(productToEdit.category as IngredientCategory);
-      setIcon(productToEdit.icon || '🌾');
-      setStock(productToEdit.stock);
-      setUnit(productToEdit.unit || 'kg');
-      setMinStock(productToEdit.minStock);
-      setPrice(productToEdit.price || 0);
-      setDescription(productToEdit.description || '');
+    if (ingredientToEdit) {
+      setName(ingredientToEdit.name);
+      setCategory(ingredientToEdit.category as IngredientCategory);
+      setIcon(ingredientToEdit.icon || '🌾');
+      setStock(ingredientToEdit.stock);
+      setUnit(ingredientToEdit.unit || 'kg');
+      setMinStock(ingredientToEdit.minStock);
+      setPrice(ingredientToEdit.price || 0);
+      setDescription(ingredientToEdit.description || '');
     } else {
       setName('');
       setCategory('Harinas y Polvos');
@@ -79,7 +79,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       setDescription('');
     }
     setError(null);
-  }, [productToEdit, isOpen]);
+  }, [ingredientToEdit, isOpen]);
 
   if (!isOpen) return null;
 
@@ -129,10 +129,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               {icon}
             </span>
             <h3 className="text-lg font-bold text-[#1C120D] dark:text-[#FBF4EB] font-serif text-center">
-              {productToEdit ? 'Modificar Ingrediente' : 'Nuevo Ingrediente de Pastelería'}
+              {ingredientToEdit ? 'Modificar Ingrediente' : 'Nuevo Ingrediente de Pastelería'}
             </h3>
             <p className="text-xs text-[#6B584C] dark:text-[#B39F93] mt-0.5 text-center">
-              {productToEdit
+              {ingredientToEdit
                 ? 'Ajusta las cantidades o datos de este insumo'
                 : 'Agrega un insumo o materia prima a la despensa'}
             </p>
@@ -312,7 +312,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               {isSubmitting ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : null}
-              <span>{productToEdit ? 'Guardar Cambios' : 'Guardar Ingrediente'}</span>
+              <span>{ingredientToEdit ? 'Guardar Cambios' : 'Guardar Ingrediente'}</span>
             </button>
           </div>
         </form>

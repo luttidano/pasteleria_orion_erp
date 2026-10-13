@@ -12,9 +12,9 @@ import { AdjustStockDto } from './dto/adjust-stock.dto';
 
 export type StockStatus = 'suficiente' | 'bajo' | 'agotado';
 
-function mapSupabaseIngredient(row: any, computeStatusFn: (s:number, m: number) => StockStatus) {
+function mapSupabaseIngredient(row: any, computeStatusFn: (s: number, m: number) => StockStatus) {
   const stock = Number(row.stock);
-  const minStock = Number(row.min_stock !== undefined ? row.min_stock : row.minStock); 
+  const minStock = Number(row.min_stock !== undefined ? row.min_stock : row.minStock);
   return {
     id: row.id,
     name: row.name,
@@ -34,7 +34,7 @@ function mapSupabaseIngredient(row: any, computeStatusFn: (s:number, m: number) 
 }
 
 @Injectable()
-export class InventoryService {
+export class IngredientService {
   private supabase: SupabaseClient;
 
   constructor(
@@ -82,7 +82,7 @@ export class InventoryService {
         }));
       } catch (err) {
         this.prisma.disable(err instanceof Error ? err.message : String(err));
-        console.warn('[InventoryService] Prisma findAll falló, recurriendo a Supabase REST:', err);
+        console.warn('[IngredientService] Prisma findAll falló, recurriendo a Supabase REST:', err);
       }
     }
 
@@ -114,8 +114,8 @@ export class InventoryService {
             status: this.computeStatus(Number(item.stock), Number(item.minStock)),
           };
         }
-      } catch {
-        // Fallback a Supabase REST
+      } catch (err) {
+        this.prisma.disable(err instanceof Error ? err.message : String(err));
       }
     }
 
@@ -148,8 +148,8 @@ export class InventoryService {
             });
             categoryId = newCat.id;
           }
-        } catch {
-          // Fallback
+        } catch (err) {
+          this.prisma.disable(err instanceof Error ? err.message : String(err));
         }
       } else {
         try {
@@ -191,8 +191,8 @@ export class InventoryService {
           },
         });
         return await this.findOne(created.id);
-      } catch {
-        // Fallback a Supabase
+      } catch (err) {
+        this.prisma.disable(err instanceof Error ? err.message : String(err));
       }
     }
 
@@ -236,8 +236,8 @@ export class InventoryService {
             });
             categoryId = newCat.id;
           }
-        } catch {
-          // Fallback
+        } catch (err) {
+          this.prisma.disable(err instanceof Error ? err.message : String(err));
         }
       } else {
         try {
@@ -281,8 +281,8 @@ export class InventoryService {
           data: updateData,
         });
         return await this.findOne(id);
-      } catch {
-        // Fallback
+      } catch (err) {
+        this.prisma.disable(err instanceof Error ? err.message : String(err));
       }
     }
 
@@ -326,8 +326,8 @@ export class InventoryService {
           },
         });
         return await this.findOne(id);
-      } catch {
-        // Fallback
+      } catch (err) {
+        this.prisma.disable(err instanceof Error ? err.message : String(err));
       }
     }
 
@@ -354,8 +354,8 @@ export class InventoryService {
         return await this.prisma.ingredient.delete({
           where: { id },
         });
-      } catch {
-        // Fallback
+      } catch (err) {
+        this.prisma.disable(err instanceof Error ? err.message : String(err));
       }
     }
 
@@ -366,3 +366,4 @@ export class InventoryService {
     return { success: true, id };
   }
 }
+

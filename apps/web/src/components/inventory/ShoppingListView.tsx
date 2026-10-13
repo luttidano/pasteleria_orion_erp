@@ -8,29 +8,29 @@ import {
   ArrowRight,
   ClipboardList,
 } from 'lucide-react';
-import type { Product, ToastMessage } from '../../types';
-import { inventoryService } from '../../services/inventoryService';
+import type { Ingredient, ToastMessage } from '../../types';
+import { ingredientService } from '../../services/ingredientService';
 import { PurchaseItemModal } from './PurchaseItemModal';
 
 interface ShoppingListViewProps {
-  products: Product[];
+  ingredients: Ingredient[];
   onRefresh: () => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
 }
 
 export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
-  products,
+  ingredients,
   onRefresh,
   addToast,
 }) => {
   const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'out' | 'low'>('all');
-  const [selectedProductForPurchase, setSelectedProductForPurchase] = useState<Product | null>(null);
+  const [selectedIngredientForPurchase, setSelectedIngredientForPurchase] = useState<Ingredient | null>(null);
   const [copiedRecently, setCopiedRecently] = useState(false);
 
   // Filtrar únicamente los ingredientes que necesitan reposición: stock <= minStock
   const allNeededItems = useMemo(() => {
-    return products.filter((p) => p.stock <= p.minStock);
-  }, [products]);
+    return ingredients.filter((p) => p.stock <= p.minStock);
+  }, [ingredients]);
 
   // Contadores clave
   const totalCount = allNeededItems.length;
@@ -49,26 +49,26 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
   }, [allNeededItems, urgencyFilter]);
 
   // Confirmar y registrar compra
-  const handleConfirmPurchase = async (product: Product, quantityBought: number) => {
+  const handleConfirmPurchase = async (ingredient: Ingredient, quantityBought: number) => {
     try {
-      await inventoryService.registerPurchase(product.id, quantityBought);
+      await ingredientService.registerPurchase(ingredient.id, quantityBought);
       await onRefresh();
 
-      const newStock = product.stock + quantityBought;
-      const unit = product.unit || 'un';
+      const newStock = ingredient.stock + quantityBought;
+      const unit = ingredient.unit || 'un';
 
-      if (newStock > product.minStock) {
+      if (newStock > ingredient.minStock) {
         addToast({
           type: 'success',
           title: '✓ Compra registrada',
-          message: `Se sumaron ${quantityBought} ${unit} de "${product.name}". ¡Stock ahora suficiente (${newStock} ${unit})! Sale de la lista.`,
+          message: `Se sumaron ${quantityBought} ${unit} de "${ingredient.name}". ¡Stock ahora suficiente (${newStock} ${unit})! Sale de la lista.`,
         });
       } else {
-        const stillMissing = Math.max(0, product.minStock - newStock);
+        const stillMissing = Math.max(0, ingredient.minStock - newStock);
         addToast({
           type: 'info',
           title: '✓ Compra parcial anotada',
-          message: `Se sumaron ${quantityBought} ${unit} de "${product.name}". Nuevo stock: ${newStock} ${unit} (faltan ${stillMissing} ${unit} para el mínimo).`,
+          message: `Se sumaron ${quantityBought} ${unit} de "${ingredient.name}". Nuevo stock: ${newStock} ${unit} (faltan ${stillMissing} ${unit} para el mínimo).`,
         });
       }
     } catch {
@@ -278,7 +278,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
               return (
                 <li
                   key={item.id}
-                  onClick={() => setSelectedProductForPurchase(item)}
+                  onClick={() => setSelectedIngredientForPurchase(item)}
                   className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition-colors cursor-pointer group select-none ${
                     isOutOfStock
                       ? 'hover:bg-rose-50/50 dark:hover:bg-rose-950/20'
@@ -358,7 +358,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedProductForPurchase(item);
+                        setSelectedIngredientForPurchase(item);
                       }}
                       className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] active:scale-95 text-white text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0"
                     >
@@ -387,9 +387,9 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
 
       {/* 4. Modal de Compra Interactiva y Actualización Automática */}
       <PurchaseItemModal
-        isOpen={Boolean(selectedProductForPurchase)}
-        product={selectedProductForPurchase}
-        onClose={() => setSelectedProductForPurchase(null)}
+        isOpen={Boolean(selectedIngredientForPurchase)}
+        ingredient={selectedIngredientForPurchase}
+        onClose={() => setSelectedIngredientForPurchase(null)}
         onConfirmPurchase={handleConfirmPurchase}
       />
     </div>

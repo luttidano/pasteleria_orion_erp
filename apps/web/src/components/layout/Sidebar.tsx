@@ -25,8 +25,7 @@ export type AdminSection =
   // Módulo Inventario
   | 'despensa'
   | 'recetas'
-  | 'productos-elaborados'
-  | 'productos-reventa'
+  | 'productos'
   | 'compras'
   | 'proveedores'
   // Módulo Punto de Venta
@@ -109,21 +108,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           allowedRoles: ['admin', 'baker'],
         },
         {
-          id: 'productos-elaborados',
-          label: 'Productos de Elaboración',
-          description: 'Pasteles, Tortas y producción',
-          icon: Sparkles,
-          badgeColor: 'bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300',
-          allowedRoles: ['admin', 'baker'],
-        },
-        {
-          id: 'productos-reventa',
-          label: 'Productos de Reventa',
-          description: 'Bebidas, abarrotes y terceros',
+          id: 'productos',
+          label: 'Catálogo de productos',
+          description: 'Producción propia y reventa',
           icon: Store,
           badgeColor: 'bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300',
-          allowedRoles: ['admin'],
-        },                
+          allowedRoles: ['admin', 'baker'],
+        },              
         {
           id: 'compras',
           label: 'Lista de Compras',

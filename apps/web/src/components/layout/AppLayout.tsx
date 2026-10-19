@@ -11,8 +11,7 @@ import { Sidebar } from './Sidebar';
 import type { AdminSection } from './Sidebar';
 import { IngredientsView } from '../inventory/IngredientsView';
 
-import { ManufacturedProductsView } from '../inventory/ManufacturedProductView';
-import { ResaleProductsView } from '../inventory/ResaleProductView';
+import { ProductsView } from '../products/ProductsView';
 import { RecipesView } from '../inventory/RecipesView';
 import { ShoppingListView } from '../inventory/ShoppingListView';
 import { SuppliersView } from '../inventory/SuppliersView';
@@ -47,8 +46,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     admin: [
       'despensa',
       'recetas',
-      'productos-elaborados',
-      'productos-reventa',
+      'productos',
       'compras',
       'proveedores',
       'pos-caja',
@@ -59,7 +57,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       'contabilidad-reportes',
       'ajustes',
     ],
-    baker: ['despensa', 'recetas', 'productos-elaborados'],
+    baker: ['despensa', 'recetas', 'productos'],
     cashier: ['pos-caja', 'pos-historial', 'pos-cierre'],
   };
 
@@ -105,10 +103,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         return 'Despensa de Insumos';
       case 'recetas':
         return 'Recetario & Fichas Técnicas'; 
-      case 'productos-elaborados':
-        return 'Productos de elaboración propia';
-      case 'productos-reventa':
-        return 'Productos de Reventa';         
+      case 'productos':
+        return 'Catálogo de Productos Comerciales'         
       case 'compras':
         return 'Lista de Compras de Materias Primas';
       case 'proveedores':
@@ -248,14 +244,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             />
           )}
 
-          {activeSection === 'productos-elaborados' && (
-            <ManufacturedProductsView user={user} addToast={addToast} />
+          {activeSection === 'productos' && (
+            <ProductsView user={user} addToast={addToast} />
           )}
-
-          {activeSection === 'productos-reventa' && (
-            <ResaleProductsView user={user} addToast={addToast} />
-          )}
-          
 
           {activeSection === 'compras' && (
             <ShoppingListView

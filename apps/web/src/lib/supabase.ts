@@ -33,3 +33,19 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured()
       },
     })
   : null;
+
+/**
+ * Crea un cliente efímero de Supabase sin persistencia de sesión en localStorage.
+ * Imprescindible para que un administrador pueda crear nuevos usuarios mediante signUp
+ * sin que se sobreescriba su propia sesión activa en el navegador.
+ */
+export const createEphemeralClient = (): SupabaseClient | null => {
+  if (!isSupabaseConfigured()) return null;
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+};

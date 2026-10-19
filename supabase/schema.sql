@@ -60,6 +60,33 @@ create policy "Permitir inserción de perfil al registrarse"
   to authenticated
   with check (auth.uid() = id);
 
+-- Política de eliminación: Solo administradores pueden revocar/eliminar perfiles
+create policy "Los administradores pueden eliminar perfiles"
+  on public.profiles for delete
+  to authenticated
+  using (public.is_admin());
+
+-- Función RPC para eliminar usuario tanto de profile como de auth.users
+create or replace function public.delete_user_by_admin(target_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Acceso denegado: solo administradores pueden eliminar usuarios.';
+  end if;
+
+  if target_user_id = auth.uid() then
+    raise exception 'Acción rechazada: no puedes eliminar tu propia cuenta de administrador.';
+  end if;
+
+  delete from public.profiles where id = target_user_id;
+  delete from auth.users where id = target_user_id;
+end;
+$$;
+
 
 -- 3. TRIGGER AUTOMÁTICO PARA CREAR PERFIL AL REGISTRAR EN AUTH.USERS
 -- Cuando un usuario se registra vía Supabase Auth, se crea automáticamente su perfil

@@ -4,6 +4,7 @@ import {PrismaModule} from './database/prisma.module';
 import {InventoryModule} from './modules/inventory/inventory.module';
 import {PosModule} from './modules/pos/pos.module';
 import {AccountingModule} from './modules/accounting/accounting.module';
+import {UsersModule} from './modules/users/users.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -28,6 +29,7 @@ import * as path from 'path';
     InventoryModule,
     PosModule,
     AccountingModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

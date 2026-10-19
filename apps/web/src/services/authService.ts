@@ -229,7 +229,7 @@ export const authService = {
         }
 
         // Obtener rol y nombre del usuario desde tabla `profiles` o `user_metadata`
-        let userRole: UserRole = 'user';
+        let userRole: UserRole = 'baker';
         let userName =
           data.user.user_metadata?.name ||
           data.user.email?.split('@')[0] ||
@@ -313,131 +313,7 @@ export const authService = {
     };
   },
 
-  /**
-   * Registro de nuevo usuario (Producción con Supabase + Fallback local)
-   */
-  async register(
-    name: string,
-    email: string,
-    password: string,
-    role: UserRole = 'user'
-  ): Promise<LoginResult> {
-    const cleanName = name.trim();
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPass = password.trim();
 
-    if (!cleanName || !cleanEmail || !cleanPass) {
-      return { success: false, error: 'Todos los campos son obligatorios.' };
-    }
-
-    // Validación básica de formato de correo
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(cleanEmail)) {
-      return { success: false, error: 'Por favor ingresa un correo electrónico válido.' };
-    }
-
-    // Supabase Auth exige mínimo 6 caracteres
-    if (cleanPass.length < 6) {
-      return { success: false, error: 'La contraseña debe tener al menos 6 caracteres.' };
-    }
-
-
-    // 1. Registro con Supabase en Producción
-    if (this.isUsingSupabase() && supabase) {
-      try {
-        const { data, error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password: cleanPass,
-          options: {
-            data: {
-              name: cleanName,
-              role: role,
-            },
-          },
-        });
-
-        if (error) {
-          return {
-            success: false,
-            error: translateSupabaseAuthError(error.message),
-          };
-        }
-
-        if (!data.user) {
-          return {
-            success: false,
-            error: 'No se pudo crear la cuenta de usuario.',
-          };
-        }
-
-        const newUser: User = {
-          id: data.user.id,
-          name: cleanName,
-          email: cleanEmail,
-          role: role,
-          createdAt: data.user.created_at || new Date().toISOString(),
-        };
-
-        // Intentar registrar perfil en tabla `profiles` si existe
-        try {
-          await supabase.from('profile').upsert({
-            id: data.user.id,
-            name: cleanName,
-            email: cleanEmail,
-            role: role,
-          });
-        } catch {
-          // Continuar normalmente si la tabla profiles no existe o está gestionada por trigger
-        }
-
-        // Si Supabase requiere confirmación de email (session es null)
-        if (!data.session) {
-          return {
-            success: true,
-            user: newUser,
-            needsEmailConfirmation: true,
-            message:
-              '¡Cuenta creada exitosamente! Revisa tu correo electrónico para confirmar tu cuenta antes de iniciar sesión.',
-          };
-        }
-
-        // Si la sesión quedó iniciada directamente (auto-confirm habilitado)
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(newUser));
-        return {
-          success: true,
-          user: newUser,
-          message: '¡Registro exitoso! Bienvenido a Pastelería Orión.',
-        };
-      } catch (err: unknown) {
-        console.error('Error durante el registro en Supabase:', err);
-        return {
-          success: false,
-          error: 'Error de comunicación con el servicio de registro de Supabase.',
-        };
-      }
-    }
-
-    // 2. Fallback a almacenamiento local si Supabase no está configurado
-    const users = this.getRegisteredUsers();
-    if (users.some((u) => u.email.toLowerCase() === cleanEmail)) {
-      return { success: false, error: 'Este correo electrónico ya está registrado.' };
-    }
-
-    const newUser: User = {
-      id: 'usr-' + Date.now(),
-      name: cleanName,
-      email: cleanEmail,
-      role: role,
-      createdAt: new Date().toISOString(),
-    };
-
-    users.push({ ...newUser, passwordHash: cleanPass });
-    localStorage.setItem(STORAGE_KEY_REGISTERED_USERS, JSON.stringify(users));
-
-    // Auto-login tras registro local
-    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(newUser));
-    return { success: true, user: newUser };
-  },
 
   /**
    * Recuperar contraseña (envío de email vía Supabase Auth)

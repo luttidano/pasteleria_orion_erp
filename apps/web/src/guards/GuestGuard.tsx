@@ -11,8 +11,8 @@ interface GuestGuardProps {
 /**
  * Guard para rutas exclusivas de invitados o no autenticados (como /login).
  * Si el usuario ya cuenta con sesión activa:
- * - Admin -> Redirige al panel de administración (/admin/despensa o ruta previa).
- * - Usuario estándar -> Redirige a su portal (/portal).
+ * - Cajero -> Redirige a /pos-caja.
+ * - Admin / Pastelero -> Redirige a /despensa.
  */
 export const GuestGuard: React.FC<GuestGuardProps> = ({
   user,
@@ -45,10 +45,10 @@ export const GuestGuard: React.FC<GuestGuardProps> = ({
     }
 
     // Redirección por defecto según rol
-    return user.role === 'admin' ? (
-      <Navigate to="/admin/despensa" replace />
+    return user.role === 'cashier' ? (
+      <Navigate to="/pos-caja" replace />
     ) : (
-      <Navigate to="/portal" replace />
+      <Navigate to="/despensa" replace />
     );
   }
 

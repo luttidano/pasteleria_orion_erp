@@ -1,5 +1,4 @@
-export type UserRole = 'admin' | 'cashier' | 'baker' | 'user'
-;
+export type UserRole = 'admin' | 'cashier' | 'baker';
 
 export interface User {
   id: string;
@@ -8,6 +7,27 @@ export interface User {
   role: UserRole;
   avatarUrl?: string; // URL en Cloudflare R2
   createdAt?: string;
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateUserData {
+  name: string;
+  email: string;
+  password?: string;
+  role: UserRole;
+}
+
+export interface UpdateUserData {
+  name?: string;
+  role?: UserRole;
 }
 
 export type CategoryType = 'ingredient' | 'recipe' | 'pos';

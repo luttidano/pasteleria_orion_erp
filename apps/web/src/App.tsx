@@ -5,7 +5,6 @@ import { authService } from './services/authService';
 import { ingredientService } from './services/ingredientService';
 import { AuthPage } from './components/auth/AuthPage';
 import { AdminLayout } from './components/layout/AppLayout';
-import { UserPortalView } from './components/user/UserPortalView';
 import { ToastContainer } from './components/common/Toast';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthGuard, RoleGuard, GuestGuard } from './guards';
@@ -188,12 +187,10 @@ function AppContent() {
       message: roleMessages[user.role] || 'Has ingresado como usuario del sistema.',
     });
 
-    if (user.role === 'admin' || user.role === 'baker') {
-      navigate('/admin/despensa');
-    } else if (user.role === 'cashier') {
-      navigate('/admin/pos-caja');
+    if (user.role === 'cashier') {
+      navigate('/pos-caja');
     } else {
-      navigate('/portal');
+      navigate('/despensa');
     }
   };
 
@@ -208,18 +205,12 @@ function AppContent() {
     navigate('/login');
   };
 
-  const handleSwitchToAdmin = async () => {
-    await authService.logout();
-    setCurrentUser(null);
-    navigate('/login');
-  };
-
   return (
     <>
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       <Routes>
-        {/* 1. Ruta Pública / Invitados: Login & Registro (Protegido por GuestGuard) */}
+        {/* 1. Ruta Pública: Login (Protegido por GuestGuard) */}
         <Route
           path="/login"
           element={
@@ -229,21 +220,23 @@ function AppContent() {
           }
         />
 
-        {/* 2. Redirección base de administración según rol */}
+        {/* 2. Vista de Acceso No Autorizado (403 Forbidden estilizado) */}
         <Route
-          path="/admin"
+          path="/unauthorized"
           element={
-            currentUser?.role === 'cashier' ? (
-              <Navigate to="/admin/pos-caja" replace />
-            ) : (
-              <Navigate to="/admin/despensa" replace />
-            )
+            <AuthGuard user={currentUser} isLoading={isLoading}>
+              <UnauthorizedView
+                user={currentUser}
+                requiredRole="Administrador"
+                onLogout={handleLogout}
+              />
+            </AuthGuard>
           }
         />
 
-        {/* 3. Rutas de Administración y Módulos ERP (Admin, Pastelero y Cajero) */}
+        {/* 4. Rutas Limpias de Módulos ERP (Admin, Pastelero y Cajero) */}
         <Route
-          path="/admin/:section"
+          path="/:section"
           element={
             <RoleGuard
               user={currentUser}
@@ -264,41 +257,7 @@ function AppContent() {
           }
         />
 
-        {/* 4. Ruta de Portal de Usuario Estándar (Protegida por RoleGuard para 'user' y 'admin') */}
-        <Route
-          path="/portal"
-          element={
-            <RoleGuard
-              user={currentUser}
-              allowedRoles={['user', 'admin']}
-              isLoading={isLoading}
-              onLogout={handleLogout}
-            >
-              <UserPortalView
-                user={currentUser!}
-                ingredients={ingredients}
-                onLogout={handleLogout}
-                onSwitchToAdmin={handleSwitchToAdmin}
-              />
-            </RoleGuard>
-          }
-        />
-
-        {/* 5. Vista de Acceso No Autorizado (403 Forbidden estilizado) */}
-        <Route
-          path="/unauthorized"
-          element={
-            <AuthGuard user={currentUser} isLoading={isLoading}>
-              <UnauthorizedView
-                user={currentUser}
-                requiredRole="Administrador"
-                onLogout={handleLogout}
-              />
-            </AuthGuard>
-          }
-        />
-
-        {/* 6. Ruta Raíz Inteligente: Redirige según el estado de sesión y rol */}
+        {/* 5. Ruta Raíz Inteligente: Redirige según el estado de sesión y rol */}
         <Route
           path="/"
           element={
@@ -306,15 +265,15 @@ function AppContent() {
               <LoadingScreen />
             ) : !currentUser ? (
               <Navigate to="/login" replace />
-            ) : currentUser.role === 'admin' ? (
-              <Navigate to="/admin/despensa" replace />
+            ) : currentUser.role === 'cashier' ? (
+              <Navigate to="/pos-caja" replace />
             ) : (
-              <Navigate to="/portal" replace />
+              <Navigate to="/despensa" replace />
             )
           }
         />
 
-        {/* 7. Catch-all: Redirige cualquier ruta inexistente a la raíz */}
+        {/* 6. Catch-all: Redirige cualquier ruta inexistente a la raíz */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

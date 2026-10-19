@@ -18,6 +18,7 @@ import { SuppliersView } from '../inventory/suppliers/SuppliersView';
 import { PosView } from '../pos/PosView';
 import { AccountingView } from '../accounting/AccountingView';
 import { useTheme } from '../../context/ThemeContext';
+import { SettingsView } from '../settings/SettingsView';
 
 interface AdminLayoutProps {
   user: User;
@@ -69,7 +70,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     cashier: 'pos-caja',
   };
 
-  // Sincronizar sección activa con la URL (/admin/:section) asegurando permisos
+  // Sincronizar sección activa con la URL (/:section) asegurando permisos
   const activeSection: AdminSection =
     section && allowedSections.includes(section as AdminSection)
       ? (section as AdminSection)
@@ -78,12 +79,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   // Si el usuario intentó acceder por URL a una sección restringida para su rol, redirigir
   useEffect(() => {
     if (section && !allowedSections.includes(section as AdminSection)) {
-      navigate(`/admin/${defaultSectionForRole[user.role] || 'despensa'}`, { replace: true });
+      navigate(`/${defaultSectionForRole[user.role] || 'despensa'}`, { replace: true });
     }
   }, [section, user.role, allowedSections, navigate]);
 
   const handleSelectSection = (newSection: AdminSection) => {
-    navigate(`/admin/${newSection}`);
+    navigate(`/${newSection}`);
   };
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -278,34 +279,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
           {/* CONFIGURACIÓN DEL SISTEMA */}
           {activeSection === 'ajustes' && (
-            <div className="bg-white dark:bg-[#16100E] rounded-[26px] p-6 sm:p-8 border border-stone-200/80 dark:border-[#35251F] shadow-xs space-y-6 animate-fade-in">
-              <div className="flex flex-col items-center text-center border-b border-stone-100 dark:border-[#2C1D18] pb-4">
-                <h3 className="text-xl sm:text-2xl font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif text-center">
-                  Configuración General del ERP
-                </h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 text-center">
-                  Ajustes de módulos, alertas y preferencias de Pastelería Orión.
-                </p>
-              </div>
-
-              <div className="space-y-4 max-w-xl mx-auto">
-                <div className="p-4 rounded-2xl bg-stone-50 dark:bg-[#201612] border border-stone-200 dark:border-[#35251F]">
-                  <h4 className="font-bold text-stone-900 dark:text-stone-100 text-sm">Sincronización Modular</h4>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 leading-relaxed">
-                    Los módulos de Inventario, Punto de Venta y Contabilidad operan desacoplados a través de la API NestJS y PostgreSQL.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-stone-50 dark:bg-[#201612] border border-stone-200 dark:border-[#35251F]">
-                  <h4 className="font-bold text-stone-900 dark:text-stone-100 text-sm">Control de Acceso por Roles (RBAC)</h4>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 leading-relaxed">
-                    • <strong>Administrador:</strong> Acceso total a los 3 módulos y ajustes.<br />
-                    • <strong>Pastelero (Baker):</strong> Acceso restringido al Inventario (existencias y consumo).<br />
-                    • <strong>Cajero (Cashier):</strong> Acceso restringido al Punto de Venta.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <SettingsView currentUser={user} addToast={addToast}/>
           )}
         </main>
 

@@ -18,10 +18,10 @@ export const UnauthorizedView: React.FC<UnauthorizedViewProps> = ({
   const navigate = useNavigate();
 
   const handleGoHome = () => {
-    if (user?.role === 'admin') {
-      navigate('/admin/despensa');
+    if (user?.role === 'cashier') {
+      navigate('/pos-caja');
     } else if (user) {
-      navigate('/portal');
+      navigate('/despensa');
     } else {
       navigate('/login');
     }
@@ -68,7 +68,7 @@ export const UnauthorizedView: React.FC<UnauthorizedViewProps> = ({
             className="w-full sm:w-auto px-5 py-3 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs sm:text-sm font-semibold shadow-btn transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>{user?.role === 'user' ? 'Volver a mi Portal de Usuario' : 'Ir a la página principal'}</span>
+            <span>Ir a la página principal</span>
           </button>
 
           {onLogout && (

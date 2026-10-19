@@ -10,7 +10,6 @@ enum Role {
   admin
   cashier
   baker
-  user
 }
 
 enum CategoryType {

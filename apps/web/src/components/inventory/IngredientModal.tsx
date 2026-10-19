@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles } from 'lucide-react';
-import type { Ingredient, IngredientCategory } from '../../types';
+import type { Ingredient, IngredientCategory, Category } from '../../types';
 import { categoryService } from '../../services/categoryService';
 
 interface IngredientModalProps {
@@ -20,6 +20,135 @@ const CATEGORIES: IngredientCategory[] = [
   'Grasas y Aceites',
 ];
 
+export const DEFAULT_CATEGORY_ICONS: Record<string, string> = {
+  'Harinas y Polvos': '🌾',
+  'Lácteos y Huevos': '🥛',
+  'Azúcares y Dulces': '🍬',
+  'Chocolates y Cacaos': '🍫',
+  'Frutas y Esencias': '🍓',
+  'Grasas y Aceites': '🧈',
+};
+
+/**
+ * Obtiene el ícono por defecto correspondiente a una categoría.
+ * Busca primero si la categoría existe en backend con ícono asignado,
+ * luego en el diccionario estándar y finalmente por palabras clave.
+ */
+export const getCategoryDefaultIcon = (
+  categoryName: string,
+  categoriesList?: Category[]
+): string => {
+  if (!categoryName) return '🌾';
+
+  // 1. Si existe en la lista de categorías del sistema y tiene un icono configurado
+  if (categoriesList && categoriesList.length > 0) {
+    const found = categoriesList.find(
+      (c) => c.name.trim().toLowerCase() === categoryName.trim().toLowerCase()
+    );
+    if (found?.icon) return found.icon;
+  }
+
+  // 2. Coincidencia exacta en el diccionario por defecto
+  if (DEFAULT_CATEGORY_ICONS[categoryName]) {
+    return DEFAULT_CATEGORY_ICONS[categoryName];
+  }
+
+  // 3. Coincidencia inteligente por palabras clave
+  const lower = categoryName.toLowerCase();
+  if (
+    lower.includes('harina') ||
+    lower.includes('polvo') ||
+    lower.includes('trigo') ||
+    lower.includes('cereal') ||
+    lower.includes('fécula') ||
+    lower.includes('fecula') ||
+    lower.includes('almidón') ||
+    lower.includes('almidon')
+  ) {
+    return '🌾';
+  }
+  if (
+    lower.includes('lácteo') ||
+    lower.includes('lacteo') ||
+    lower.includes('leche') ||
+    lower.includes('queso') ||
+    lower.includes('crema') ||
+    lower.includes('yogur') ||
+    lower.includes('manjar')
+  ) {
+    return '🥛';
+  }
+  if (lower.includes('huevo') || lower.includes('yema') || lower.includes('clara')) {
+    return '🥚';
+  }
+  if (
+    lower.includes('azúcar') ||
+    lower.includes('azucar') ||
+    lower.includes('dulce') ||
+    lower.includes('miel') ||
+    lower.includes('caramelo') ||
+    lower.includes('sirope') ||
+    lower.includes('almíbar') ||
+    lower.includes('almibar')
+  ) {
+    return '🍬';
+  }
+  if (lower.includes('chocola') || lower.includes('cacao') || lower.includes('cobertura')) {
+    return '🍫';
+  }
+  if (
+    lower.includes('fruta') ||
+    lower.includes('frutilla') ||
+    lower.includes('fresa') ||
+    lower.includes('baya') ||
+    lower.includes('pulpa') ||
+    lower.includes('arándano') ||
+    lower.includes('arandano') ||
+    lower.includes('frambuesa')
+  ) {
+    return '🍓';
+  }
+  if (
+    lower.includes('grasa') ||
+    lower.includes('aceite') ||
+    lower.includes('mantequilla') ||
+    lower.includes('manteca') ||
+    lower.includes('margarina')
+  ) {
+    return '🧈';
+  }
+  if (
+    lower.includes('esencia') ||
+    lower.includes('aroma') ||
+    lower.includes('extracto') ||
+    lower.includes('vainilla') ||
+    lower.includes('colorante')
+  ) {
+    return '✨';
+  }
+  if (
+    lower.includes('fruto seco') ||
+    lower.includes('nuez') ||
+    lower.includes('almendra') ||
+    lower.includes('maní') ||
+    lower.includes('mani') ||
+    lower.includes('pistacho') ||
+    lower.includes('semilla')
+  ) {
+    return '🥜';
+  }
+  if (
+    lower.includes('sal') ||
+    lower.includes('condimento') ||
+    lower.includes('especia') ||
+    lower.includes('canela')
+  ) {
+    return '🧂';
+  }
+
+  return '🌾';
+};
+
 const COMMON_UNITS = [
   { value: 'kg', label: 'Kilogramos (kg)' },
   { value: 'Litros', label: 'Litros (L)' },
@@ -28,7 +157,7 @@ const COMMON_UNITS = [
   { value: 'Gramos', label: 'Gramos (g)' },
 ];
 
-const SUGGESTED_ICONS = ['🌾', '🧈', '🥛', '🥚', '🍫', '🍬', '🍯', '🍓', '✨', '🍶', '🍥', '🌸'];
+const SUGGESTED_ICONS = ['🌾', '🥛', '🥚', '🧈', '🍫', '🍬', '🍯', '🍓', '✨', '🍶', '🧂', '🍋'];
 
 export const IngredientModal: React.FC<IngredientModalProps> = ({
   isOpen,
@@ -44,6 +173,7 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
   const [minStock, setMinStock] = useState<number | ''>(5);
   const [price, setPrice] = useState<number | ''>(1500);
   const [description, setDescription] = useState('');
+  const [categoriesData, setCategoriesData] = useState<Category[]>([]);
   const [dynamicCategories, setDynamicCategories] = useState<string[]>(CATEGORIES);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,27 +181,36 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       categoryService.getAll('ingredient').then((cats) => {
-        if (cats.length > 0) {
+        if (cats && cats.length > 0) {
+          setCategoriesData(cats);
           setDynamicCategories(cats.map((c) => c.name));
+          // Si estamos creando un nuevo ingrediente, sincronizar el ícono según la categoría actual
+          if (!ingredientToEdit) {
+            setIcon((prev) => {
+              const autoIcon = getCategoryDefaultIcon(category, cats);
+              return autoIcon || prev;
+            });
+          }
         }
       }).catch(() => {});
     }
-  }, [isOpen]);
+  }, [isOpen, ingredientToEdit]);
 
   useEffect(() => {
     if (ingredientToEdit) {
       setName(ingredientToEdit.name);
       setCategory(ingredientToEdit.category as IngredientCategory);
-      setIcon(ingredientToEdit.icon || '🌾');
+      setIcon(ingredientToEdit.icon || getCategoryDefaultIcon(ingredientToEdit.category, categoriesData));
       setStock(ingredientToEdit.stock);
       setUnit(ingredientToEdit.unit || 'kg');
       setMinStock(ingredientToEdit.minStock);
       setPrice(ingredientToEdit.price || 0);
       setDescription(ingredientToEdit.description || '');
     } else {
+      const defaultCat = 'Harinas y Polvos';
       setName('');
-      setCategory('Harinas y Polvos');
-      setIcon('🌾');
+      setCategory(defaultCat);
+      setIcon(getCategoryDefaultIcon(defaultCat, categoriesData));
       setStock(10);
       setUnit('kg');
       setMinStock(5);
@@ -80,6 +219,13 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
     }
     setError(null);
   }, [ingredientToEdit, isOpen]);
+
+  const handleCategoryChange = (newCategory: string) => {
+    setCategory(newCategory as IngredientCategory);
+    // Asignar automáticamente el ícono según la categoría seleccionada
+    const matchedIcon = getCategoryDefaultIcon(newCategory, categoriesData);
+    setIcon(matchedIcon);
+  };
 
   if (!isOpen) return null;
 
@@ -174,7 +320,7 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
               Categoría y símbolo visual
             </label>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {SUGGESTED_ICONS.map((emoji) => (
+              {(SUGGESTED_ICONS.includes(icon) ? SUGGESTED_ICONS : [icon, ...SUGGESTED_ICONS]).map((emoji) => (
                 <button
                   key={emoji}
                   type="button"
@@ -192,7 +338,7 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
 
             <select
               value={category}
-              onChange={(e) => setCategory(e.target.value as IngredientCategory)}
+              onChange={(e) => handleCategoryChange(e.target.value)}
               className="w-full mt-2 px-3.5 py-2.5 rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] bg-white dark:bg-[#1E1512] text-sm font-medium text-[#1C120D] dark:text-[#FBF4EB] focus:outline-none focus:ring-2 focus:ring-[#8C1F25]"
             >
               {dynamicCategories.map((cat) => (

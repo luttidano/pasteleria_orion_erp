@@ -36,10 +36,11 @@ interface IngredientsViewProps {
 const CATEGORIES: Array<{ label: string; value: 'Todas' | IngredientCategory; icon: string }> = [
   { label: 'Todos', value: 'Todas', icon: '🧁' },
   { label: 'Harinas y Polvos', value: 'Harinas y Polvos', icon: '🌾' },
-  { label: 'Lácteos y Huevos', value: 'Lácteos y Huevos', icon: '🧈' },
+  { label: 'Lácteos y Huevos', value: 'Lácteos y Huevos', icon: '🥛' },
   { label: 'Azúcares y Dulces', value: 'Azúcares y Dulces', icon: '🍬' },
   { label: 'Chocolates y Cacaos', value: 'Chocolates y Cacaos', icon: '🍫' },
   { label: 'Frutas y Esencias', value: 'Frutas y Esencias', icon: '🍓' },
+  { label: 'Grasas y Aceites', value: 'Grasas y Aceites', icon: '🧈' },
 ];
 
 export const IngredientsView: React.FC<IngredientsViewProps> = ({

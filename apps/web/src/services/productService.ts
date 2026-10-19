@@ -185,5 +185,11 @@ export const productService = {
       throw new Error('Error al eliminar el producto.');
     }
   },
+
+  async adjustStock(id: string, delta: number, currentStock?: number): Promise<CatalogProduct> {
+    const stockToUse = currentStock !== undefined ? currentStock : (await this.getById(id)).stock;
+    const newStock = Math.max(0, stockToUse + delta);
+    return this.update(id, { stock: newStock});
+  }
 };
 

@@ -10,10 +10,10 @@ import {
   Cake,
   Tag,
 } from 'lucide-react';
-import type { User, Ingredient, ToastMessage, Recipe, Category } from '../../types';
-import { recipeService } from '../../services/recipeService';
-import { categoryService } from '../../services/categoryService';
-import { CategoryManagerModal } from './CategoryManagerModal';
+import type { User, Ingredient, ToastMessage, Recipe, Category } from '../../../types';
+import { recipeService } from '../../../services/recipeService';
+import { categoryService } from '../../../services/categoryService';
+import { CategoryManagerModal } from '../categories/CategoryManagerModal';
 
 interface RecipesViewProps {
   user: User;

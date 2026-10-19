@@ -86,6 +86,7 @@ export interface Recipe {
 }
 
 export type SupplierType = 'materia_prima' | 'reventa' | 'ambos';
+export type SupplyModality = 'despacho' | 'presencial' | 'mixto';
 
 export interface Supplier {
   id: string;
@@ -95,6 +96,7 @@ export interface Supplier {
   category: string; // Proveedor de qué es (rubro o insumos principales)
   approximatePrices: string; // Precios aproximados o lista de precios de referencia
   supplierType?: SupplierType;
+  supplyModality?: SupplyModality;
   contactPerson?: string; // Nombre de persona de contacto o vendedor
   icon?: string; // Emoji de avatar (🌾, 🧈, 🍫, 📦, 🍓, etc.)
   email?: string;
@@ -128,4 +130,3 @@ export interface CatalogProduct {
   createdAt?: string;
   updatedAt?: string;
 }
-

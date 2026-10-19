@@ -8,8 +8,8 @@ import {
   ArrowRight,
   ClipboardList,
 } from 'lucide-react';
-import type { Ingredient, ToastMessage } from '../../types';
-import { ingredientService } from '../../services/ingredientService';
+import type { Ingredient, ToastMessage } from '../../../types';
+import { ingredientService } from '../../../services/ingredientService';
 import { PurchaseItemModal } from './PurchaseItemModal';
 
 interface ShoppingListViewProps {

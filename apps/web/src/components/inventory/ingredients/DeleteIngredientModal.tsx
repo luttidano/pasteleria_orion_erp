@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { Trash2, AlertTriangle, X } from 'lucide-react';
-import type { Ingredient } from '../../types';
+import type { Ingredient } from '../../../types';
 
 interface DeleteConfirmModalProps {
   isOpen: boolean;

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles } from 'lucide-react';
-import type { Ingredient, IngredientCategory, Category } from '../../types';
-import { categoryService } from '../../services/categoryService';
+import type { Ingredient, IngredientCategory, Category } from '../../../types';
+import { categoryService } from '../../../services/categoryService';
 
 interface IngredientModalProps {
   isOpen: boolean;

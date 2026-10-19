@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
-import type { Category, CategoryType, ToastMessage } from '../../types';
-import { categoryService } from '../../services/categoryService';
+import type { Category, CategoryType, ToastMessage } from '../../../types';
+import { categoryService } from '../../../services/categoryService';
 
 interface CategoryManagerModalProps {
   isOpen: boolean;

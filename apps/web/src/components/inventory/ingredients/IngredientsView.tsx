@@ -15,11 +15,11 @@ import {
   X,
   Tag,
 } from 'lucide-react';
-import type { Ingredient, IngredientCategory, ToastMessage, User } from '../../types';
-import { ingredientService } from '../../services/ingredientService';
+import type { Ingredient, IngredientCategory, ToastMessage, User } from '../../../types';
+import { ingredientService } from '../../../services/ingredientService';
 import { IngredientModal } from './IngredientModal';
-import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { CategoryManagerModal } from './CategoryManagerModal';
+import { DeleteConfirmModal } from './DeleteIngredientModal';
+import { CategoryManagerModal } from '../categories/CategoryManagerModal';
 
 export type StatusFilterType = 'todos' | 'bajo' | 'agotado' | 'comprar';
 

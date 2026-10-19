@@ -9,12 +9,12 @@ import {
 import type { User, Ingredient, ToastMessage } from '../../types';
 import { Sidebar } from './Sidebar';
 import type { AdminSection } from './Sidebar';
-import { IngredientsView } from '../inventory/IngredientsView';
+import { IngredientsView } from '../inventory/ingredients/IngredientsView';
 
-import { ProductsView } from '../products/ProductsView';
-import { RecipesView } from '../inventory/RecipesView';
-import { ShoppingListView } from '../inventory/ShoppingListView';
-import { SuppliersView } from '../inventory/SuppliersView';
+import { ProductsView } from '../inventory/products/ProductsView';
+import { RecipesView } from '../inventory/recipes/RecipesView';
+import { ShoppingListView } from '../inventory/shopping/ShoppingListView';
+import { SuppliersView } from '../inventory/suppliers/SuppliersView';
 import { PosView } from '../pos/PosView';
 import { AccountingView } from '../accounting/AccountingView';
 import { useTheme } from '../../context/ThemeContext';

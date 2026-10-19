@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { Trash2, AlertTriangle, X } from 'lucide-react';
-import type { Supplier } from '../../types';
+import type { Supplier } from '../../../types';
 
 interface DeleteSupplierModalProps {
   isOpen: boolean;

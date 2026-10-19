@@ -12,10 +12,10 @@ import {
   LayoutGrid,
   List,
 } from 'lucide-react';
-import type { User, ToastMessage, Recipe, Supplier, CatalogProduct, ProductKind } from '../../types';
-import { productService } from '../../services/productService';
-import { recipeService } from '../../services/recipeService';
-import { supplierService } from '../../services/supplierService';
+import type { User, ToastMessage, Recipe, Supplier, CatalogProduct, ProductKind } from '../../../types';
+import { productService } from '../../../services/productService';
+import { recipeService } from '../../../services/recipeService';
+import { supplierService } from '../../../services/supplierService';
 import { ProductModal } from './ProductModal';
 
 interface ProductsViewProps {
@@ -121,7 +121,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
   // Ajuste rápido de stock (+ / -)
   const handleStockDelta = async (product: CatalogProduct, delta: number) => {
     try {
-      await productService.adjustStock(product.id, delta);
+      await productService.adjustStock(product.id, delta, product.stock);
       await loadData();
     } catch (err: unknown) {
       addToast({

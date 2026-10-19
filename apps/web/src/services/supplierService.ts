@@ -1,4 +1,4 @@
-import type { Supplier } from '../types';
+import type { Supplier, SupplyModality } from '../types';
 import { supabase } from '../lib/supabase';
 
 const STORAGE_KEY = 'pasteleria_orion_suppliers';
@@ -20,7 +20,7 @@ interface SupabaseSupplierRow {
 }
 
 function mapRowToSupplier(row: SupabaseSupplierRow): Supplier {
-  return {
+  const s: Supplier = {
     id: row.id,
     name: row.name,
     phone: row.phone,
@@ -35,6 +35,39 @@ function mapRowToSupplier(row: SupabaseSupplierRow): Supplier {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+  s.supplyModality = getSupplyModality(s);
+  return s;
+}
+
+/* Genera enlace a Google Maps */
+export function getGoogleMapsUrl(address: string): string {
+  if (!address) return '';
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
+/* Detecta modo de abastecimiento */
+export function getSupplyModality(supplier: Supplier): SupplyModality {
+  if (supplier.supplyModality) return supplier.supplyModality;
+  const schedule = (supplier.deliverySchedule || '').toLowerCase();
+  const notes = (supplier.notes || '').toLowerCase();
+  const name = (supplier.name || '').toLowerCase();
+  if (
+    schedule.includes('presencial') ||
+    schedule.includes('retiro') ||
+    schedule.includes('local') ||
+    schedule.includes('mayorista') ||
+    notes.includes('presencial') ||
+    notes.includes('local') ||
+    notes.includes('mayorista') ||
+    name.includes('mayorista') ||
+    name.includes('vega') ||
+    supplier.icon === '🏬' ||
+    supplier.icon === '🏪' ||
+    supplier.icon === '🛒'
+  ) {
+    return 'presencial';
+  }
+  return 'despacho';
 }
 
 /**

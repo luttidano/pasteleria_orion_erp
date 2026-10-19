@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, CheckCircle2, ShoppingCart, AlertTriangle, AlertCircle, Plus, Minus } from 'lucide-react';
-import type { Ingredient } from '../../types';
+import type { Ingredient } from '../../../types';
 
 interface PurchaseItemModalProps {
   isOpen: boolean;

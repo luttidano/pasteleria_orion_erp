@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, BookOpen, Truck } from 'lucide-react';
-import type { CatalogProduct, ProductKind, Recipe, Supplier } from '../../types';
+import type { CatalogProduct, ProductKind, Recipe, Supplier } from '../../../types';
 
 interface ProductModalProps {
   isOpen: boolean;

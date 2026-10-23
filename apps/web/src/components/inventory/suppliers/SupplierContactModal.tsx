@@ -60,9 +60,17 @@ export const SupplierContactModal: React.FC<SupplierContactModalProps> = ({
 
   const handleOpenWhatsApp = (customMsg?: string) => {
     if (!hasPhone) return;
+    const defaultProductTerm =
+      supplier.category.split(/[,•]/)[0]?.trim() ||
+      (supplier.supplierType === 'reventa'
+        ? 'productos de reventa'
+        : supplier.supplierType === 'ambos'
+        ? 'materias primas y productos'
+        : 'materias primas');
+
     const defaultMsg = isPresencial
-      ? `Hola ${supplier.name}, te escribo desde Pastelería Orión. Quisiera cotizar / consultar disponibilidad de ${supplier.category.split(/[,•]/)[0] || 'materias primas'} para ir a comprar.`
-      : `Hola ${supplier.name}, te escribo desde Pastelería Orión. Quisiera cotizar / consultar disponibilidad de materias primas para despacho.`;
+      ? `Hola ${supplier.name}, te escribo desde Pastelería Orión. Quisiera cotizar / consultar disponibilidad de ${defaultProductTerm} para ir a comprar.`
+      : `Hola ${supplier.name}, te escribo desde Pastelería Orión. Quisiera cotizar / consultar disponibilidad de ${defaultProductTerm} para despacho.`;
     const message = customMsg || customNote || defaultMsg;
     const url = getWhatsAppUrl(supplier.phone, supplier.name, message);
     window.open(url, '_blank', 'noopener,noreferrer');

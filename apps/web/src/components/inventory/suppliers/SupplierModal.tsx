@@ -16,7 +16,7 @@ import {
   Check,
   Plus,
 } from 'lucide-react';
-import type { Supplier, SupplyModality } from '../../../types';
+import type { Supplier, SupplyModality, SupplierType } from '../../../types';
 import { formatPhoneForWhatsApp, getSupplyModality } from '../../../services/supplierService';
 
 interface SupplierModalProps {
@@ -71,6 +71,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [approximatePrices, setApproximatePrices] = useState('');
   const [supplyModality, setSupplyModality] = useState<SupplyModality>('despacho');
+  const [supplierType, setSupplierType] = useState<SupplierType>('materia_prima');
   const [contactPerson, setContactPerson] = useState('');
   const [icon, setIcon] = useState('🚚');
   const [notes, setNotes] = useState('');
@@ -102,6 +103,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
           : supplierToEdit.approximatePrices || ''
       );
       setSupplyModality(supplierToEdit.supplyModality || getSupplyModality(supplierToEdit));
+      setSupplierType(supplierToEdit.supplierType || 'materia_prima');
       setContactPerson(supplierToEdit.contactPerson || '');
       setIcon(supplierToEdit.icon || '🚚');
       setNotes(supplierToEdit.notes || '');
@@ -115,6 +117,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
       setCustomCategoryInput('');
       setApproximatePrices('');
       setSupplyModality('despacho');
+      setSupplierType('materia_prima');
       setContactPerson('');
       setIcon('🚚');
       setNotes('');
@@ -184,6 +187,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
         approximatePrices: approximatePrices.trim() || 'A consultar en establecimiento',
         contactPerson: contactPerson.trim() || undefined,
         supplyModality,
+        supplierType,
         address: address.trim() || undefined,
         icon,
         notes: notes.trim() || undefined,
@@ -231,6 +235,68 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
               <span className="font-bold">⚠️ Atención:</span> {error}
             </div>
           )}
+
+          {/* Tipo de Suministro / Productos */}
+          <div>
+            <label className="block text-xs font-semibold text-[#4A3B32] dark:text-[#C4B2A5] mb-1.5">
+              Tipo de Suministro <span className="text-[#8C1F25]">*</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setSupplierType('materia_prima')}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  supplierType === 'materia_prima'
+                    ? 'border-amber-600 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-1 ring-amber-600'
+                    : 'border-[#DFCAA9]/70 dark:border-[#35251F] bg-white/70 dark:bg-[#1E1512] hover:bg-white'
+                }`}
+              >
+                <div className="font-bold text-xs flex items-center gap-1.5">
+                  <span>🌾</span>
+                  <span>Materia Prima</span>
+                </div>
+                <p className="text-[11px] text-[#6B584C] dark:text-[#B39F93] mt-1 leading-tight">
+                  Harinas, lácteos, chocolates, envases
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSupplierType('reventa')}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  supplierType === 'reventa'
+                    ? 'border-blue-600 bg-blue-500/10 text-blue-900 dark:text-blue-200 ring-1 ring-blue-600'
+                    : 'border-[#DFCAA9]/70 dark:border-[#35251F] bg-white/70 dark:bg-[#1E1512] hover:bg-white'
+                }`}
+              >
+                <div className="font-bold text-xs flex items-center gap-1.5">
+                  <span>🛍️</span>
+                  <span>Reventa Directa</span>
+                </div>
+                <p className="text-[11px] text-[#6B584C] dark:text-[#B39F93] mt-1 leading-tight">
+                  Bebidas, confites, productos cerrados
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSupplierType('ambos')}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  supplierType === 'ambos'
+                    ? 'border-emerald-600 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-600'
+                    : 'border-[#DFCAA9]/70 dark:border-[#35251F] bg-white/70 dark:bg-[#1E1512] hover:bg-white'
+                }`}
+              >
+                <div className="font-bold text-xs flex items-center gap-1.5">
+                  <span>🔄</span>
+                  <span>Ambos Rubros</span>
+                </div>
+                <p className="text-[11px] text-[#6B584C] dark:text-[#B39F93] mt-1 leading-tight">
+                  Materia prima y productos de reventa
+                </p>
+              </button>
+            </div>
+          </div>
 
           {/* Modalidad de Abastecimiento */}
           <div>

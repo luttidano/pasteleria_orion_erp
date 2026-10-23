@@ -49,6 +49,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
   const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [modalityFilter, setModalityFilter] = useState<'all' | 'despacho' | 'presencial'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'materia_prima' | 'reventa'>('all');
 
   // Vista en dispositivos móviles: 'list' (directorio) o 'detail' (ficha activa)
   const [mobileTab, setMobileTab] = useState<'list' | 'detail'>('list');
@@ -81,12 +82,18 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
     loadSuppliers();
   }, [loadSuppliers]);
 
-  // Contadores por modalidad de abastecimiento
+  // Contadores por modalidad de abastecimiento y tipo de suministro
   const counts = useMemo(() => {
     const total = suppliers.length;
     const despacho = suppliers.filter((s) => getSupplyModality(s) === 'despacho').length;
     const presencial = suppliers.filter((s) => getSupplyModality(s) === 'presencial').length;
-    return { total, despacho, presencial };
+    const materiaPrima = suppliers.filter(
+      (s) => !s.supplierType || s.supplierType === 'materia_prima' || s.supplierType === 'ambos'
+    ).length;
+    const reventa = suppliers.filter(
+      (s) => s.supplierType === 'reventa' || s.supplierType === 'ambos'
+    ).length;
+    return { total, despacho, presencial, materiaPrima, reventa };
   }, [suppliers]);
 
   // Lista de rubros para filtros rápidos
@@ -99,14 +106,25 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
     return ['Todas', ...Array.from(set)];
   }, [suppliers]);
 
-  // Proveedores filtrados
+  // Proveedores filtrados (acumulativo: modalidad + tipo + rubro + búsqueda)
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter((s) => {
+      // 1. Modalidad
       const modality = getSupplyModality(s);
       if (modalityFilter !== 'all' && modality !== modalityFilter) {
         return false;
       }
 
+      // 2. Tipo de Proveedor (Materia Prima / Reventa) [Acumulable]
+      const sType = s.supplierType || 'materia_prima';
+      if (typeFilter === 'materia_prima' && sType !== 'materia_prima' && sType !== 'ambos') {
+        return false;
+      }
+      if (typeFilter === 'reventa' && sType !== 'reventa' && sType !== 'ambos') {
+        return false;
+      }
+
+      // 3. Búsqueda libre
       const query = searchTerm.toLowerCase();
       const matchSearch =
         s.name.toLowerCase().includes(query) ||
@@ -117,13 +135,14 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
         (s.approximatePrices && s.approximatePrices.toLowerCase().includes(query)) ||
         (s.contactPerson && s.contactPerson.toLowerCase().includes(query));
 
+      // 4. Rubro específico
       const matchCategory =
         selectedCategory === 'Todas' ||
         s.category.toLowerCase().includes(selectedCategory.toLowerCase());
 
       return matchSearch && matchCategory;
     });
-  }, [suppliers, searchTerm, selectedCategory, modalityFilter]);
+  }, [suppliers, searchTerm, selectedCategory, modalityFilter, typeFilter]);
 
   // Proveedor seleccionado actualmente para la ficha de contacto
   const selectedSupplier = useMemo(() => {
@@ -289,10 +308,10 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
               </span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-[#1C120D] dark:text-[#FBF4EB] font-serif mt-1">
-              Proveedores de Materia Prima
+              Directorio de Proveedores & Abastecimiento
             </h2>
             <p className="text-xs sm:text-sm text-[#6C594D] dark:text-[#B4A194] mt-0.5">
-              Agenda de pedidos con redirección directa a <strong>WhatsApp</strong> y <strong>llamadas telefónicas</strong>.
+              Gestión de compras para materias primas, insumos y productos de reventa comercial.
             </p>
           </div>
 
@@ -311,48 +330,89 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
         </div>
 
         {/* Barra de Filtros y Búsqueda integrada */}
-        <div className="mt-4 pt-4 border-t border-[#E8D7BE]/80 dark:border-[#2C1D18] flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Selector de Modalidad */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white dark:bg-[#1E1410] border border-[#DFCAA9]/70 dark:border-[#2C1D18] w-fit shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setModalityFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                modalityFilter === 'all'
-                  ? 'bg-[#8C1F25] text-white shadow-xs'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-[#FAF5ED] dark:hover:bg-[#2A1D18]'
-              }`}
-            >
-              Todos ({counts.total})
-            </button>
-            <button
-              type="button"
-              onClick={() => setModalityFilter('despacho')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                modalityFilter === 'despacho'
-                  ? 'bg-[#8C1F25] text-white shadow-xs'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-[#FAF5ED] dark:hover:bg-[#2A1D18]'
-              }`}
-            >
-              <Truck className="w-3.5 h-3.5" />
-              <span>Con Despacho ({counts.despacho})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setModalityFilter('presencial')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                modalityFilter === 'presencial'
-                  ? 'bg-[#8C1F25] text-white shadow-xs'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-[#FAF5ED] dark:hover:bg-[#2A1D18]'
-              }`}
-            >
-              <Store className="w-3.5 h-3.5" />
-              <span>Compra en Local ({counts.presencial})</span>
-            </button>
+        <div className="mt-4 pt-4 border-t border-[#E8D7BE]/80 dark:border-[#2C1D18] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Selector de Modalidad */}
+            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white dark:bg-[#1E1410] border border-[#DFCAA9]/70 dark:border-[#2C1D18] w-fit shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setModalityFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  modalityFilter === 'all'
+                    ? 'bg-[#8C1F25] text-white shadow-xs'
+                    : 'text-stone-600 dark:text-stone-300 hover:bg-[#FAF5ED] dark:hover:bg-[#2A1D18]'
+                }`}
+              >
+                Todas las modalidades ({counts.total})
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalityFilter('despacho')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  modalityFilter === 'despacho'
+                    ? 'bg-[#8C1F25] text-white shadow-xs'
+                    : 'text-stone-600 dark:text-stone-300 hover:bg-[#FAF5ED] dark:hover:bg-[#2A1D18]'
+                }`}
+              >
+                <Truck className="w-3.5 h-3.5" />
+                <span>Con Despacho ({counts.despacho})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalityFilter('presencial')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  modalityFilter === 'presencial'
+                    ? 'bg-[#8C1F25] text-white shadow-xs'
+                    : 'text-stone-600 dark:text-stone-300 hover:bg-[#FAF5ED] dark:hover:bg-[#2A1D18]'
+                }`}
+              >
+                <Store className="w-3.5 h-3.5" />
+                <span>Compra en Local ({counts.presencial})</span>
+              </button>
+            </div>
+
+            {/* Selector de Tipo de Proveedor (Materia Prima vs Reventa) */}
+            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white dark:bg-[#1E1410] border border-[#DFCAA9]/70 dark:border-[#2C1D18] w-fit shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setTypeFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  typeFilter === 'all'
+                    ? 'bg-[#8C1F25] text-white shadow-xs'
+                    : 'text-stone-600 dark:text-stone-300 hover:bg-[#FAF5ED] dark:hover:bg-[#2A1D18]'
+                }`}
+              >
+                Todos los tipos
+              </button>
+              <button
+                type="button"
+                onClick={() => setTypeFilter('materia_prima')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  typeFilter === 'materia_prima'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-stone-600 dark:text-stone-300 hover:bg-[#FAF5ED] dark:hover:bg-[#2A1D18]'
+                }`}
+              >
+                <span>🌾</span>
+                <span>Materia Prima ({counts.materiaPrima})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTypeFilter('reventa')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  typeFilter === 'reventa'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-stone-600 dark:text-stone-300 hover:bg-[#FAF5ED] dark:hover:bg-[#2A1D18]'
+                }`}
+              >
+                <span>🛍️</span>
+                <span>Reventa ({counts.reventa})</span>
+              </button>
+            </div>
           </div>
 
           {/* Búsqueda */}
-          <div className="relative w-full md:w-72">
+          <div className="relative w-full lg:w-72">
             <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -407,6 +467,8 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
             onClick={() => {
               setSearchTerm('');
               setSelectedCategory('Todas');
+              setModalityFilter('all');
+              setTypeFilter('all');
             }}
             className="mt-4 px-4 py-2 rounded-xl text-xs font-semibold bg-stone-100 dark:bg-[#201612] hover:bg-stone-200 text-stone-700 dark:text-stone-300 cursor-pointer"
           >
@@ -580,8 +642,12 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
                             <User className="w-3.5 h-3.5 text-stone-400" />
                             <span>Contacto directo: <strong>{selectedSupplier.contactPerson}</strong></span>
                           </p>
+                        ) : selectedSupplier.supplierType === 'reventa' ? (
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 font-medium">🛍️ Proveedor de productos de reventa</p>
+                        ) : selectedSupplier.supplierType === 'ambos' ? (
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">🔄 Proveedor de materia prima y reventa</p>
                         ) : (
-                          <p className="text-xs text-stone-400 mt-0.5">Proveedor autorizado de materias primas</p>
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 font-medium">🌾 Proveedor de materias primas e insumos</p>
                         )}
                       </div>
                     </div>
@@ -790,7 +856,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
                   <div>
                     <div className="flex items-center gap-2 mb-2 text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wide">
                       <Tag className="w-4 h-4 text-[#8C1F25] dark:text-[#E25C64]" />
-                      <span>Proveedor de qué es (Materias Primas)</span>
+                      <span>Categorías / Insumos que Abastece</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {categoryChips.map((chip, idx) => (

@@ -1,5 +1,6 @@
 import type { Supplier, SupplyModality } from '../types';
 import { supabase } from '../lib/supabase';
+import type { SupplierType } from '@repo/types';
 
 const STORAGE_KEY = 'pasteleria_orion_suppliers';
 
@@ -7,6 +8,7 @@ interface SupabaseSupplierRow {
   id: string;
   name: string;
   phone: string;
+  supplier_type?: SupplierType | null;
   delivery_schedule: string;
   category: string;
   approximate_prices: string;
@@ -24,6 +26,7 @@ function mapRowToSupplier(row: SupabaseSupplierRow): Supplier {
     id: row.id,
     name: row.name,
     phone: row.phone,
+    supplierType: (row.supplier_type as SupplierType) || 'materia_prima',
     deliverySchedule: row.delivery_schedule,
     category: row.category,
     approximatePrices: row.approximate_prices,
@@ -208,6 +211,7 @@ export const supplierService = {
           .insert({
             name: data.name,
             phone: data.phone,
+            supplier_type: data.supplierType || 'materia_prima',
             delivery_schedule: data.deliverySchedule,
             category: data.category,
             approximate_prices: data.approximatePrices,
@@ -269,6 +273,7 @@ export const supplierService = {
           .update({
             ...(updates.name !== undefined && { name: updates.name }),
             ...(updates.phone !== undefined && { phone: updates.phone }),
+            ...(updates.supplierType !== undefined && { supplier_type: updates.supplierType }),
             ...(updates.deliverySchedule !== undefined && { delivery_schedule: updates.deliverySchedule }),
             ...(updates.category !== undefined && { category: updates.category }),
             ...(updates.approximatePrices !== undefined && { approximate_prices: updates.approximatePrices }),

@@ -176,7 +176,7 @@ export const supplierService = {
     if (supabase) {
       try {
         const { data, error } = await supabase
-          .from('suppliers')
+          .from('supplier')
           .select('*')
           .order('created_at', { ascending: false });
 
@@ -207,7 +207,7 @@ export const supplierService = {
     if (supabase) {
       try {
         const { data: inserted, error } = await supabase
-          .from('suppliers')
+          .from('supplier')
           .insert({
             name: data.name,
             phone: data.phone,
@@ -269,7 +269,7 @@ export const supplierService = {
     if (supabase) {
       try {
         const { data: updatedRow, error } = await supabase
-          .from('suppliers')
+          .from('supplier')
           .update({
             ...(updates.name !== undefined && { name: updates.name }),
             ...(updates.phone !== undefined && { phone: updates.phone }),
@@ -327,7 +327,7 @@ export const supplierService = {
   async delete(id: string): Promise<boolean> {
     if (supabase) {
       try {
-        const { error } = await supabase.from('suppliers').delete().eq('id', id);
+        const { error } = await supabase.from('supplier').delete().eq('id', id);
         if (error) {
           console.error('[supplierService] Error eliminando en Supabase:', error.message);
           throw new Error(error.message);

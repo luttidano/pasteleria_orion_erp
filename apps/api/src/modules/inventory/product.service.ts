@@ -94,7 +94,7 @@ export class ProductService {
     // Fallback transparente a Supabase REST
     let query = this.supabase
       .from('product')
-      .select('*, recipe:recipe(*), supplier:suppliers(*), categoryRef:category(*)')
+      .select('*, recipe:recipe(*), supplier:supplier(*), categoryRef:category(*)')
       .order('name', { ascending: true });
 
     if (productType) {

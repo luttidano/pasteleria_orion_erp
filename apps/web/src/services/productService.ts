@@ -52,7 +52,7 @@ export const productService = {
       if (supabase) {
         let query = supabase
           .from('product')
-          .select('*, recipe:recipe(*), supplier:suppliers(*), categoryRef:category(*)')
+          .select('*, recipe:recipe(*), supplier:supplier(*), categoryRef:category(*)')
           .order('name', { ascending: true });
 
         if (type) {
@@ -78,7 +78,7 @@ export const productService = {
       if (supabase) {
         const { data } = await supabase
           .from('product')
-          .select('*, recipe:recipe(*), supplier:suppliers(*), categoryRef:category(*)')
+          .select('*, recipe:recipe(*), supplier:supplier(*), categoryRef:category(*)')
           .eq('id', id)
           .maybeSingle();
         if (data) return mapRowToProduct(data);
@@ -115,7 +115,7 @@ export const productService = {
             image_url: data.imageUrl,
             icon: data.icon || '🧁',
           })
-          .select('*, recipe:recipe(*), supplier:suppliers(*), categoryRef:category(*)')
+          .select('*, recipe:recipe(*), supplier:supplier(*), categoryRef:category(*)')
           .single();
 
         if (!error && inserted) {
@@ -158,7 +158,7 @@ export const productService = {
           .from('product')
           .update(payload)
           .eq('id', id)
-          .select('*, recipe:recipe(*), supplier:suppliers(*), categoryRef:category(*)')
+          .select('*, recipe:recipe(*), supplier:supplier(*), categoryRef:category(*)')
           .single();
 
         if (!error && updated) {

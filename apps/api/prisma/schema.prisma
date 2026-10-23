@@ -124,7 +124,7 @@ model Supplier {
   supplierIngredients SupplierIngredient[]
   resaleProducts      Product[]
 
-  @@map("suppliers")
+  @@map("supplier")
 }
 
 model SupplierIngredient {

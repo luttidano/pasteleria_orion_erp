@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { apiFetch } from '../../lib/api';
 import {
   Store,
   CreditCard,
@@ -45,26 +46,134 @@ interface SaleTicket {
   paymentMethod: string;
   status: 'completada' | 'anulada';
 }
-
-const INITIAL_TICKETS: SaleTicket[] = [
+//los tickets ficticios
+/* const INITIAL_TICKETS: SaleTicket[] = [
   { id: 'tk-1', ticketNumber: '#TK-1082', time: '11:42 AM', itemsSummary: '2x Selva Negra, 1x Café Cappuccino', total: 10000, paymentMethod: 'Tarjeta Débito', status: 'completada' },
   { id: 'tk-2', ticketNumber: '#TK-1081', time: '11:15 AM', itemsSummary: '1x Croissant Mantequilla, 1x Cappuccino', total: 4300, paymentMethod: 'Efectivo', status: 'completada' },
   { id: 'tk-3', ticketNumber: '#TK-1080', time: '10:48 AM', itemsSummary: '3x Medialunas, 2x Pie de Limón', total: 9000, paymentMethod: 'Transferencia', status: 'completada' },
   { id: 'tk-4', ticketNumber: '#TK-1079', time: '10:20 AM', itemsSummary: '1x Cheesecake Frutos Rojos', total: 3900, paymentMethod: 'Tarjeta Crédito', status: 'completada' },
-];
+]; */
+interface SaleApiItem {
+  id: string;
+  sale_id: string;
+  product_id: string | null;
+  product_name: string;
+  quantity: number;
+  unit_price: number | string;
+  line_total: number | string;
+}
+
+interface SaleApiResponse {
+  id: string;
+  ticketNumber: string;
+  paymentMethod: 'efectivo' | 'debito' | 'credito' | 'transferencia';
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  status: 'completada' | 'anulada';
+  soldAt: string;
+  dataOrigin: 'demo' | 'real';
+  items: SaleApiItem[];
+}
+
+const paymentMethodLabel = (
+  method: SaleApiResponse['paymentMethod'],
+): string => {
+  switch (method) {
+    case 'efectivo':
+      return 'Efectivo';
+    case 'debito':
+      return 'Tarjeta Débito';
+    case 'credito':
+      return 'Tarjeta Crédito';
+    case 'transferencia':
+      return 'Transferencia';
+  }
+};
+
+const mapSaleToTicket = (sale: SaleApiResponse): SaleTicket => ({
+  id: sale.id,
+  ticketNumber: sale.ticketNumber.startsWith('#')
+    ? sale.ticketNumber
+    : `#${sale.ticketNumber}`,
+  time: new Date(sale.soldAt).toLocaleTimeString('es-CL', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }),
+  itemsSummary: sale.items
+    .map((item) => `${item.quantity}x ${item.product_name}`)
+    .join(', '),
+  total: Number(sale.total),
+  paymentMethod: paymentMethodLabel(sale.paymentMethod),
+  status: sale.status,
+});
 
 export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
-  const [cart, setCart] = useState<CartItem[]>([
-    { ...BAKERY_POS_ITEMS[0], quantity: 1 },
-    { ...BAKERY_POS_ITEMS[1], quantity: 2 },
-  ]);
-  const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'debito' | 'credito' | 'transferencia'>('debito');
-  const [tickets, setTickets] = useState<SaleTicket[]>(INITIAL_TICKETS);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<
+  'efectivo' | 'debito' | 'credito' | 'transferencia'
+  >('debito');
 
-  // Totales
+  const [tickets, setTickets] = useState<SaleTicket[]>([]);
+  const [isLoadingTickets, setIsLoadingTickets] = useState(false);
+  const [isSavingSale, setIsSavingSale] = useState(false);
+
+
+  useEffect(() => {
+  if (section !== 'pos-historial' && section !== 'pos-cierre') {
+    return;
+  }
+
+  let cancelled = false;
+
+  const loadSales = async () => {
+    setIsLoadingTickets(true);
+
+    try {
+      const sales = await apiFetch<SaleApiResponse[]>('/pos/sales');
+
+      if (!cancelled) {
+        setTickets(sales.map(mapSaleToTicket));
+      }
+    } catch (error) {
+      if (!cancelled) {
+        addToast({
+          type: 'error',
+          title: 'Error al cargar las ventas',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'No se pudo consultar el historial de ventas.',
+        });
+      }
+    } finally {
+      if (!cancelled) {
+        setIsLoadingTickets(false);
+      }
+    }
+  };
+
+  void loadSales();
+
+  return () => {
+    cancelled = true;
+  };
+},
+[section, addToast]);
+
+  /* // Totales
   const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const iva = Math.round(subtotal * 0.19);
-  const total = subtotal;
+  const total = subtotal; */
+
+  // Totales: los precios del catálogo incluyen IVA.
+const subtotal = cart.reduce(
+  (acc, item) => acc + item.price * item.quantity,
+  0,
+);
+
+const iva = Math.round((subtotal * 19) / 119);
+const total = subtotal;
 
   const addToCart = (product: PosProduct) => {
     setCart((prev) => {
@@ -94,42 +203,70 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
 
   const clearCart = () => setCart([]);
 
-  const handleCompleteSale = () => {
-    if (cart.length === 0) {
-      addToast({
-        type: 'error',
-        title: 'Venta vacía',
-        message: 'Agrega al menos un producto al carrito para cobrar.',
-      });
-      return;
-    }
+  const handleCompleteSale = async () => {
+  if (isSavingSale) {
+    return;
+  }
 
-    const ticketNumber = `#TK-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newTicket: SaleTicket = {
-      id: 'tk-' + Date.now(),
-      ticketNumber,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      itemsSummary: cart.map((i) => `${i.quantity}x ${i.name}`).join(', '),
-      total,
-      paymentMethod:
-        paymentMethod === 'efectivo'
-          ? 'Efectivo'
-          : paymentMethod === 'debito'
-          ? 'Tarjeta Débito'
-          : paymentMethod === 'credito'
-          ? 'Tarjeta Crédito'
-          : 'Transferencia',
-      status: 'completada',
-    };
+  if (cart.length === 0) {
+    addToast({
+      type: 'error',
+      title: 'Venta vacía',
+      message: 'Agrega al menos un producto al carrito para cobrar.',
+    });
+    return;
+  }
 
-    setTickets([newTicket, ...tickets]);
+  setIsSavingSale(true);
+
+  try {
+    const savedSale = await apiFetch<SaleApiResponse>('/pos/sales', {
+      method: 'POST',
+      body: JSON.stringify({
+        paymentMethod,
+        subtotal: total - iva,
+        taxAmount: iva,
+        total,
+        items: cart.map((item) => ({
+          productName: item.name,
+          quantity: item.quantity,
+          unitPrice: item.price,
+
+          // Los productos pos-1, pos-2, etc. son ficticios.
+          // No enviamos productId porque no son UUID de Supabase.
+        })),
+      }),
+    });
+
+    const newTicket = mapSaleToTicket(savedSale);
+
+    setTickets((previousTickets) => [
+      newTicket,
+      ...previousTickets.filter((ticket) => ticket.id !== newTicket.id),
+    ]);
+
     addToast({
       type: 'success',
-      title: `¡Venta Exitosa ${ticketNumber}!`,
-      message: `Total cobrado: $${total.toLocaleString('es-CL')} mediante ${newTicket.paymentMethod}.`,
+      title: `¡Venta registrada ${newTicket.ticketNumber}!`,
+      message: `Total cobrado: $${savedSale.total.toLocaleString('es-CL')} mediante ${newTicket.paymentMethod}.`,
     });
+
+    // Solo vaciar el carrito después de recibir
+    // la confirmación satisfactoria del backend.
     clearCart();
-  };
+  } catch (error) {
+    addToast({
+      type: 'error',
+      title: 'No se pudo registrar la venta',
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error al guardar la venta. Inténtalo nuevamente.',
+    });
+  } finally {
+    setIsSavingSale(false);
+  }
+};
 
   return (
     <div className="space-y-6 animate-fade-in max-w-6xl mx-auto">
@@ -307,10 +444,15 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
               <button
                 type="button"
                 onClick={handleCompleteSale}
-                className="w-full py-3.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] active:scale-[0.98] text-white text-sm font-bold shadow-btn transition-all duration-150 cursor-pointer flex items-center justify-center gap-2"
+                disabled={isSavingSale || cart.length === 0}
+                className="w-full py-3.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] active:scale-[0.98] text-white text-sm font-bold shadow-btn transition-all duration-150 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Cobrar ${total.toLocaleString('es-CL')}</span>
+                <span>
+                  {isSavingSale
+                    ? 'Registrando venta...'
+                    : `Cobrar $${total.toLocaleString('es-CL')}`}
+                </span>
               </button>
             </div>
           </div>
@@ -348,30 +490,64 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-[#281C17]">
-                {tickets.map((t) => (
-                  <tr key={t.id} className="hover:bg-stone-50 dark:hover:bg-[#201613]/50 transition-colors">
-                    <td className="py-3 px-4 font-bold text-[#8C1F25] dark:text-[#E8A598]">
-                      {t.ticketNumber}
-                    </td>
-                    <td className="py-3 px-4 text-xs text-stone-500 font-mono">
-                      {t.time}
-                    </td>
-                    <td className="py-3 px-6 text-xs text-stone-700 dark:text-stone-300">
-                      {t.itemsSummary}
-                    </td>
-                    <td className="py-3 px-4 text-xs font-semibold text-stone-600 dark:text-stone-400">
-                      {t.paymentMethod}
-                    </td>
-                    <td className="py-3 px-4 font-bold text-right font-sans">
-                      ${t.total.toLocaleString('es-CL')}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
-                        {t.status.toUpperCase()}
-                      </span>
+                {isLoadingTickets ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-8 text-center text-stone-500 text-sm"
+                    >
+                      Cargando ventas registradas...
                     </td>
                   </tr>
-                ))}
+                ) : tickets.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-8 text-center text-stone-500 text-sm"
+                    >
+                      No hay ventas registradas en la base de datos.
+                    </td>
+                  </tr>
+                ) : (
+                  tickets.map((t) => (
+                    <tr
+                      key={t.id}
+                      className="hover:bg-stone-50 dark:hover:bg-[#201613]/50 transition-colors"
+                    >
+                      <td className="py-3 px-4 font-bold text-[#8C1F25] dark:text-[#E8A598]">
+                        {t.ticketNumber}
+                      </td>
+
+                      <td className="py-3 px-4 text-xs text-stone-500 font-mono">
+                        {t.time}
+                      </td>
+
+                      <td className="py-3 px-6 text-xs text-stone-700 dark:text-stone-300">
+                        {t.itemsSummary}
+                      </td>
+
+                      <td className="py-3 px-4 text-xs font-semibold text-stone-600 dark:text-stone-400">
+                        {t.paymentMethod}
+                      </td>
+
+                      <td className="py-3 px-4 font-bold text-right font-sans">
+                        ${t.total.toLocaleString('es-CL')}
+                      </td>
+
+                      <td className="py-3 px-4 text-center">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            t.status === 'completada'
+                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                              : 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300'
+                          }`}
+                        >
+                          {t.status.toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

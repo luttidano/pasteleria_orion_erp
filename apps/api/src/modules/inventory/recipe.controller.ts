@@ -15,7 +15,7 @@ import { UpdateRecipeDto } from './dto/update-recipe.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { Role } from '@prisma/client';
+import { Role } from '../../common/enums';
 
 @Controller('recipes')
 @UseGuards(AuthGuard, RolesGuard)

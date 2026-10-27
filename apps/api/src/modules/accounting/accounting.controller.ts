@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Role } from '../../common/enums';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';

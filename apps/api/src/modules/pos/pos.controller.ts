@@ -8,7 +8,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Role } from '../../common/enums';
 
 import { PosService } from './pos.service';
 import { CreateSaleDto } from './dto/create-sale.dto';

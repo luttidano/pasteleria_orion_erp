@@ -16,7 +16,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { Role } from '@prisma/client';
+import { Role } from '../../common/enums';
 
 @Controller('products')
 @UseGuards(AuthGuard, RolesGuard)

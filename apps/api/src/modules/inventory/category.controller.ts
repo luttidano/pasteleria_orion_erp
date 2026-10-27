@@ -16,7 +16,7 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { Role, CategoryType } from '@prisma/client';
+import { Role, CategoryType } from '../../common/enums';
 
 @Controller('categories')
 @UseGuards(AuthGuard, RolesGuard)

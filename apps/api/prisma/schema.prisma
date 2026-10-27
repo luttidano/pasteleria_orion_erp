@@ -6,23 +6,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum Role {
-  admin
-  cashier
-  baker
-}
-
-enum CategoryType {
-  ingredient
-  recipe
-  pos
-}
-
 model Profile {
   id        String   @id @db.Uuid
   name      String
   email     String?
-  role      Role     @default(baker)
+  role      String   @default("baker")
   avatarUrl String?  @map("avatar_url")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -31,13 +19,13 @@ model Profile {
 }
 
 model Category {
-  id          String       @id @default(uuid()) @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
   name        String
-  type        CategoryType @default(ingredient)
+  type        String   @default("ingredient")
   description String?
   icon        String?
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   ingredients Ingredient[]
   recipes     Recipe[]
@@ -97,32 +85,21 @@ model RecipeIngredient {
   @@map("recipe_ingredient")
 }
 
-enum SupplierType {
-  materia_prima
-  reventa
-  ambos
-}
-
-enum ProductType {
-  manufactured
-  resale
-}
-
 model Supplier {
-  id                String       @id @default(uuid()) @db.Uuid
+  id                String   @id @default(uuid()) @db.Uuid
   name              String
   phone             String
-  deliverySchedule  String       @map("delivery_schedule")
+  deliverySchedule  String   @map("delivery_schedule")
   category          String
-  approximatePrices String       @map("approximate_prices")
-  contactPerson     String?      @map("contact_person")
-  icon              String?      @default("🚚")
+  approximatePrices String   @map("approximate_prices")
+  contactPerson     String?  @map("contact_person")
+  icon              String?  @default("🚚")
   email             String?
   address           String?
   notes             String?
-  supplierType      SupplierType @default(materia_prima) @map("supplier_type")
-  createdAt         DateTime     @default(now()) @map("created_at")
-  updatedAt         DateTime     @default(now()) @map("updated_at")
+  supplierType      String   @default("materia_prima") @map("supplier_type")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @default(now()) @map("updated_at")
 
   supplierIngredients SupplierIngredient[]
   resaleProducts      Product[]
@@ -144,10 +121,10 @@ model SupplierIngredient {
 }
 
 model Product {
-  id           String        @id @default(uuid()) @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
   name         String
   description  String?
-  productType  ProductType   @map("product_type")
+  productType  String   @map("product_type")
   stock        Decimal       @default(0) @db.Decimal(12, 3)
   minStock     Decimal       @default(0) @map("min_stock") @db.Decimal(12, 3)
   unit         String        @default("un")

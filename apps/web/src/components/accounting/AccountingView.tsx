@@ -65,6 +65,8 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState('');
   const [movementDate, setMovementDate] = useState(todayISO);
@@ -77,18 +79,54 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
   const loadAccountingData = async () => {
     setLoading(true);
     try {
-      const [loadedAccounts, loadedEntries] = await Promise.all([
+      const [loadedAccounts, loadedEntries, pendingData] = await Promise.all([
         apiFetch<AccountingAccount[]>('/accounting/accounts'),
         apiFetch<AccountingEntry[]>('/accounting/movements'),
+        apiFetch<{ pendingCount: number }>('/accounting/pending-sales-count').catch(() => ({ pendingCount: 0 })),
       ]);
       setAccounts(loadedAccounts);
       setEntries(loadedEntries);
+      setPendingCount(pendingData.pendingCount);
       setAccountId((current) => current || loadedAccounts[0]?.id || '');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo cargar la contabilidad.';
       addToast({ type: 'error', title: 'Error de contabilidad', message });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncPendingSales = async () => {
+    setSyncing(true);
+    try {
+      const result = await apiFetch<{ synced: number; failed: number }>('/accounting/sync-pending-sales', {
+        method: 'POST',
+      });
+      if (result.synced > 0) {
+        addToast({
+          type: 'success',
+          title: 'Sincronización completada',
+          message: `Se contabilizaron ${result.synced} venta(s) del POS exitosamente.${result.failed > 0 ? ` (${result.failed} fallaron)` : ''}`,
+        });
+      } else if (result.failed > 0) {
+        addToast({
+          type: 'error',
+          title: 'Fallo al sincronizar',
+          message: `${result.failed} venta(s) no pudieron contabilizarse. Verifica que la cuenta 4101 exista y esté activa.`,
+        });
+      } else {
+        addToast({
+          type: 'info',
+          title: 'Sin pendientes',
+          message: 'No había ventas pendientes por contabilizar.',
+        });
+      }
+      await loadAccountingData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error al sincronizar ventas.';
+      addToast({ type: 'error', title: 'Error de sincronización', message });
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -223,6 +261,30 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
                 + Registrar Gasto / Entrada
               </button>
             </div>
+
+            {/* Banner de ventas POS pendientes de contabilizar */}
+            {pendingCount > 0 && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base select-none">⚠️</span>
+                  <div>
+                    <span className="font-bold">Hay {pendingCount} venta(s) del POS pendiente(s) de contabilizar.</span>
+                    <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+                      Fueron cobradas en caja pero su asiento automático requiere sincronización (ej.: cuenta 4101).
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSyncPendingSales}
+                  disabled={syncing}
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-[0.98] text-white font-bold cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0 transition-all shadow-xs"
+                >
+                  {syncing && <LoaderCircle className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{syncing ? 'Sincronizando...' : 'Sincronizar ahora'}</span>
+                </button>
+              </div>
+            )}
 
             {showForm && (
               <form onSubmit={submitMovement} className="rounded-2xl border border-[#EADBCE] dark:border-[#35251F] bg-[#FAF5ED] dark:bg-[#201613] p-4 sm:p-5 space-y-4">

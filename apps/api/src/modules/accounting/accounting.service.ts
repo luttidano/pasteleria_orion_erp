@@ -186,4 +186,127 @@ export class AccountingService {
       createdAt: data.created_at,
     };
   }
+
+  async registerSaleIncome(sale: {
+    id: string;
+    ticketNumber: string;
+    soldAt: string;
+    total: number;
+    paymentMethod: string;
+
+  }): Promise<void> {
+    if (sale.total <= 0) return;
+
+    // Verificar para no duplicar asientos ante reintentos
+    const { data: existing, error: existingErr} = await this.supabase
+      .from('accounting_movement')
+      .select('id')
+      .eq('pos_sale_id', sale.id)
+      .maybeSingle();
+
+    if (existingErr) {
+      console.error('[AccountingService] Error validando asiento previo:', existingErr.message);
+      throw new InternalServerErrorException('Error al verificar movimientos contables');
+    }
+    if (existing) return;
+
+
+    // Obtener cuenta contable de ventas
+    const { data: account, error: accErr } = await this.supabase
+      .from('accounting_account')
+      .select('id')
+      .eq('code', '4101')
+      .eq('is_active', true)
+      .maybeSingle();
+    
+    if (accErr || !account) {
+      console.error('[AccountingService] Cuenta 4101 no encontrada', accErr?.message);
+      throw new InternalServerErrorException('No se pudo contabilizar la venta: no existe la cuenta contable activa 4101'); 
+    }
+
+    //Insertar movimeinto contable con origen pos
+    const { error: insertErr } = await this.supabase
+      .from('accounting_movement')
+      .insert({
+        movement_date: sale.soldAt.slice(0, 10),
+        concept: `Venta POS ${sale.ticketNumber}`,
+        movement_type: 'ingreso',
+        account_id: account.id,
+        amount: Math.round(sale.total * 100) / 100,
+        origin: 'pos',
+        pos_sale_id: sale.id,
+        payment_method: sale.paymentMethod
+    });
+
+    if(insertErr) {
+      console.error('[AccountingService] Error insertado movimiento POS', insertErr.message);
+      throw new InternalServerErrorException('No se pudo registrar el movimiento contable de la venta');
+    }
+  }
+
+  // Obtener ventas pendientes de contabilizar
+  async getPendingSalesCount(): Promise<{ pendingCount: number }> {
+    const { count, error } = await this.supabase
+      .from('pos_sale')
+      .select('id', { count: 'exact', head: true })
+      .eq('accounting_status', 'pending');
+
+    if (error) {
+      console.error('[AccountingService] Error contando ventas pendientes:', error.message);
+      return { pendingCount: 0 };
+    }
+
+    return { pendingCount: count ?? 0 };
+  }
+
+  // Reintenta contabilizar todas las ventas pendientes del POS
+  async syncPendingSales(): Promise<{ synced: number; failed: number }> {
+    const { data: pendingSales, error } = await this.supabase
+      .from('pos_sale')
+      .select('id, ticket_number, sold_at, total, payment_method')
+      .eq('accounting_status', 'pending')
+      .order('sold_at', { ascending: true });
+
+    if (error || !pendingSales) {
+      throw new InternalServerErrorException('No se pudieron consultar las ventas pendientes.');
+    }
+
+    let synced = 0;
+    let failed = 0;
+
+    for (const sale of pendingSales) {
+      try {
+        await this.registerSaleIncome({
+          id: sale.id,
+          ticketNumber: sale.ticket_number,
+          soldAt: sale.sold_at,
+          total: Number(sale.total),
+          paymentMethod: sale.payment_method,
+        });
+
+        // Actualizar venta a posted
+        await this.supabase
+          .from('pos_sale')
+          .update({
+            accounting_status: 'posted',
+            accounting_error: null,
+          })
+          .eq('id', sale.id);
+
+        synced++;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Error al sincronizar.';
+        console.error(`[AccountingService] Falló reintento de venta ${sale.ticket_number}:`, err);
+        await this.supabase
+          .from('pos_sale')
+          .update({
+            accounting_error: errorMsg,
+          })
+          .eq('id', sale.id);
+        failed++;
+      }
+    }
+    return { synced, failed };
+  }
+
 }

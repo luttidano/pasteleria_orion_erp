@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../../lib/api';
+import { authService } from  '../../services/authService';
 import {
   Store,
   CreditCard,
@@ -45,6 +46,7 @@ interface SaleTicket {
   total: number;
   paymentMethod: string;
   status: 'completada' | 'anulada';
+  accountingStatus?: 'posted' | 'pending';
 }
 //los tickets ficticios
 /* const INITIAL_TICKETS: SaleTicket[] = [
@@ -71,6 +73,8 @@ interface SaleApiResponse {
   taxAmount: number;
   total: number;
   status: 'completada' | 'anulada';
+  accountingStatus?: 'posted' | 'pending';
+  accountingWarning?: string | null;
   soldAt: string;
   dataOrigin: 'demo' | 'real';
   items: SaleApiItem[];
@@ -106,9 +110,13 @@ const mapSaleToTicket = (sale: SaleApiResponse): SaleTicket => ({
   total: Number(sale.total),
   paymentMethod: paymentMethodLabel(sale.paymentMethod),
   status: sale.status,
+  accountingStatus: sale.accountingStatus,
 });
 
 export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
+  const currentUser = authService.getCurrentUser();
+  const isAdmin = currentUser?.role === 'admin';
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
   'efectivo' | 'debito' | 'credito' | 'transferencia'
@@ -120,14 +128,14 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
 
 
   useEffect(() => {
-  if (section !== 'pos-historial' && section !== 'pos-cierre') {
-    return;
-  }
+    if (section !== 'pos-historial' && section !== 'pos-cierre') {
+      return;
+    }
 
-  let cancelled = false;
+    let cancelled = false;
 
-  const loadSales = async () => {
-    setIsLoadingTickets(true);
+    const loadSales = async () => {
+      setIsLoadingTickets(true);
 
     try {
       const sales = await apiFetch<SaleApiResponse[]>('/pos/sales');
@@ -153,13 +161,13 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
     }
   };
 
-  void loadSales();
+    void loadSales();
 
-  return () => {
-    cancelled = true;
-  };
-},
-[section, addToast]);
+    return () => {
+      cancelled = true;
+    };
+  },
+  [section, addToast]);
 
   /* // Totales
   const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -167,13 +175,13 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
   const total = subtotal; */
 
   // Totales: los precios del catálogo incluyen IVA.
-const subtotal = cart.reduce(
-  (acc, item) => acc + item.price * item.quantity,
-  0,
-);
+  const subtotal = cart.reduce(
+    (acc, item) => acc + item.price * item.quantity,
+    0,
+  );
 
-const iva = Math.round((subtotal * 19) / 119);
-const total = subtotal;
+  const iva = Math.round((subtotal * 19) / 119);
+  const total = subtotal;
 
   const addToCart = (product: PosProduct) => {
     setCart((prev) => {
@@ -204,69 +212,81 @@ const total = subtotal;
   const clearCart = () => setCart([]);
 
   const handleCompleteSale = async () => {
-  if (isSavingSale) {
-    return;
-  }
 
-  if (cart.length === 0) {
-    addToast({
-      type: 'error',
-      title: 'Venta vacía',
-      message: 'Agrega al menos un producto al carrito para cobrar.',
-    });
-    return;
-  }
 
-  setIsSavingSale(true);
+    if (isSavingSale) {
+      return;
+    }
 
-  try {
-    const savedSale = await apiFetch<SaleApiResponse>('/pos/sales', {
-      method: 'POST',
-      body: JSON.stringify({
-        paymentMethod,
-        subtotal: total - iva,
-        taxAmount: iva,
-        total,
-        items: cart.map((item) => ({
-          productName: item.name,
-          quantity: item.quantity,
-          unitPrice: item.price,
+    if (cart.length === 0) {
+      addToast({
+        type: 'error',
+        title: 'Venta vacía',
+        message: 'Agrega al menos un producto al carrito para cobrar.',
+      });
+      return;
+    }
 
-          // Los productos pos-1, pos-2, etc. son ficticios.
-          // No enviamos productId porque no son UUID de Supabase.
-        })),
-      }),
-    });
+    setIsSavingSale(true);
 
-    const newTicket = mapSaleToTicket(savedSale);
+    try {
+      const savedSale = await apiFetch<SaleApiResponse>('/pos/sales', {
+        method: 'POST',
+        body: JSON.stringify({
+          paymentMethod,
+          subtotal: total - iva,
+          taxAmount: iva,
+          total,
+          items: cart.map((item) => ({
+            productName: item.name,
+            quantity: item.quantity,
+            unitPrice: item.price,
 
-    setTickets((previousTickets) => [
-      newTicket,
-      ...previousTickets.filter((ticket) => ticket.id !== newTicket.id),
-    ]);
+            // Los productos pos-1, pos-2, etc. son ficticios.
+            // No enviamos productId porque no son UUID de Supabase.
+          })),
+        }),
+      });
 
-    addToast({
-      type: 'success',
-      title: `¡Venta registrada ${newTicket.ticketNumber}!`,
-      message: `Total cobrado: $${savedSale.total.toLocaleString('es-CL')} mediante ${newTicket.paymentMethod}.`,
-    });
+      const newTicket = mapSaleToTicket(savedSale);
 
-    // Solo vaciar el carrito después de recibir
-    // la confirmación satisfactoria del backend.
-    clearCart();
-  } catch (error) {
-    addToast({
-      type: 'error',
-      title: 'No se pudo registrar la venta',
-      message:
-        error instanceof Error
-          ? error.message
-          : 'Ocurrió un error al guardar la venta. Inténtalo nuevamente.',
-    });
-  } finally {
-    setIsSavingSale(false);
-  }
-};
+      setTickets((previousTickets) => [
+        newTicket,
+        ...previousTickets.filter((ticket) => ticket.id !== newTicket.id),
+      ]);
+
+      //Solo si es admin se le notifica advertencia contable
+
+      if (isAdmin && savedSale.accountingWarning) {
+        addToast({
+          type: 'warning',
+          title: `¡Venta registrada ${newTicket.ticketNumber}!`,
+          message: savedSale.accountingWarning,
+        });
+      } else { // Cajeros
+        addToast({
+          type: 'success',
+          title: `¡Venta registrada ${newTicket.ticketNumber}!`,
+          message: `Total cobrado: $${savedSale.total.toLocaleString('es-CL')} mediante ${newTicket.paymentMethod}.`,
+        });
+      }
+
+      // Solo vaciar el carrito después de recibir
+      // la confirmación satisfactoria del backend.
+      clearCart();
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'No se pudo registrar la venta',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error al guardar la venta. Inténtalo nuevamente.',
+      });
+    } finally {
+      setIsSavingSale(false);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in max-w-6xl mx-auto">
@@ -535,15 +555,25 @@ const total = subtotal;
                       </td>
 
                       <td className="py-3 px-4 text-center">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            t.status === 'completada'
-                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
-                              : 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300'
-                          }`}
-                        >
-                          {t.status.toUpperCase()}
-                        </span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              t.status === 'completada'
+                                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                                : 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300'
+                            }`}
+                          >
+                            {t.status.toUpperCase()}
+                          </span>
+                          {isAdmin && t.accountingStatus === 'pending' && (
+                            <span
+                              title="Asiento contable pendiente de sincronización"
+                              className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300"
+                            >
+                              ⏳ CONTAB. PENDIENTE
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))

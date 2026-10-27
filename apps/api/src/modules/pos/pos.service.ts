@@ -7,12 +7,16 @@ import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { AccountingService } from '../accounting/accounting.service';
 
 @Injectable()
 export class PosService {
   private readonly supabase: SupabaseClient;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly accountingService: AccountingService
+  ) {
     const supabaseUrl =
       this.configService.get<string>('SUPABASE_URL') ||
       this.configService.get<string>('VITE_SUPABASE_URL') ||
@@ -158,14 +162,33 @@ export class PosService {
     // Los movimientos contables exigen un monto positivo; una venta gratuita
     // queda registrada en el POS, pero no genera un ingreso de caja por $0.
     // La restricción única parcial sobre pos_sale_id evita duplicados.
+    let accountingStatus: 'posted' | 'pending' = 'posted';
+    let accountingWarning: string | null = null;
+
     const accountingMovementCreated = declaredTotal > 0;
     if (accountingMovementCreated) {
-      await this.createAccountingMovementForSale({
-        id: sale.id,
-        ticketNumber: sale.ticket_number,
-        soldAt: sale.sold_at,
-        total: declaredTotal,
-      });
+      try {
+        await this.accountingService.registerSaleIncome({
+          id: sale.id,
+          ticketNumber: sale.ticket_number,
+          soldAt: sale.sold_at,
+          total: declaredTotal,
+          paymentMethod: sale.payment_method,
+        });
+      } catch (accError) {
+        accountingStatus = 'pending';
+        const errorMsg = accError instanceof Error ? accError.message : 'Error al registrar en contabilidad';
+        accountingWarning =  `Venta registrada en caja. La sincronización contable quedó pendiente: ${errorMsg}`;
+        console.warn(`[PosService] Venta ${sale.ticket_number} guardada, pero falló la contabilización:`, errorMsg);
+
+        await this.supabase
+          .from('pos_sale')
+          .update({
+            accounting_status: 'pending',
+            accounting_error: errorMsg,
+          })
+          .eq('id', sale.id);
+      }
     }
 
     return {
@@ -176,6 +199,8 @@ export class PosService {
       taxAmount: Number(sale.tax_amount),
       total: Number(sale.total),
       status: sale.status,
+      accountingStatus,
+      accountingWarning,
       soldAt: sale.sold_at,
       dataOrigin: sale.data_origin,
       accountingMovementCreated,
@@ -209,6 +234,8 @@ export class PosService {
       taxAmount: Number(sale.tax_amount),
       total: Number(sale.total),
       status: sale.status,
+      accountingStatus: sale.accounting_status ?? 'posted',
+      accountingError: sale.accounting_error ?? null,
       soldAt: sale.sold_at,
       dataOrigin: sale.data_origin,
       items: sale.pos_sale_item ?? [],
@@ -245,111 +272,15 @@ export class PosService {
       taxAmount: Number(data.tax_amount),
       total: Number(data.total),
       status: data.status,
+      accountingStatus: data.accounting_status ?? 'posted',
+      accountingError: data.accounting_error ?? null,
       soldAt: data.sold_at,
       dataOrigin: data.data_origin,
       items: data.pos_sale_item ?? [],
     };
   }
-
-
-  /**
-   * Crea un único movimiento de ingreso por cada venta completada.
-   * Se utiliza la cuenta 4101 (Ventas de Pastelería y Cafetería).
-   */
-  private async createAccountingMovementForSale(sale: {
-    id: string;
-    ticketNumber: string;
-    soldAt: string;
-    total: number;
-  }): Promise<void> {
-    // Comprobación previa para que la operación sea idempotente ante reintentos.
-    const { data: existingMovement, error: existingError } = await this.supabase
-      .from('accounting_movement')
-      .select('id')
-      .eq('pos_sale_id', sale.id)
-      .maybeSingle();
-
-    if (existingError) {
-      console.error(
-        '[PosService] No se pudo comprobar el movimiento contable:',
-        existingError.message,
-      );
-      await this.rollbackSale(sale.id);
-      throw new InternalServerErrorException(
-        'No se pudo verificar el movimiento contable de la venta.',
-      );
-    }
-
-    if (existingMovement) return;
-
-    const { data: account, error: accountError } = await this.supabase
-      .from('accounting_account')
-      .select('id')
-      .eq('code', '4101')
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (accountError || !account) {
-      console.error(
-        '[PosService] No se encontró la cuenta contable 4101:',
-        accountError?.message,
-      );
-      await this.rollbackSale(sale.id);
-      throw new InternalServerErrorException(
-        'No se pudo registrar la venta: falta la cuenta contable activa 4101.',
-      );
-    }
-
-    const { error: movementError } = await this.supabase
-      .from('accounting_movement')
-      .insert({
-        movement_date: sale.soldAt.slice(0, 10),
-        concept: `Venta POS ${sale.ticketNumber}`,
-        movement_type: 'ingreso',
-        account_id: account.id,
-        amount: Math.round(sale.total * 100) / 100,
-        origin: 'pos',
-        pos_sale_id: sale.id,
-      });
-
-    if (!movementError) return;
-
-    // Si hubo una respuesta de red ambigua o una carrera concurrente, comprobamos
-    // si la restricción única ya dejó creado el movimiento para esta venta.
-    const { data: movementAfterError, error: verifyError } = await this.supabase
-      .from('accounting_movement')
-      .select('id')
-      .eq('pos_sale_id', sale.id)
-      .maybeSingle();
-
-    if (!verifyError && movementAfterError) return;
-
-    console.error(
-      '[PosService] Error creando movimiento contable:',
-      movementError.message,
-    );
-    await this.rollbackSale(sale.id);
-    throw new InternalServerErrorException(
-      'No se pudo registrar el ingreso contable de la venta. La operación fue revertida; vuelve a intentarlo.',
-    );
-  }
-
-  /** Intenta revertir la venta si falla la contabilización. */
-  private async rollbackSale(saleId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('pos_sale')
-      .delete()
-      .eq('id', saleId);
-
-    if (error) {
-      console.error(
-        '[PosService] No se pudo revertir la venta tras un error contable:',
-        error.message,
-      );
-    }
-  }
-
   private roundMoney(value: number): number {
     return Math.round((value + Number.EPSILON) * 100) / 100;
   }
+
 }

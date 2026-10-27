@@ -169,23 +169,24 @@ model Product {
 }
 
 model PosSale {
-  id            String   @id @default(uuid()) @db.Uuid
-  ticketNumber  String   @unique @map("ticket_number")
-  paymentMethod String   @map("payment_method")
-  subtotal      Decimal  @db.Decimal(12, 2)
-  taxAmount     Decimal  @default(0) @map("tax_amount") @db.Decimal(12, 2)
-  total         Decimal  @db.Decimal(12, 2)
-  status        String   @default("completada")
-  soldAt        DateTime @default(now()) @map("sold_at") @db.Timestamptz(6)
-  dataOrigin    String   @default("demo") @map("data_origin")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                String   @id @default(uuid()) @db.Uuid
+  ticketNumber      String   @unique @map("ticket_number")
+  paymentMethod     String   @map("payment_method")
+  subtotal          Decimal  @db.Decimal(12, 2)
+  taxAmount         Decimal  @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  total             Decimal  @db.Decimal(12, 2)
+  status            String   @default("completada")
+  accountingStatus  String   @default("posted") @map("accounting_status")
+  accountingError   String?  @map("accounting_error")
+  soldAt            DateTime @default(now()) @map("sold_at") @db.Timestamptz(6)
+  dataOrigin        String   @default("demo") @map("data_origin")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   items PosSaleItem[]
 
   @@index([soldAt], map: "idx_pos_sale_sold_at")
   @@index([paymentMethod], map: "idx_pos_sale_payment_method")
   @@index([status], map: "idx_pos_sale_status")
-
   @@map("pos_sale")
 }
 

@@ -28,4 +28,16 @@ export class AccountingController {
   createMovement(@Body() dto: CreateAccountingMovementDto) {
     return this.accountingService.createMovement(dto);
   }
+
+  @Get('pending-sales-count')
+  @Roles(Role.admin, Role.cashier)
+  getPendingSalesCount() {
+    return this.accountingService.getPendingSalesCount();
+  }
+
+  @Post('sync-pending-sales')
+  @Roles(Role.admin)
+  syncPendingSales() {
+    return this.accountingService.syncPendingSales();
+  }
 }

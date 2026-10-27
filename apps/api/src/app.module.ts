@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import {ConfigModule} from '@nestjs/config';
 import {PrismaModule} from './database/prisma.module';
+import {SupabaseModule} from './common/supabase/supabase.module';
 import {InventoryModule} from './modules/inventory/inventory.module';
 import {PosModule} from './modules/pos/pos.module';
 import {AccountingModule} from './modules/accounting/accounting.module';
@@ -26,6 +27,7 @@ import * as path from 'path';
       ],
     }),
     PrismaModule,
+    SupabaseModule,
     InventoryModule,
     PosModule,
     AccountingModule,

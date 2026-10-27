@@ -3,43 +3,21 @@ import {
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { AccountingService } from '../accounting/accounting.service';
+import { PrismaService } from '../../database/prisma.service';
 
 @Injectable()
 export class PosService {
-  private readonly supabase: SupabaseClient;
-
   constructor(
-    private readonly configService: ConfigService,
-    private readonly accountingService: AccountingService
-  ) {
-    const supabaseUrl =
-      this.configService.get<string>('SUPABASE_URL') ||
-      this.configService.get<string>('VITE_SUPABASE_URL') ||
-      process.env.SUPABASE_URL ||
-      process.env.VITE_SUPABASE_URL;
-
-    // Esta clave es exclusivamente para el backend.
-    // No utilizar VITE_SUPABASE_ANON_KEY como sustituto.
-    const serviceRoleKey =
-      this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') ||
-      process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error(
-        'Falta SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en el entorno de la API.',
-      );
-    }
-
-    this.supabase = createClient(supabaseUrl, serviceRoleKey);
-  }
+    private readonly prisma: PrismaService,
+    private readonly accountingService: AccountingService,
+  ) {}
 
   /**
    * Registra una venta y sus productos.
+   * Ejecuta la persistencia en una transacción atómica ACID mediante Prisma.
    */
   async createSale(dto: CreateSaleDto) {
     if (!dto.items?.length) {
@@ -54,22 +32,22 @@ export class PosService {
       const lineTotal = this.roundMoney(item.quantity * item.unitPrice);
 
       return {
-        product_id: item.productId ?? null,
-        product_name: item.productName.trim(),
+        productId: item.productId ?? null,
+        productName: item.productName.trim(),
         quantity: item.quantity,
-        unit_price: item.unitPrice,
-        line_total: lineTotal,
+        unitPrice: item.unitPrice,
+        lineTotal,
       };
     });
 
-    if (items.some((item) => !item.product_name)) {
+    if (items.some((item) => !item.productName)) {
       throw new BadRequestException(
         'Todos los productos deben tener un nombre.',
       );
     }
 
     const itemsTotal = this.roundMoney(
-      items.reduce((sum, item) => sum + item.line_total, 0),
+      items.reduce((sum, item) => sum + item.lineTotal, 0),
     );
 
     const declaredTotal = this.roundMoney(dto.total);
@@ -98,70 +76,42 @@ export class PosService {
       .slice(0, 6)
       .toUpperCase()}`;
 
-    // 1. Guardar la cabecera.
-    const { data: sale, error: saleError } = await this.supabase
-      .from('pos_sale')
-      .insert({
-        ticket_number: ticketNumber,
-        payment_method: dto.paymentMethod,
-        subtotal: declaredSubtotal,
-        tax_amount: declaredTax,
-        total: declaredTotal,
-        status: 'completada',
-        sold_at: new Date().toISOString(),
-        data_origin: 'demo',
-      })
-      .select()
-      .single();
-
-    if (saleError || !sale) {
-      console.error('[PosService] Error creando venta:', saleError?.message);
-
-      throw new InternalServerErrorException(
-        'No se pudo registrar la venta.',
-      );
-    }
-
-    // 2. Guardar los productos relacionados con la venta.
-    const saleItems = items.map((item) => ({
-      ...item,
-      sale_id: sale.id,
-    }));
-
-    const { data: savedItems, error: itemsError } = await this.supabase
-      .from('pos_sale_item')
-      .insert(saleItems)
-      .select();
-
-    if (itemsError || !savedItems) {
+    // 1. Guardar la cabecera y el detalle en una transacción ACID atómica nativa de base de datos
+    let sale;
+    try {
+      sale = await this.prisma.posSale.create({
+        data: {
+          ticketNumber,
+          paymentMethod: dto.paymentMethod,
+          subtotal: declaredSubtotal,
+          taxAmount: declaredTax,
+          total: declaredTotal,
+          status: 'completada',
+          accountingStatus: 'posted',
+          dataOrigin: 'demo',
+          items: {
+            create: items.map((item) => ({
+              productId: item.productId,
+              productName: item.productName,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              lineTotal: item.lineTotal,
+            })),
+          },
+        },
+        include: {
+          items: true,
+        },
+      });
+    } catch (createError) {
       console.error(
-        '[PosService] Error guardando productos:',
-        itemsError?.message,
+        '[PosService] Error registrando venta de forma atómica:',
+        createError,
       );
-
-      // Intentar eliminar la cabecera si falló el detalle.
-      // La FK ON DELETE CASCADE eliminará también sus detalles.
-      const { error: rollbackError } = await this.supabase
-        .from('pos_sale')
-        .delete()
-        .eq('id', sale.id);
-
-      if (rollbackError) {
-        console.error(
-          '[PosService] No se pudo revertir la venta:',
-          rollbackError.message,
-        );
-      }
-
-      throw new InternalServerErrorException(
-        'No se pudieron guardar los productos de la venta.',
-      );
+      throw new InternalServerErrorException('No se pudo registrar la venta.');
     }
 
-    // 3. Registrar el ingreso contable asociado a esta venta.
-    // Los movimientos contables exigen un monto positivo; una venta gratuita
-    // queda registrada en el POS, pero no genera un ingreso de caja por $0.
-    // La restricción única parcial sobre pos_sale_id evita duplicados.
+    // 2. Registrar el ingreso contable asociado a esta venta (desacoplado y con tolerancia a fallos)
     let accountingStatus: 'posted' | 'pending' = 'posted';
     let accountingWarning: string | null = null;
 
@@ -170,41 +120,60 @@ export class PosService {
       try {
         await this.accountingService.registerSaleIncome({
           id: sale.id,
-          ticketNumber: sale.ticket_number,
-          soldAt: sale.sold_at,
+          ticketNumber: sale.ticketNumber,
+          soldAt: sale.soldAt.toISOString(),
           total: declaredTotal,
-          paymentMethod: sale.payment_method,
+          paymentMethod: sale.paymentMethod,
         });
       } catch (accError) {
         accountingStatus = 'pending';
-        const errorMsg = accError instanceof Error ? accError.message : 'Error al registrar en contabilidad';
-        accountingWarning =  `Venta registrada en caja. La sincronización contable quedó pendiente: ${errorMsg}`;
-        console.warn(`[PosService] Venta ${sale.ticket_number} guardada, pero falló la contabilización:`, errorMsg);
+        const errorMsg =
+          accError instanceof Error
+            ? accError.message
+            : 'Error al registrar en contabilidad';
+        accountingWarning = `Venta registrada en caja. La sincronización contable quedó pendiente: ${errorMsg}`;
+        console.warn(
+          `[PosService] Venta ${sale.ticketNumber} guardada, pero falló la contabilización:`,
+          errorMsg,
+        );
 
-        await this.supabase
-          .from('pos_sale')
-          .update({
-            accounting_status: 'pending',
-            accounting_error: errorMsg,
-          })
-          .eq('id', sale.id);
+        await this.prisma.posSale.update({
+          where: { id: sale.id },
+          data: {
+            accountingStatus: 'pending',
+            accountingError: errorMsg,
+          },
+        });
       }
     }
 
     return {
       id: sale.id,
-      ticketNumber: sale.ticket_number,
-      paymentMethod: sale.payment_method,
+      ticketNumber: sale.ticketNumber,
+      paymentMethod: sale.paymentMethod,
       subtotal: Number(sale.subtotal),
-      taxAmount: Number(sale.tax_amount),
+      taxAmount: Number(sale.taxAmount),
       total: Number(sale.total),
       status: sale.status,
       accountingStatus,
       accountingWarning,
-      soldAt: sale.sold_at,
-      dataOrigin: sale.data_origin,
+      soldAt: sale.soldAt.toISOString(),
+      dataOrigin: sale.dataOrigin,
       accountingMovementCreated,
-      items: savedItems,
+      items: sale.items.map((item) => ({
+        id: item.id,
+        sale_id: item.saleId,
+        product_id: item.productId,
+        product_name: item.productName,
+        quantity: item.quantity,
+        unit_price: Number(item.unitPrice),
+        line_total: Number(item.lineTotal),
+        saleId: item.saleId,
+        productId: item.productId,
+        productName: item.productName,
+        unitPrice: Number(item.unitPrice),
+        lineTotal: Number(item.lineTotal),
+      })),
     };
   }
 
@@ -212,75 +181,107 @@ export class PosService {
    * Obtiene las últimas ventas guardadas.
    */
   async findAllSales() {
-    const { data, error } = await this.supabase
-      .from('pos_sale')
-      .select('*, pos_sale_item(*)')
-      .order('sold_at', { ascending: false })
-      .limit(100);
+    try {
+      const sales = await this.prisma.posSale.findMany({
+        include: {
+          items: true,
+        },
+        orderBy: {
+          soldAt: 'desc',
+        },
+        take: 100,
+      });
 
-    if (error) {
-      console.error('[PosService] Error consultando ventas:', error.message);
+      return sales.map((sale) => ({
+        id: sale.id,
+        ticketNumber: sale.ticketNumber,
+        paymentMethod: sale.paymentMethod,
+        subtotal: Number(sale.subtotal),
+        taxAmount: Number(sale.taxAmount),
+        total: Number(sale.total),
+        status: sale.status,
+        accountingStatus: sale.accountingStatus ?? 'posted',
+        accountingError: sale.accountingError ?? null,
+        soldAt: sale.soldAt.toISOString(),
+        dataOrigin: sale.dataOrigin,
+        items: sale.items.map((item) => ({
+          id: item.id,
+          sale_id: item.saleId,
+          product_id: item.productId,
+          product_name: item.productName,
+          quantity: item.quantity,
+          unit_price: Number(item.unitPrice),
+          line_total: Number(item.lineTotal),
+          saleId: item.saleId,
+          productId: item.productId,
+          productName: item.productName,
+          unitPrice: Number(item.unitPrice),
+          lineTotal: Number(item.lineTotal),
+        })),
+      }));
+    } catch (error) {
+      console.error('[PosService] Error consultando ventas:', error);
 
       throw new InternalServerErrorException(
         'No se pudo consultar el historial de ventas.',
       );
     }
-
-    return (data ?? []).map((sale) => ({
-      id: sale.id,
-      ticketNumber: sale.ticket_number,
-      paymentMethod: sale.payment_method,
-      subtotal: Number(sale.subtotal),
-      taxAmount: Number(sale.tax_amount),
-      total: Number(sale.total),
-      status: sale.status,
-      accountingStatus: sale.accounting_status ?? 'posted',
-      accountingError: sale.accounting_error ?? null,
-      soldAt: sale.sold_at,
-      dataOrigin: sale.data_origin,
-      items: sale.pos_sale_item ?? [],
-    }));
   }
 
   /**
    * Obtiene una venta específica con sus productos.
    */
   async findSaleById(id: string) {
-    const { data, error } = await this.supabase
-      .from('pos_sale')
-      .select('*, pos_sale_item(*)')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (error) {
-      console.error('[PosService] Error consultando venta:', error.message);
+    let sale;
+    try {
+      sale = await this.prisma.posSale.findUnique({
+        where: { id },
+        include: {
+          items: true,
+        },
+      });
+    } catch (error) {
+      console.error('[PosService] Error consultando venta:', error);
 
       throw new InternalServerErrorException(
         'No se pudo consultar la venta.',
       );
     }
 
-    if (!data) {
+    if (!sale) {
       throw new BadRequestException('La venta solicitada no existe.');
     }
 
     return {
-      id: data.id,
-      ticketNumber: data.ticket_number,
-      paymentMethod: data.payment_method,
-      subtotal: Number(data.subtotal),
-      taxAmount: Number(data.tax_amount),
-      total: Number(data.total),
-      status: data.status,
-      accountingStatus: data.accounting_status ?? 'posted',
-      accountingError: data.accounting_error ?? null,
-      soldAt: data.sold_at,
-      dataOrigin: data.data_origin,
-      items: data.pos_sale_item ?? [],
+      id: sale.id,
+      ticketNumber: sale.ticketNumber,
+      paymentMethod: sale.paymentMethod,
+      subtotal: Number(sale.subtotal),
+      taxAmount: Number(sale.taxAmount),
+      total: Number(sale.total),
+      status: sale.status,
+      accountingStatus: sale.accountingStatus ?? 'posted',
+      accountingError: sale.accountingError ?? null,
+      soldAt: sale.soldAt.toISOString(),
+      dataOrigin: sale.dataOrigin,
+      items: sale.items.map((item) => ({
+        id: item.id,
+        sale_id: item.saleId,
+        product_id: item.productId,
+        product_name: item.productName,
+        quantity: item.quantity,
+        unit_price: Number(item.unitPrice),
+        line_total: Number(item.lineTotal),
+        saleId: item.saleId,
+        productId: item.productId,
+        productName: item.productName,
+        unitPrice: Number(item.unitPrice),
+        lineTotal: Number(item.lineTotal),
+      })),
     };
   }
+
   private roundMoney(value: number): number {
     return Math.round((value + Number.EPSILON) * 100) / 100;
   }
-
 }

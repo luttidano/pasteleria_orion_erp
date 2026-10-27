@@ -4,8 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseService } from '../supabase/supabase.service';
 import { PrismaService } from '../../database/prisma.service';
 
 interface CachedAuthProfile {
@@ -17,28 +16,13 @@ const tokenProfileCache = new Map<string, CachedAuthProfile>();
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  private supabase: SupabaseClient;
-
   constructor(
-    private readonly configService: ConfigService,
+    private readonly supabaseService: SupabaseService,
     private readonly prisma: PrismaService,
-  ) {
-    const supabaseUrl =
-      this.configService.get<string>('VITE_SUPABASE_URL') ||
-      this.configService.get<string>('SUPABASE_URL') ||
-      process.env.VITE_SUPABASE_URL ||
-      process.env.SUPABASE_URL ||
-      '';
-    const supabaseKey =
-      this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') ||
-      this.configService.get<string>('VITE_SUPABASE_ANON_KEY') ||
-      this.configService.get<string>('SUPABASE_ANON_KEY') ||
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.VITE_SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      '';
+  ) {}
 
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+  private get supabase() {
+    return this.supabaseService.client;
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

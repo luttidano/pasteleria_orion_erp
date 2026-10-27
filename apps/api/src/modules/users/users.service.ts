@@ -3,32 +3,16 @@ import {
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseService } from '../../common/supabase/supabase.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
-  private supabase: SupabaseClient;
+  constructor(private readonly supabaseService: SupabaseService) {}
 
-  constructor(private readonly configService: ConfigService) {
-    const supabaseUrl =
-      this.configService.get<string>('VITE_SUPABASE_URL') ||
-      this.configService.get<string>('SUPABASE_URL') ||
-      process.env.VITE_SUPABASE_URL ||
-      process.env.SUPABASE_URL ||
-      '';
-    const supabaseKey =
-      this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') ||
-      this.configService.get<string>('VITE_SUPABASE_ANON_KEY') ||
-      this.configService.get<string>('SUPABASE_ANON_KEY') ||
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.VITE_SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      '';
-
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+  private get supabase() {
+    return this.supabaseService.client;
   }
 
   async findAll() {
@@ -89,7 +73,11 @@ export class UsersService {
       .single();
 
     if (profError) {
-      console.warn('[UsersService] Error al crear profile:', profError.message);
+      console.error('[UsersService] Error al crear profile, compensando en auth.users:', profError.message);
+      await this.supabase.auth.admin.deleteUser(authData.user.id);
+      throw new InternalServerErrorException(
+        `No se pudo crear el perfil del usuario: ${profError.message}`,
+      );
     }
 
     return {

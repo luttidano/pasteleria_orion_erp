@@ -4,32 +4,15 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseService } from '../../common/supabase/supabase.service';
 import { CreateAccountingMovementDto } from './dto/create-accounting-movement.dto';
 
 @Injectable()
 export class AccountingService {
-  private readonly supabase: SupabaseClient;
+  constructor(private readonly supabaseService: SupabaseService) {}
 
-  constructor(private readonly configService: ConfigService) {
-    const supabaseUrl =
-      this.configService.get<string>('SUPABASE_URL') ||
-      this.configService.get<string>('VITE_SUPABASE_URL') ||
-      process.env.SUPABASE_URL ||
-      process.env.VITE_SUPABASE_URL;
-    const serviceRoleKey =
-      this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') ||
-      process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error(
-        'Falta SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en el entorno de la API.',
-      );
-    }
-
-    // La clave de servicio solo se utiliza en el backend.
-    this.supabase = createClient(supabaseUrl, serviceRoleKey);
+  private get supabase() {
+    return this.supabaseService.client;
   }
 
   async findAccounts() {

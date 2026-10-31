@@ -1,20 +1,4 @@
-import { IsString, IsOptional, IsEnum } from 'class-validator';
-import { CategoryType } from '../../../common/enums';
+import { PartialType } from '@nestjs/swagger';
+import { CreateCategoryDto } from './create-category.dto';
 
-export class UpdateCategoryDto {
-  @IsString()
-  @IsOptional()
-  name?: string;
-
-  @IsEnum(CategoryType)
-  @IsOptional()
-  type?: CategoryType;
-
-  @IsString()
-  @IsOptional()
-  icon?: string;
-
-  @IsString()
-  @IsOptional()
-  description?: string;
-}
+export class UpdateCategoryDto extends PartialType(CreateCategoryDto) {}

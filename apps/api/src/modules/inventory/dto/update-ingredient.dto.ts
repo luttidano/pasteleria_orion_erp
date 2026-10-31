@@ -1,46 +1,4 @@
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { PartialType } from '@nestjs/swagger';
+import { CreateIngredientDto } from './create-ingredient.dto';
 
-export class UpdateIngredientDto {
-  @IsString()
-  @IsOptional()
-  name?: string;
-
-  @IsString()
-  @IsOptional()
-  categoryId?: string;
-
-  @IsString()
-  @IsOptional()
-  category?: string;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  stock?: number;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  minStock?: number;
-
-  @IsString()
-  @IsOptional()
-  unit?: string;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  price?: number;
-
-  @IsString()
-  @IsOptional()
-  icon?: string;
-
-  @IsString()
-  @IsOptional()
-  imageUrl?: string;
-
-  @IsString()
-  @IsOptional()
-  description?: string;
-}
+export class UpdateIngredientDto extends PartialType(CreateIngredientDto) {}

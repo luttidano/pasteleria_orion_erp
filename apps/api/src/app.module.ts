@@ -5,7 +5,7 @@ import {SupabaseModule} from './common/supabase/supabase.module';
 import {InventoryModule} from './modules/inventory/inventory.module';
 import {PosModule} from './modules/pos/pos.module';
 import {AccountingModule} from './modules/accounting/accounting.module';
-import {UsersModule} from './modules/users/users.module';
+import { UsersModule } from './modules/users/users.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 

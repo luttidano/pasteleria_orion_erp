@@ -115,8 +115,8 @@ export class PosService {
     let accountingStatus: 'posted' | 'pending' = 'posted';
     let accountingWarning: string | null = null;
 
-    const accountingMovementCreated = declaredTotal > 0;
-    if (accountingMovementCreated) {
+    const accountingEntryCreated = declaredTotal > 0;
+    if (accountingEntryCreated) {
       try {
         await this.accountingService.registerSaleIncome({
           id: sale.id,
@@ -159,7 +159,7 @@ export class PosService {
       accountingWarning,
       soldAt: sale.soldAt.toISOString(),
       dataOrigin: sale.dataOrigin,
-      accountingMovementCreated,
+      accountingEntryCreated,
       items: sale.items.map((item) => ({
         id: item.id,
         sale_id: item.saleId,

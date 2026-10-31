@@ -4,255 +4,312 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { SupabaseService } from '../../common/supabase/supabase.service';
-import { CreateAccountingMovementDto } from './dto/create-accounting-movement.dto';
+import { PrismaService } from '../../database/prisma.service';
+import { CreateAccountingEntryDto } from './dto/create-accounting-entry.dto';
 
 @Injectable()
 export class AccountingService {
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  private get supabase() {
-    return this.supabaseService.client;
-  }
-
+  /**
+   * Obtiene las cuentas contables activas.
+   */
   async findAccounts() {
-    const { data, error } = await this.supabase
-      .from('accounting_account')
-      .select('id, code, name, account_type, is_active')
-      .eq('is_active', true)
-      .order('code', { ascending: true });
+    try {
+      const accounts = await this.prisma.accountingAccount.findMany({
+        where: { isActive: true },
+        orderBy: { code: 'asc' },
+      });
 
-    if (error) {
-      console.error('[AccountingService] Error consultando cuentas:', error.message);
+      return accounts.map((acc) => ({
+        id: acc.id,
+        code: acc.code,
+        name: acc.name,
+        accountType: acc.accountType,
+        isActive: acc.isActive,
+      }));
+    } catch (error) {
+      console.error('[AccountingService] Error consultando cuentas:', error);
       throw new InternalServerErrorException('No se pudieron consultar las cuentas contables.');
     }
-
-    return (data ?? []).map((account) => ({
-      id: account.id,
-      code: account.code,
-      name: account.name,
-      accountType: account.account_type,
-      isActive: account.is_active,
-    }));
   }
 
-  async findMovements() {
-    const { data, error } = await this.supabase
-      .from('accounting_movement')
-      .select('id, movement_number, movement_date, concept, movement_type, account_id, amount, origin, pos_sale_id, payment_method, created_at')
-      .order('movement_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(200);
+  /**
+   * Obtiene los asientos del Libro Diario con sus líneas (Debe y Haber).
+   */
+  async findEntries() {
+    try {
+      const entries = await this.prisma.accountingEntry.findMany({
+        include: {
+          items: {
+            include: { account: true },
+            orderBy: { debit: 'desc' }, // Muestra primero los Débitos y luego los Créditos
+          },
+          posSale: true,
+        },
+        orderBy: [
+          { entryDate: 'desc' },
+          { entryNumber: 'desc' },
+        ],
+        take: 100,
+      });
 
-    if (error) {
-      console.error('[AccountingService] Error consultando movimientos:', error.message);
-      throw new InternalServerErrorException('No se pudieron consultar los movimientos contables.');
+      return entries.map((entry) => {
+        const totalDebit = entry.items.reduce((sum, it) => sum + Number(it.debit), 0);
+        const totalCredit = entry.items.reduce((sum, it) => sum + Number(it.credit), 0);
+
+        return {
+          id: entry.id,
+          entryNumber: Number(entry.entryNumber),
+          entryDate: entry.entryDate.toISOString().slice(0, 10),
+          concept: entry.concept,
+          origin: entry.origin,
+          ticketNumber: entry.posSale?.ticketNumber || null,
+          totalAmount: totalDebit,
+          isBalanced: Math.abs(totalDebit - totalCredit) < 0.01,
+          createdAt: entry.createdAt.toISOString(),
+          items: entry.items.map((it) => ({
+            id: it.id,
+            accountId: it.accountId,
+            accountCode: it.account.code,
+            accountName: it.account.name,
+            accountType: it.account.accountType,
+            debit: Number(it.debit),
+            credit: Number(it.credit),
+            description: it.description,
+          })),
+        };
+      });
+    } catch (error) {
+      console.error('[AccountingService] Error consultando asientos:', error);
+      throw new InternalServerErrorException('No se pudieron consultar los asientos del libro diario.');
+    }
+  }
+
+  /**
+   * Registra un asiento contable manual validando el cuadre exacto de Debe == Haber.
+   */
+  async createEntry(dto: CreateAccountingEntryDto) {
+    if (!dto.items || dto.items.length < 2) {
+      throw new BadRequestException('Un asiento contable debe tener al menos dos líneas.');
     }
 
-    const accountIds = [...new Set((data ?? []).map((movement) => movement.account_id))];
-    let accountsById = new Map<string, { code: string; name: string }>();
+    const totalDebit = dto.items.reduce((sum, it) => sum + Number(it.debit || 0), 0);
+    const totalCredit = dto.items.reduce((sum, it) => sum + Number(it.credit || 0), 0);
 
-    if (accountIds.length) {
-      const { data: accounts, error: accountsError } = await this.supabase
-        .from('accounting_account')
-        .select('id, code, name')
-        .in('id', accountIds);
-
-      if (accountsError) {
-        console.error('[AccountingService] Error consultando nombres de cuentas:', accountsError.message);
-        throw new InternalServerErrorException('No se pudieron cargar las cuentas de los movimientos.');
-      }
-
-      accountsById = new Map(
-        (accounts ?? []).map((account) => [account.id, { code: account.code, name: account.name }]),
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      throw new BadRequestException(
+        `El asiento está descuadrado: Total Debe ($${totalDebit}) debe ser igual al Total Haber ($${totalCredit}).`,
       );
     }
 
-    // El método de pago vive en la venta del POS; se consulta por separado
-    // para mostrarlo en el Libro Diario sin duplicar datos contables.
-    const posSaleIds = [...new Set(
-      (data ?? [])
-        .filter((movement) => movement.origin === 'pos' && movement.pos_sale_id)
-        .map((movement) => movement.pos_sale_id as string),
-    )];
-    let paymentMethodBySaleId = new Map<string, string>();
+    try {
+      const entry = await this.prisma.accountingEntry.create({
+        data: {
+          entryDate: new Date(dto.entryDate),
+          concept: dto.concept.trim(),
+          origin: 'manual',
+          items: {
+            create: dto.items.map((it) => ({
+              accountId: it.accountId,
+              debit: Math.round(Number(it.debit || 0) * 100) / 100,
+              credit: Math.round(Number(it.credit || 0) * 100) / 100,
+              description: it.description || null,
+            })),
+          },
+        },
+        include: {
+          items: { include: { account: true } },
+        },
+      });
 
-    if (posSaleIds.length) {
-      const { data: sales, error: salesError } = await this.supabase
-        .from('pos_sale')
-        .select('id, payment_method')
-        .in('id', posSaleIds);
-
-      if (salesError) {
-        console.error('[AccountingService] Error consultando métodos de pago POS:', salesError.message);
-        throw new InternalServerErrorException('No se pudieron cargar los métodos de pago de las ventas.');
-      }
-
-      paymentMethodBySaleId = new Map(
-        (sales ?? []).map((sale) => [sale.id, sale.payment_method as string]),
-      );
-    }
-
-    return (data ?? []).map((movement) => {
-      const account = accountsById.get(movement.account_id);
       return {
-        id: movement.id,
-        movementNumber: movement.movement_number,
-        date: movement.movement_date,
-        concept: movement.concept,
-        category: movement.movement_type,
-        accountId: movement.account_id,
-        account: account ? `${account.code} - ${account.name}` : 'Cuenta no disponible',
-        amount: Number(movement.amount),
-        origin: movement.origin,
-        posSaleId: movement.pos_sale_id,
-        paymentMethod: movement.pos_sale_id
-          ? paymentMethodBySaleId.get(movement.pos_sale_id) ?? movement.payment_method ?? null
-          : movement.payment_method ?? null,
-        createdAt: movement.created_at,
+        id: entry.id,
+        entryNumber: Number(entry.entryNumber),
+        entryDate: entry.entryDate.toISOString().slice(0, 10),
+        concept: entry.concept,
+        origin: entry.origin,
+        totalAmount: totalDebit,
+        items: entry.items.map((it) => ({
+          id: it.id,
+          accountId: it.accountId,
+          accountCode: it.account.code,
+          accountName: it.account.name,
+          debit: Number(it.debit),
+          credit: Number(it.credit),
+        })),
       };
-    });
+    } catch (error) {
+      console.error('[AccountingService] Error creando asiento manual:', error);
+      throw new InternalServerErrorException('No se pudo registrar el asiento contable.');
+    }
   }
 
-  async createMovement(dto: CreateAccountingMovementDto) {
-    const concept = dto.concept.trim();
-    if (!concept) {
-      throw new BadRequestException('El concepto del movimiento es obligatorio.');
-    }
-
-    const { data: account, error: accountError } = await this.supabase
-      .from('accounting_account')
-      .select('id, code, name, is_active')
-      .eq('id', dto.accountId)
-      .maybeSingle();
-
-    if (accountError) {
-      console.error('[AccountingService] Error validando cuenta:', accountError.message);
-      throw new InternalServerErrorException('No se pudo validar la cuenta contable.');
-    }
-    if (!account || !account.is_active) {
-      throw new NotFoundException('La cuenta contable seleccionada no existe o está inactiva.');
-    }
-
-    const { data, error } = await this.supabase
-      .from('accounting_movement')
-      .insert({
-        movement_date: dto.movementDate,
-        concept,
-        movement_type: dto.movementType,
-        account_id: dto.accountId,
-        amount: Math.round(dto.amount * 100) / 100,
-        payment_method: dto.paymentMethod,
-        origin: 'manual',
-        pos_sale_id: null,
-      })
-      .select('id, movement_number, movement_date, concept, movement_type, account_id, amount, origin, pos_sale_id, payment_method, created_at')
-      .single();
-
-    if (error || !data) {
-      console.error('[AccountingService] Error creando movimiento:', error?.message);
-      throw new InternalServerErrorException('No se pudo registrar el movimiento contable.');
-    }
-
-    return {
-      id: data.id,
-      movementNumber: data.movement_number,
-      date: data.movement_date,
-      concept: data.concept,
-      category: data.movement_type,
-      accountId: data.account_id,
-      account: `${account.code} - ${account.name}`,
-      amount: Number(data.amount),
-      origin: data.origin,
-      posSaleId: data.pos_sale_id,
-      paymentMethod: data.payment_method,
-      createdAt: data.created_at,
-    };
-  }
-
+  /**
+   * Genera el asiento formal automático por venta POS con Partida Doble:
+   * - DEBE: Caja o Banco (Activo) por el Total recaudado
+   * - HABER: Ventas de Pastelería (Ingreso) por el Subtotal Neto
+   * - HABER: IVA Débito Fiscal (Pasivo) por el Impuesto
+   */
   async registerSaleIncome(sale: {
     id: string;
     ticketNumber: string;
     soldAt: string;
     total: number;
     paymentMethod: string;
-
   }): Promise<void> {
     if (sale.total <= 0) return;
 
-    // Verificar para no duplicar asientos ante reintentos
-    const { data: existing, error: existingErr} = await this.supabase
-      .from('accounting_movement')
-      .select('id')
-      .eq('pos_sale_id', sale.id)
-      .maybeSingle();
-
-    if (existingErr) {
-      console.error('[AccountingService] Error validando asiento previo:', existingErr.message);
-      throw new InternalServerErrorException('Error al verificar movimientos contables');
-    }
+    // Idempotencia: Verificar que no se haya generado asiento previamente
+    const existing = await this.prisma.accountingEntry.findFirst({
+      where: { posSaleId: sale.id },
+      select: { id: true },
+    });
     if (existing) return;
 
+    // 1. Determinar cuenta de Activo (Caja o Banco según medio de pago)
+    const isCash = sale.paymentMethod === 'efectivo';
+    const targetAssetCode = isCash ? '1101' : '1102';
 
-    // Obtener cuenta contable de ventas
-    const { data: account, error: accErr } = await this.supabase
-      .from('accounting_account')
-      .select('id')
-      .eq('code', '4101')
-      .eq('is_active', true)
-      .maybeSingle();
-    
-    if (accErr || !account) {
-      console.error('[AccountingService] Cuenta 4101 no encontrada', accErr?.message);
-      throw new InternalServerErrorException('No se pudo contabilizar la venta: no existe la cuenta contable activa 4101'); 
-    }
-
-    //Insertar movimeinto contable con origen pos
-    const { error: insertErr } = await this.supabase
-      .from('accounting_movement')
-      .insert({
-        movement_date: sale.soldAt.slice(0, 10),
-        concept: `Venta POS ${sale.ticketNumber}`,
-        movement_type: 'ingreso',
-        account_id: account.id,
-        amount: Math.round(sale.total * 100) / 100,
-        origin: 'pos',
-        pos_sale_id: sale.id,
-        payment_method: sale.paymentMethod
+    const assetAccount = await this.prisma.accountingAccount.findFirst({
+      where: {
+        isActive: true,
+        OR: [
+          { code: targetAssetCode },
+          { accountType: 'activo' },
+        ],
+      },
+      orderBy: { code: 'asc' },
     });
 
-    if(insertErr) {
-      console.error('[AccountingService] Error insertado movimiento POS', insertErr.message);
-      throw new InternalServerErrorException('No se pudo registrar el movimiento contable de la venta');
+    // 2. Determinar cuenta de Ingreso (Ventas)
+    const salesAccount = await this.prisma.accountingAccount.findFirst({
+      where: {
+        isActive: true,
+        OR: [
+          { code: '4101' },
+          { accountType: 'ingreso' },
+        ],
+      },
+      orderBy: { code: 'asc' },
+    });
+
+    // 3. Determinar cuenta de Impuesto (IVA Débito Fiscal)
+    const vatAccount = await this.prisma.accountingAccount.findFirst({
+      where: {
+        isActive: true,
+        OR: [
+          { code: '2105' },
+          { accountType: 'pasivo' },
+        ],
+      },
+      orderBy: { code: 'asc' },
+    });
+
+    if (!assetAccount || !salesAccount) {
+      throw new InternalServerErrorException(
+        'Faltan cuentas contables básicas (Activo o Ingreso) para registrar la venta.',
+      );
+    }
+
+    // Cálculo tributario (IVA 19% desglosado si existe cuenta de IVA)
+    const total = Math.round(sale.total * 100) / 100;
+    let netSales = total;
+    let vatAmount = 0;
+
+    if (vatAccount) {
+      netSales = Math.round((total / 1.19) * 100) / 100;
+      vatAmount = Math.round((total - netSales) * 100) / 100;
+    }
+
+    const itemsToCreate = [
+      // DEBE: Entrada de dinero a Caja o Banco
+      { accountId: assetAccount.id, debit: total, credit: 0, description: `Ingreso venta ${sale.paymentMethod}` },
+      // HABER: Ganancia neta por venta
+      { accountId: salesAccount.id, debit: 0, credit: netSales, description: 'Venta neta productos' },
+    ];
+
+    if (vatAmount > 0 && vatAccount) {
+      // HABER: Impuesto retenido
+      itemsToCreate.push({
+        accountId: vatAccount.id,
+        debit: 0,
+        credit: vatAmount,
+        description: '19% IVA Débito Fiscal',
+      });
+    }
+
+    try {
+      await this.prisma.accountingEntry.create({
+        data: {
+          entryDate: new Date(sale.soldAt.slice(0, 10)),
+          concept: `Venta POS ${sale.ticketNumber}`,
+          origin: 'pos',
+          posSaleId: sale.id,
+          items: {
+            create: itemsToCreate,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('[AccountingService] Error registrando asiento POS:', error);
+      throw new InternalServerErrorException('No se pudo generar el asiento contable de la venta.');
     }
   }
 
-  // Obtener ventas pendientes de contabilizar
-  async getPendingSalesCount(): Promise<{ pendingCount: number }> {
-    const { count, error } = await this.supabase
-      .from('pos_sale')
-      .select('id', { count: 'exact', head: true })
-      .eq('accounting_status', 'pending');
+  /**
+   * Calcula el Balance de Comprobación y Saldos en tiempo real.
+   */
+  async getBalance() {
+    try {
+      const accounts = await this.prisma.accountingAccount.findMany({
+        where: { isActive: true },
+        include: {
+          entryItems: true,
+        },
+        orderBy: { code: 'asc' },
+      });
 
-    if (error) {
-      console.error('[AccountingService] Error contando ventas pendientes:', error.message);
+      return accounts.map((acc) => {
+        const totalDebit = acc.entryItems.reduce((sum, it) => sum + Number(it.debit), 0);
+        const totalCredit = acc.entryItems.reduce((sum, it) => sum + Number(it.credit), 0);
+
+        const debitBalance = totalDebit > totalCredit ? totalDebit - totalCredit : 0;
+        const creditBalance = totalCredit > totalDebit ? totalCredit - totalDebit : 0;
+
+        return {
+          id: acc.id,
+          code: acc.code,
+          name: acc.name,
+          accountType: acc.accountType,
+          totalDebit,
+          totalCredit,
+          debitBalance,
+          creditBalance,
+        };
+      });
+    } catch (error) {
+      console.error('[AccountingService] Error calculando balance:', error);
+      throw new InternalServerErrorException('No se pudo calcular el balance contable.');
+    }
+  }
+
+  async getPendingSalesCount(): Promise<{ pendingCount: number }> {
+    try {
+      const pendingCount = await this.prisma.posSale.count({
+        where: { accountingStatus: 'pending' },
+      });
+      return { pendingCount };
+    } catch (error) {
       return { pendingCount: 0 };
     }
-
-    return { pendingCount: count ?? 0 };
   }
 
-  // Reintenta contabilizar todas las ventas pendientes del POS
   async syncPendingSales(): Promise<{ synced: number; failed: number }> {
-    const { data: pendingSales, error } = await this.supabase
-      .from('pos_sale')
-      .select('id, ticket_number, sold_at, total, payment_method')
-      .eq('accounting_status', 'pending')
-      .order('sold_at', { ascending: true });
-
-    if (error || !pendingSales) {
-      throw new InternalServerErrorException('No se pudieron consultar las ventas pendientes.');
-    }
+    const pendingSales = await this.prisma.posSale.findMany({
+      where: { accountingStatus: 'pending' },
+      orderBy: { soldAt: 'asc' },
+    });
 
     let synced = 0;
     let failed = 0;
@@ -261,35 +318,28 @@ export class AccountingService {
       try {
         await this.registerSaleIncome({
           id: sale.id,
-          ticketNumber: sale.ticket_number,
-          soldAt: sale.sold_at,
+          ticketNumber: sale.ticketNumber,
+          soldAt: sale.soldAt.toISOString(),
           total: Number(sale.total),
-          paymentMethod: sale.payment_method,
+          paymentMethod: sale.paymentMethod,
         });
 
-        // Actualizar venta a posted
-        await this.supabase
-          .from('pos_sale')
-          .update({
-            accounting_status: 'posted',
-            accounting_error: null,
-          })
-          .eq('id', sale.id);
+        await this.prisma.posSale.update({
+          where: { id: sale.id },
+          data: { accountingStatus: 'posted', accountingError: null },
+        });
 
         synced++;
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Error al sincronizar.';
-        console.error(`[AccountingService] Falló reintento de venta ${sale.ticket_number}:`, err);
-        await this.supabase
-          .from('pos_sale')
-          .update({
-            accounting_error: errorMsg,
-          })
-          .eq('id', sale.id);
+        await this.prisma.posSale.update({
+          where: { id: sale.id },
+          data: { accountingError: errorMsg },
+        });
         failed++;
       }
     }
+
     return { synced, failed };
   }
-
 }

@@ -160,6 +160,7 @@ model PosSale {
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   items PosSaleItem[]
+  accountingEntries AccountingEntry[]
 
   @@index([soldAt], map: "idx_pos_sale_sold_at")
   @@index([paymentMethod], map: "idx_pos_sale_payment_method")
@@ -183,3 +184,46 @@ model PosSaleItem {
 
   @@map("pos_sale_item")
 }
+
+model AccountingAccount {
+  id          String                @id @default(uuid()) @db.Uuid
+  code        String                @unique
+  name        String
+  accountType String                @map("account_type")
+  isActive    Boolean               @default(true) @map("is_active")
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  entryItems  AccountingEntryItem[]
+
+  @@map("accounting_account")
+}
+
+model AccountingEntry {
+  id          String                @id @default(uuid()) @db.Uuid
+  entryNumber BigInt                @default(autoincrement()) @map("entry_number")
+  entryDate   DateTime              @default(now()) @map("entry_date") @db.Date
+  concept     String
+  origin      String                @default("manual")
+  posSaleId   String?               @map("pos_sale_id") @db.Uuid
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  posSale     PosSale?              @relation(fields: [posSaleId], references: [id])
+  items       AccountingEntryItem[]
+
+  @@map("accounting_entry")
+}
+
+model AccountingEntryItem {
+  id          String            @id @default(uuid()) @db.Uuid
+  entryId     String            @map("entry_id") @db.Uuid
+  accountId   String            @map("account_id") @db.Uuid
+  debit       Decimal           @default(0) @db.Decimal(12, 2)
+  credit      Decimal           @default(0) @db.Decimal(12, 2)
+  description String?
+
+  entry       AccountingEntry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account     AccountingAccount @relation(fields: [accountId], references: [id])
+
+  @@map("accounting_entry_item")
+}
+

@@ -4,7 +4,7 @@ import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AccountingService } from './accounting.service';
-import { CreateAccountingMovementDto } from './dto/create-accounting-movement.dto';
+import { CreateAccountingEntryDto } from './dto/create-accounting-entry.dto';
 
 @Controller('accounting')
 @UseGuards(AuthGuard, RolesGuard)
@@ -17,20 +17,28 @@ export class AccountingController {
     return this.accountingService.findAccounts();
   }
 
-  @Get('movements')
-  @Roles(Role.admin, Role.cashier)
-  findMovements() {
-    return this.accountingService.findMovements();
+  // Libro Diario formal con Debe y Haber
+  @Get('entries')
+  @Roles(Role.admin)
+  findEntries() {
+    return this.accountingService.findEntries();
   }
 
-  @Post('movements')
-  @Roles(Role.admin, Role.cashier)
-  createMovement(@Body() dto: CreateAccountingMovementDto) {
-    return this.accountingService.createMovement(dto);
+  @Post('entries')
+  @Roles(Role.admin)
+  createEntry(@Body() dto: CreateAccountingEntryDto) {
+    return this.accountingService.createEntry(dto);
+  }
+
+  // Balance de Comprobación y Saldos
+  @Get('balance')
+  @Roles(Role.admin)
+  getBalance() {
+    return this.accountingService.getBalance();
   }
 
   @Get('pending-sales-count')
-  @Roles(Role.admin, Role.cashier)
+  @Roles(Role.admin)
   getPendingSalesCount() {
     return this.accountingService.getPendingSalesCount();
   }

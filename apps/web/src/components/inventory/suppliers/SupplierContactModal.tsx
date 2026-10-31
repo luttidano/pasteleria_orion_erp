@@ -60,13 +60,13 @@ export const SupplierContactModal: React.FC<SupplierContactModalProps> = ({
 
   const handleOpenWhatsApp = (customMsg?: string) => {
     if (!hasPhone) return;
+    const terms: string[] = [];
+    if (supplier.supplierTypes?.includes('materia_prima')) terms.push('materias primas');
+    if (supplier.supplierTypes?.includes('empaque')) terms.push('empaques y cajas');
+    if (supplier.supplierTypes?.includes('reventa')) terms.push('productos de reventa');
     const defaultProductTerm =
       supplier.category.split(/[,•]/)[0]?.trim() ||
-      (supplier.supplierType === 'reventa'
-        ? 'productos de reventa'
-        : supplier.supplierType === 'ambos'
-        ? 'materias primas y productos'
-        : 'materias primas');
+      (terms.length > 0 ? terms.join(' y ') : 'insumos');
 
     const defaultMsg = isPresencial
       ? `Hola ${supplier.name}, te escribo desde Pastelería Orión. Quisiera cotizar / consultar disponibilidad de ${defaultProductTerm} para ir a comprar.`

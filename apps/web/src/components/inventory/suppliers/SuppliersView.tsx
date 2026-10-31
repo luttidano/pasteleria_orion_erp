@@ -49,7 +49,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
   const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [modalityFilter, setModalityFilter] = useState<'all' | 'despacho' | 'presencial'>('all');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'materia_prima' | 'reventa'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'materia_prima' | 'empaque' | 'reventa'>('all');
 
   // Vista en dispositivos móviles: 'list' (directorio) o 'detail' (ficha activa)
   const [mobileTab, setMobileTab] = useState<'list' | 'detail'>('list');
@@ -87,13 +87,10 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
     const total = suppliers.length;
     const despacho = suppliers.filter((s) => getSupplyModality(s) === 'despacho').length;
     const presencial = suppliers.filter((s) => getSupplyModality(s) === 'presencial').length;
-    const materiaPrima = suppliers.filter(
-      (s) => !s.supplierType || s.supplierType === 'materia_prima' || s.supplierType === 'ambos'
-    ).length;
-    const reventa = suppliers.filter(
-      (s) => s.supplierType === 'reventa' || s.supplierType === 'ambos'
-    ).length;
-    return { total, despacho, presencial, materiaPrima, reventa };
+    const materiaPrima = suppliers.filter((s) => s.supplierTypes?.includes('materia_prima')).length;
+    const empaques = suppliers.filter((s) => s.supplierTypes?.includes('empaque')).length;
+    const reventa = suppliers.filter((s) => s.supplierTypes?.includes('reventa')).length;
+    return { total, despacho, presencial, materiaPrima, empaques, reventa };
   }, [suppliers]);
 
   // Lista de rubros para filtros rápidos
@@ -115,12 +112,9 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
         return false;
       }
 
-      // 2. Tipo de Proveedor (Materia Prima / Reventa) [Acumulable]
-      const sType = s.supplierType || 'materia_prima';
-      if (typeFilter === 'materia_prima' && sType !== 'materia_prima' && sType !== 'ambos') {
-        return false;
-      }
-      if (typeFilter === 'reventa' && sType !== 'reventa' && sType !== 'ambos') {
+      // 2. Tipo de Proveedor (Materia Prima / Empaques / Reventa)
+      const types = s.supplierTypes || ['materia_prima'];
+      if (typeFilter !== 'all' && !types.includes(typeFilter)) {
         return false;
       }
 
@@ -398,6 +392,18 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
               </button>
               <button
                 type="button"
+                onClick={() => setTypeFilter('empaque')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  typeFilter === 'empaque'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-stone-600 dark:text-stone-300 hover:bg-[#FAF5ED] dark:hover:bg-[#2A1D18]'
+                }`}
+              >
+                <span>📦</span>
+                <span>Empaques ({counts.empaques})</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setTypeFilter('reventa')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   typeFilter === 'reventa'
@@ -642,12 +648,24 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
                             <User className="w-3.5 h-3.5 text-stone-400" />
                             <span>Contacto directo: <strong>{selectedSupplier.contactPerson}</strong></span>
                           </p>
-                        ) : selectedSupplier.supplierType === 'reventa' ? (
-                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 font-medium">🛍️ Proveedor de productos de reventa</p>
-                        ) : selectedSupplier.supplierType === 'ambos' ? (
-                          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">🔄 Proveedor de materia prima y reventa</p>
                         ) : (
-                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 font-medium">🌾 Proveedor de materias primas e insumos</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {selectedSupplier.supplierTypes?.includes('materia_prima') && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
+                                🌾 Materia Prima
+                              </span>
+                            )}
+                            {selectedSupplier.supplierTypes?.includes('empaque') && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/10 text-purple-800 dark:text-purple-200 border border-purple-300 dark:border-purple-800">
+                                📦 Empaques & Despacho
+                              </span>
+                            )}
+                            {selectedSupplier.supplierTypes?.includes('reventa') && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-800">
+                                🛍️ Reventa
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>

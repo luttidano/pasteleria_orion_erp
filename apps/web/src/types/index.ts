@@ -42,7 +42,6 @@ export interface Category {
   updatedAt?: string;
 }
 
-
 export type IngredientCategory =
   | 'Harinas y Polvos'
   | 'Lácteos y Huevos'
@@ -105,7 +104,7 @@ export interface Recipe {
   updatedAt?: string;
 }
 
-export type SupplierType = 'materia_prima' | 'reventa' | 'ambos';
+export type SupplierType = 'materia_prima' | 'empaque' | 'reventa';
 export type SupplyModality = 'despacho' | 'presencial' | 'mixto';
 
 export interface Supplier {
@@ -115,6 +114,7 @@ export interface Supplier {
   deliverySchedule: string; // Cuándo entrega (días, horarios o frecuencia)
   category: string; // Proveedor de qué es (rubro o insumos principales)
   approximatePrices: string; // Precios aproximados o lista de precios de referencia
+  supplierTypes: SupplierType[];
   supplierType?: SupplierType;
   supplyModality?: SupplyModality;
   contactPerson?: string; // Nombre de persona de contacto o vendedor
@@ -122,6 +122,26 @@ export interface Supplier {
   email?: string;
   address?: string;
   notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type PackagingType = 'primario' | 'secundario';
+
+export interface Packaging {
+  id: string;
+  name: string;
+  packageType: PackagingType;
+  category: string;
+  stock: number;
+  minStock: number;
+  unit: string;
+  costPrice?: number;
+  supplierId?: string;
+  supplier?: Supplier;
+  icon?: string;
+  description?: string;
+  status?: StockStatus;
   createdAt?: string;
   updatedAt?: string;
 }

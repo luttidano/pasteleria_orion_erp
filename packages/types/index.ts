@@ -75,7 +75,7 @@ export interface Recipe {
   updatedAt?: string;
 }
 
-export type SupplierType = 'materia_prima' | 'reventa' | 'ambos';
+export type SupplierType = 'materia_prima' | 'empaque' | 'reventa';
 
 export interface Supplier {
   id: string;
@@ -84,7 +84,7 @@ export interface Supplier {
   deliverySchedule: string; // Cuándo entrega (días, horarios o frecuencia)
   category: string; // Proveedor de qué es (rubro o insumos principales)
   approximatePrices: string; // Precios aproximados o lista de referencia
-  supplierType?: SupplierType;
+  supplierTypes: SupplierType[];
   contactPerson?: string; // Nombre de la persona o vendedor de contacto
   icon?: string; // Emoji representativo
   email?: string;
@@ -114,6 +114,26 @@ export interface CatalogProduct {
   categoryName?: string;
   imageUrl?: string;
   icon?: string;
+  status?: StockStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type PackagingType = 'primario' | 'secundario';
+
+export interface Packaging {
+  id: string;
+  name: string;
+  packageType: PackagingType;
+  category: string;
+  stock: number;
+  minStock: number;
+  unit: string;
+  costPrice?: number;
+  supplierId?: string;
+  supplier?: Supplier;
+  icon?: string;
+  description?: string;
   status?: StockStatus;
   createdAt?: string;
   updatedAt?: string;

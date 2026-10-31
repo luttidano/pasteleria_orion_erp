@@ -3,7 +3,7 @@
 -- =============================================================================
 -- Ejecuta este script en el SQL Editor de tu proyecto en Supabase
 -- (https://supabase.com/dashboard/project/_/sql) para inicializar desde cero.
--- Tablas normalizadas en singular, control de inventario, recetas,
+-- Tablas normalizadas en singular, control de inventario, empaques, recetas,
 -- punto de venta (POS) y contabilidad de partida doble (Libro Diario).
 -- =============================================================================
 
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS public.category (
   updated_at timestamp with time zone DEFAULT now()
 );
 
--- Proveedores
+-- Proveedores (Materia prima, Empaques, Reventa o Ambos)
 CREATE TABLE IF NOT EXISTS public.supplier (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS public.supplier (
   email text,
   address text,
   notes text,
-  supplier_type text NOT NULL DEFAULT 'materia_prima'::text CHECK (supplier_type = ANY (ARRAY['materia_prima'::text, 'reventa'::text, 'ambos'::text])),
+  supplier_types text[] NOT NULL DEFAULT ARRAY['materia_prima'::text],
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now()
 );
@@ -67,10 +67,10 @@ CREATE TABLE IF NOT EXISTS public.profile (
 );
 
 -- =============================================================================
--- 3. INVENTARIO & RECETARIO ARTESANAL
+-- 3. INVENTARIO, RECETARIO ARTESANAL & EMPAQUES
 -- =============================================================================
 
--- Materias Primas / Ingredientes
+-- Materias Primas / Ingredientes (100% Culinarios)
 CREATE TABLE IF NOT EXISTS public.ingredient (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   category_id uuid REFERENCES public.category(id) ON DELETE SET NULL,
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS public.supplier_ingredient (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- Recetas
+-- Recetas (100% Culinarias, aisladas de empaques)
 CREATE TABLE IF NOT EXISTS public.recipe (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   category_id uuid REFERENCES public.category(id) ON DELETE SET NULL,
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS public.recipe (
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
--- Insumos por Receta
+-- Insumos por Receta (Solo materias primas comestibles)
 CREATE TABLE IF NOT EXISTS public.recipe_ingredient (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   recipe_id uuid NOT NULL REFERENCES public.recipe(id) ON DELETE CASCADE,
@@ -133,6 +133,23 @@ CREATE TABLE IF NOT EXISTS public.product (
   cost_price numeric DEFAULT 0,
   image_url text,
   icon text DEFAULT '🧁'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);
+
+-- Material de Empaque & Despacho (Cajas, bolsas, domos, blondas, vasos)
+CREATE TABLE IF NOT EXISTS public.packaging (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  package_type text NOT NULL CHECK (package_type = ANY (ARRAY['primario'::text, 'secundario'::text])),
+  category text NOT NULL,
+  stock numeric NOT NULL DEFAULT 0 CHECK (stock >= 0::numeric),
+  min_stock numeric NOT NULL DEFAULT 0 CHECK (min_stock >= 0::numeric),
+  unit text NOT NULL DEFAULT 'un'::text,
+  cost_price numeric DEFAULT 0,
+  supplier_id uuid REFERENCES public.supplier(id) ON DELETE SET NULL,
+  icon text DEFAULT '📦'::text,
+  description text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now()
 );
@@ -190,7 +207,7 @@ CREATE TABLE IF NOT EXISTS public.accounting_entry_item (
 );
 
 -- =============================================================================
--- 6. ÍNDICES DE RENDIMIENTO (Foreign Keys y Búsquedas Frecuentes)
+-- 6. ÍNDICES DE RENDIMIENTO
 -- =============================================================================
 
 CREATE INDEX IF NOT EXISTS idx_ingredient_category ON public.ingredient(category_id);
@@ -200,6 +217,8 @@ CREATE INDEX IF NOT EXISTS idx_recipe_ingredient_ingredient ON public.recipe_ing
 CREATE INDEX IF NOT EXISTS idx_product_category ON public.product(category_id);
 CREATE INDEX IF NOT EXISTS idx_product_recipe ON public.product(recipe_id);
 CREATE INDEX IF NOT EXISTS idx_product_supplier ON public.product(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_packaging_supplier ON public.packaging(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_packaging_package_type ON public.packaging(package_type);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_items_sale ON public.pos_sale_item(sale_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_items_product ON public.pos_sale_item(product_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_sold_at ON public.pos_sale(sold_at DESC);

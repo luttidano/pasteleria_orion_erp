@@ -97,12 +97,13 @@ model Supplier {
   email             String?
   address           String?
   notes             String?
-  supplierType      String   @default("materia_prima") @map("supplier_type")
+  supplierTypes     String[] @default(["materia_prima"]) @map("supplier_types")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @default(now()) @map("updated_at")
 
   supplierIngredients SupplierIngredient[]
   resaleProducts      Product[]
+  packagings          Packaging[]
 
   @@map("supplier")
 }
@@ -143,6 +144,28 @@ model Product {
   posSaleItems PosSaleItem[]
 
   @@map("product")
+}
+
+model Packaging {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  packageType String   @map("package_type")
+  category    String
+  stock       Decimal  @default(0) @db.Decimal(12, 3)
+  minStock    Decimal  @default(0) @map("min_stock") @db.Decimal(12, 3)
+  unit        String   @default("un")
+  costPrice   Decimal? @default(0) @map("cost_price") @db.Decimal(12, 2)
+  supplierId  String?  @map("supplier_id") @db.Uuid
+  icon        String?  @default("📦")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  supplier    Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@index([supplierId], map: "idx_packaging_supplier")
+  @@index([packageType], map: "idx_packaging_package_type")
+  @@map("packaging")
 }
 
 model PosSale {

@@ -12,6 +12,7 @@ import {
   X,
   ChevronDown,
   Boxes,
+  Package,
   Store,
   Receipt,
   Clock,
@@ -26,6 +27,7 @@ export type AdminSection =
   | 'despensa'
   | 'recetas'
   | 'productos'
+  | 'empaques'
   | 'compras'
   | 'proveedores'
   // Módulo Punto de Venta
@@ -114,6 +116,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           description: 'Producción propia y reventa',
           icon: Store,
           badgeColor: 'bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300',
+          allowedRoles: ['admin', 'baker'],
+        },
+        {
+          id: 'empaques',
+          label: 'Empaques & Despacho',
+          description: 'Cajas, bolsas y envases',
+          icon: Package,
           allowedRoles: ['admin', 'baker'],
         },              
         {
@@ -229,6 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       'despensa', 
       'compras', 
       'recetas', 
+      'empaques', 
       'proveedores']
       .includes(activeSection),
     pos: [
@@ -246,7 +256,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Auto-expandir el dropdown si la sección activa cambia externamente
   useEffect(() => {
-    if (['despensa', 'compras', 'recetas', 'proveedores'].includes(activeSection)) {
+    if (['despensa', 'compras', 'recetas', 'empaques', 'proveedores'].includes(activeSection)) {
       setOpenDropdowns((prev) => ({ ...prev, inventario: true }));
     } else if (['pos-caja', 'pos-historial', 'pos-cierre'].includes(activeSection)) {
       setOpenDropdowns((prev) => ({ ...prev, pos: true }));

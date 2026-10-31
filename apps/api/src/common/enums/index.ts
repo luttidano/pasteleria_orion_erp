@@ -12,8 +12,8 @@ export enum CategoryType {
 
 export enum SupplierType {
   materia_prima = 'materia_prima',
+  empaque = 'empaque',
   reventa = 'reventa',
-  ambos = 'ambos',
 }
 
 export enum ProductType {

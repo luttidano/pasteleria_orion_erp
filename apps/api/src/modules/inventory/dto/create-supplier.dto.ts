@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsIn, IsEmail } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsIn, IsEmail, IsArray, ArrayNotEmpty } from 'class-validator';
 
 export class CreateSupplierDto {
   @IsString()
@@ -52,8 +52,11 @@ export class CreateSupplierDto {
   supplyModality?: 'despacho' | 'presencial';
 
   @IsOptional()
-  @IsIn(['materia_prima', 'reventa', 'ambos'], {
-    message: 'El tipo debe ser: materia_prima, reventa o ambos.',
+  @IsArray({ message: 'Los tipos de proveedor deben ser una lista '})
+  @ArrayNotEmpty({ message: 'Debe seleccionar al menos un tipo de proveedor' })
+  @IsIn(['materia_prima', 'empaque', 'reventa'], {
+    each: true,
+    message: 'El tipo debe ser: materia_prima, empaque o reventa.',
   })
-  supplierType?: 'materia_prima' | 'reventa' | 'ambos';
+  supplierTypes?: ('materia_prima' | 'empaque' |'reventa')[];
 }

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
@@ -10,6 +11,8 @@ import { UpdateSupplierDto } from './dto/update-supplier.dto';
 
 @Injectable()
 export class SupplierService {
+  private readonly logger = new Logger(SupplierService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /**
@@ -43,7 +46,10 @@ export class SupplierService {
       id: item.id,
       name: item.name,
       phone: item.phone,
-      supplierType: item.supplierType,
+      supplierTypes:
+        item.supplierTypes && item.supplierTypes.length > 0
+          ? item.supplierTypes
+          : ['materia_prima'],
       supplyModality: this.detectSupplyModality(item),
       deliverySchedule: item.deliverySchedule,
       category: item.category,
@@ -62,20 +68,25 @@ export class SupplierService {
 
   async findAll(type?: string) {
     try {
-      const where = type ? { supplierType: type } : {};
+      const where: any = {};
+      if (type) {
+        where.supplierTypes = {
+          has: type,
+        };
+      }
       const suppliers = await this.prisma.supplier.findMany({
         where,
         include: {
           supplierIngredients: true,
           resaleProducts: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { name: 'asc' },
       });
 
       return suppliers.map((s) => this.mapSupplier(s));
-    } catch (error) {
-      console.error('[SupplierService] Error consultando proveedores:', error);
-      throw new InternalServerErrorException('No se pudieron consultar los proveedores.');
+    } catch (error: any) {
+      this.logger.error(`Error en findAll proveedores: ${error?.message || error}`);
+      throw error;
     }
   }
 
@@ -122,7 +133,7 @@ export class SupplierService {
           email: dto.email?.trim() || null,
           address: dto.address?.trim() || null,
           notes: dto.notes?.trim() || null,
-          supplierType: dto.supplierType || 'materia_prima',
+          supplierTypes: dto.supplierTypes || ['materia_prima'],
         },
       });
 
@@ -150,7 +161,7 @@ export class SupplierService {
           ...(dto.email !== undefined && { email: dto.email?.trim() || null }),
           ...(dto.address !== undefined && { address: dto.address?.trim() || null }),
           ...(dto.notes !== undefined && { notes: dto.notes?.trim() || null }),
-          ...(dto.supplierType !== undefined && { supplierType: dto.supplierType }),
+          ...(dto.supplierTypes !== undefined && { supplierTypes: dto.supplierTypes }),
           updatedAt: new Date(),
         },
       });

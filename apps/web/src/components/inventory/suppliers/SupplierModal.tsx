@@ -71,7 +71,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [approximatePrices, setApproximatePrices] = useState('');
   const [supplyModality, setSupplyModality] = useState<SupplyModality>('despacho');
-  const [supplierType, setSupplierType] = useState<SupplierType>('materia_prima');
+  const [supplierTypes, setSupplierTypes] = useState<SupplierType[]>(['materia_prima']);
   const [contactPerson, setContactPerson] = useState('');
   const [icon, setIcon] = useState('🚚');
   const [notes, setNotes] = useState('');
@@ -103,7 +103,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
           : supplierToEdit.approximatePrices || ''
       );
       setSupplyModality(supplierToEdit.supplyModality || getSupplyModality(supplierToEdit));
-      setSupplierType(supplierToEdit.supplierType || 'materia_prima');
+      const initialTypes: SupplierType[] = (supplierToEdit.supplierTypes && supplierToEdit.supplierTypes.length > 0) ? supplierToEdit.supplierTypes : ['materia_prima'];
+      setSupplierTypes(initialTypes);
       setContactPerson(supplierToEdit.contactPerson || '');
       setIcon(supplierToEdit.icon || '🚚');
       setNotes(supplierToEdit.notes || '');
@@ -117,7 +118,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
       setCustomCategoryInput('');
       setApproximatePrices('');
       setSupplyModality('despacho');
-      setSupplierType('materia_prima');
+      setSupplierTypes(['materia_prima']);
       setContactPerson('');
       setIcon('🚚');
       setNotes('');
@@ -147,6 +148,16 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
 
   const handleRemoveCategory = (catToRemove: string) => {
     setSelectedCategories((prev) => prev.filter((c) => c !== catToRemove));
+  };
+
+  const toggleSupplierType = (type: SupplierType) => {
+    setSupplierTypes((prev) => {
+      if (prev.includes(type)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((t) => t !== type);
+      }
+      return [...prev, type];
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -187,7 +198,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
         approximatePrices: approximatePrices.trim() || 'A consultar en establecimiento',
         contactPerson: contactPerson.trim() || undefined,
         supplyModality,
-        supplierType,
+        supplierTypes,
         address: address.trim() || undefined,
         icon,
         notes: notes.trim() || undefined,
@@ -236,63 +247,69 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
             </div>
           )}
 
-          {/* Tipo de Suministro / Productos */}
+          {/* Tipo de Suministro / Rubros que provee (Múltiple) */}
           <div>
-            <label className="block text-xs font-semibold text-[#4A3B32] dark:text-[#C4B2A5] mb-1.5">
-              Tipo de Suministro <span className="text-[#8C1F25]">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-[#4A3B32] dark:text-[#C4B2A5]">
+                Rubros que provee (Selecciona 1 o más) <span className="text-[#8C1F25]">*</span>
+              </label>
+              <span className="text-[10px] text-stone-500 dark:text-stone-400">Múltiple selección</span>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {/* 1. Materia Prima */}
               <button
                 type="button"
-                onClick={() => setSupplierType('materia_prima')}
+                onClick={() => toggleSupplierType('materia_prima')}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  supplierType === 'materia_prima'
-                    ? 'border-amber-600 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-1 ring-amber-600'
-                    : 'border-[#DFCAA9]/70 dark:border-[#35251F] bg-white/70 dark:bg-[#1E1512] hover:bg-white'
+                  supplierTypes.includes('materia_prima')
+                    ? 'border-amber-600 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-1 ring-amber-600 shadow-xs'
+                    : 'border-[#DFCAA9]/70 dark:border-[#35251F] bg-white/70 dark:bg-[#1E1512] text-stone-500 opacity-70 hover:opacity-100'
                 }`}
               >
-                <div className="font-bold text-xs flex items-center gap-1.5">
-                  <span>🌾</span>
-                  <span>Materia Prima</span>
+                <div className="font-bold text-xs flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">🌾 Materia Prima</span>
+                  {supplierTypes.includes('materia_prima') && <span className="text-amber-600 dark:text-amber-400 font-bold">✓</span>}
                 </div>
                 <p className="text-[11px] text-[#6B584C] dark:text-[#B39F93] mt-1 leading-tight">
-                  Harinas, lácteos, chocolates, envases
+                  Harinas, lácteos, huevos, chocolates
                 </p>
               </button>
 
+              {/* 2. Empaques */}
               <button
                 type="button"
-                onClick={() => setSupplierType('reventa')}
+                onClick={() => toggleSupplierType('empaque')}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  supplierType === 'reventa'
-                    ? 'border-blue-600 bg-blue-500/10 text-blue-900 dark:text-blue-200 ring-1 ring-blue-600'
-                    : 'border-[#DFCAA9]/70 dark:border-[#35251F] bg-white/70 dark:bg-[#1E1512] hover:bg-white'
+                  supplierTypes.includes('empaque')
+                    ? 'border-purple-600 bg-purple-500/10 text-purple-900 dark:text-purple-200 ring-1 ring-purple-600 shadow-xs'
+                    : 'border-[#DFCAA9]/70 dark:border-[#35251F] bg-white/70 dark:bg-[#1E1512] text-stone-500 opacity-70 hover:opacity-100'
                 }`}
               >
-                <div className="font-bold text-xs flex items-center gap-1.5">
-                  <span>🛍️</span>
-                  <span>Reventa Directa</span>
+                <div className="font-bold text-xs flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">📦 Empaques</span>
+                  {supplierTypes.includes('empaque') && <span className="text-purple-600 dark:text-purple-400 font-bold">✓</span>}
                 </div>
                 <p className="text-[11px] text-[#6B584C] dark:text-[#B39F93] mt-1 leading-tight">
-                  Bebidas, confites, productos cerrados
+                  Cajas de torta, bolsas kraft, blondas, domos
                 </p>
               </button>
 
+              {/* 3. Reventa */}
               <button
                 type="button"
-                onClick={() => setSupplierType('ambos')}
+                onClick={() => toggleSupplierType('reventa')}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  supplierType === 'ambos'
-                    ? 'border-emerald-600 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-600'
-                    : 'border-[#DFCAA9]/70 dark:border-[#35251F] bg-white/70 dark:bg-[#1E1512] hover:bg-white'
+                  supplierTypes.includes('reventa')
+                    ? 'border-blue-600 bg-blue-500/10 text-blue-900 dark:text-blue-200 ring-1 ring-blue-600 shadow-xs'
+                    : 'border-[#DFCAA9]/70 dark:border-[#35251F] bg-white/70 dark:bg-[#1E1512] text-stone-500 opacity-70 hover:opacity-100'
                 }`}
               >
-                <div className="font-bold text-xs flex items-center gap-1.5">
-                  <span>🔄</span>
-                  <span>Ambos Rubros</span>
+                <div className="font-bold text-xs flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">🛍️ Reventa</span>
+                  {supplierTypes.includes('reventa') && <span className="text-blue-600 dark:text-blue-400 font-bold">✓</span>}
                 </div>
                 <p className="text-[11px] text-[#6B584C] dark:text-[#B39F93] mt-1 leading-tight">
-                  Materia prima y productos de reventa
+                  Bebidas, velas de cumpleaños, confites
                 </p>
               </button>
             </div>

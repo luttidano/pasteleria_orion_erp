@@ -15,6 +15,7 @@ import { ProductsView } from '../inventory/products/ProductsView';
 import { RecipesView } from '../inventory/recipes/RecipesView';
 import { ShoppingListView } from '../inventory/shopping/ShoppingListView';
 import { SuppliersView } from '../inventory/suppliers/SuppliersView';
+import { PackagingView } from '../inventory/packaging/PackagingView';
 import { PosView } from '../pos/PosView';
 import { AccountingView } from '../accounting/AccountingView';
 import { useTheme } from '../../context/ThemeContext';
@@ -48,6 +49,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       'despensa',
       'recetas',
       'productos',
+      'empaques',
       'compras',
       'proveedores',
       'pos-caja',
@@ -59,7 +61,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       'contabilidad-reportes',
       'ajustes',
     ],
-    baker: ['despensa', 'recetas', 'productos'],
+    baker: ['despensa', 'recetas', 'productos', 'empaques'],
     cashier: ['pos-caja', 'pos-historial', 'pos-cierre'],
   };
 
@@ -261,6 +263,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           )}
 
 
+
+          {activeSection === 'empaques' && (
+            <PackagingView addToast={addToast} />
+          )}
 
           {activeSection === 'proveedores' && (
             <SuppliersView addToast={addToast} />

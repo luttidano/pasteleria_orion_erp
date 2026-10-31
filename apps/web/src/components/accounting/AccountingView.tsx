@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  DollarSign,
-  PieChart,
-  FileSpreadsheet,
   Plus,
   Trash2,
   X,

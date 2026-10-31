@@ -54,6 +54,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       'pos-historial',
       'pos-cierre',
       'contabilidad-diario',
+      'contabilidad-mayor',
       'contabilidad-balances',
       'contabilidad-reportes',
       'ajustes',
@@ -118,6 +119,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         return 'Arqueo y Cierre de Turno';
       case 'contabilidad-diario':
         return 'Libro Diario & Flujo de Caja';
+      case 'contabilidad-mayor':
+        return 'Libro Mayor & Movimientos por Cuenta';
       case 'contabilidad-balances':
         return 'Costos y Balances de Producción';
       case 'contabilidad-reportes':
@@ -273,6 +276,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           {/* MÓDULO 3: CONTABILIDAD (SOLO ADMIN) */}
           {(activeSection === 'contabilidad-diario' ||
             activeSection === 'contabilidad-balances' ||
+            activeSection === 'contabilidad-mayor' ||
             activeSection === 'contabilidad-reportes') && (
             <AccountingView section={activeSection} addToast={addToast} />
           )}

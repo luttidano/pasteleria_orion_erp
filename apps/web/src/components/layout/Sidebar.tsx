@@ -34,6 +34,7 @@ export type AdminSection =
   | 'pos-cierre'
   // Módulo Contabilidad
   | 'contabilidad-diario'
+  | 'contabilidad-mayor'
   | 'contabilidad-balances'
   | 'contabilidad-reportes'
   // Configuración general
@@ -179,6 +180,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           allowedRoles: ['admin'],
         },
         {
+          id: 'contabilidad-mayor',
+          label: 'Libro Mayor',
+          description: 'Movimientos por cuenta y saldos',
+          icon: BookOpen,
+          allowedRoles: ['admin'],
+        },
+        {
           id: 'contabilidad-balances',
           label: 'Costos & Balances',
           description: 'Márgenes de tortas y masas',
@@ -217,9 +225,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Estado de apertura de los Dropdowns (acordeón interactivo)
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>(() => ({
-    inventario: ['despensa', 'compras', 'recetas', 'proveedores'].includes(activeSection),
-    pos: ['pos-caja', 'pos-historial', 'pos-cierre'].includes(activeSection),
-    contabilidad: ['contabilidad-diario', 'contabilidad-balances', 'contabilidad-reportes'].includes(activeSection),
+    inventario: [
+      'despensa', 
+      'compras', 
+      'recetas', 
+      'proveedores']
+      .includes(activeSection),
+    pos: [
+      'pos-caja', 
+      'pos-historial', 
+      'pos-cierre']
+      .includes(activeSection),
+    contabilidad: [
+      'contabilidad-diario',
+      'contabilidad-mayor', 
+      'contabilidad-balances', 
+      'contabilidad-reportes']
+      .includes(activeSection),
   }));
 
   // Auto-expandir el dropdown si la sección activa cambia externamente

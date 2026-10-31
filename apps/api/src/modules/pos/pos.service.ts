@@ -5,14 +5,14 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { CreateSaleDto } from './dto/create-sale.dto';
-import { AccountingService } from '../accounting/accounting.service';
+import { EntryService } from '../accounting/entry.service';
 import { PrismaService } from '../../database/prisma.service';
 
 @Injectable()
 export class PosService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accountingService: AccountingService,
+    private readonly entryService: EntryService,
   ) {}
 
   /**
@@ -118,7 +118,7 @@ export class PosService {
     const accountingEntryCreated = declaredTotal > 0;
     if (accountingEntryCreated) {
       try {
-        await this.accountingService.registerSaleIncome({
+        await this.entryService.registerSaleIncome({
           id: sale.id,
           ticketNumber: sale.ticketNumber,
           soldAt: sale.soldAt.toISOString(),

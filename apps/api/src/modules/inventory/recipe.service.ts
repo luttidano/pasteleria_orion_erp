@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateRecipeDto } from './dto/create-recipe.dto';
 import { UpdateRecipeDto } from './dto/update-recipe.dto';
+import { ProduceRecipeDto } from './dto/produce-recipe.dto';
 
 // Normalizador de unidades para comparar stock vs receta
 function toBaseUnits(qty: number, unit: string): { value: number; type: 'mass' | 'volume' | 'count' } {
@@ -76,6 +77,15 @@ export class RecipeService {
       ? Math.floor(minRatio)
       : 0;
 
+    const products = (recipe.products || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      stock: Number(p.stock ?? 0),
+      unit: p.unit || 'un',
+      salePrice: p.salePrice ? Number(p.salePrice) : 0,
+      productType: p.productType,
+    }));
+
     return {
       id: recipe.id,
       name: recipe.name,
@@ -85,6 +95,7 @@ export class RecipeService {
       categoryId: recipe.categoryId || recipe.category_id,
       imageUrl: recipe.imageUrl ?? recipe.image_url,
       ingredients: formattedIngredients,
+      products,
       canProduce: formattedIngredients.length > 0 ? canProduce : false,
       maxBatches,
       missingIngredients,
@@ -102,6 +113,16 @@ export class RecipeService {
             ingredients: true,
           },
         },
+        products: {
+          select: {
+            id: true,
+            name: true,
+            stock: true,
+            unit: true,
+            salePrice: true,
+            productType: true,
+          },
+        },
       },
       orderBy: { name: 'asc' },
     });
@@ -116,6 +137,16 @@ export class RecipeService {
         ingredients: {
           include: {
             ingredients: true,
+          },
+        },
+        products: {
+          select: {
+            id: true,
+            name: true,
+            stock: true,
+            unit: true,
+            salePrice: true,
+            productType: true,
           },
         },
       },
@@ -167,6 +198,16 @@ export class RecipeService {
           ingredients: {
             include: {
               ingredients: true,
+            },
+          },
+          products: {
+            select: {
+              id: true,
+              name: true,
+              stock: true,
+              unit: true,
+              salePrice: true,
+              productType: true,
             },
           },
         },
@@ -228,5 +269,136 @@ export class RecipeService {
     await this.findOne(id);
     await this.prisma.recipe.delete({ where: { id } });
     return { message: 'Receta eliminada correctamente', id };
+  }
+
+  /**
+   * Orden de producción: Deduce insumos consumidos e incrementa el stock del producto de elaboración propia
+   */
+  async produce(id: string, dto: ProduceRecipeDto) {
+    const recipe = await this.prisma.recipe.findUnique({
+      where: { id },
+      include: {
+        ingredients: {
+          include: {
+            ingredients: true,
+          },
+        },
+        products: true,
+      },
+    });
+
+    if (!recipe) {
+      throw new NotFoundException(`Receta con ID "${id}" no encontrada.`);
+    }
+
+    if (!recipe.products || recipe.products.length === 0) {
+      throw new BadRequestException(
+        'Esta receta no tiene ningún producto comercial de elaboración propia asignado en el catálogo. Asigna o crea un producto para esta receta primero.',
+      );
+    }
+
+    // Identificar el producto objetivo
+    const targetProduct = dto.productId
+      ? recipe.products.find((p) => p.id === dto.productId)
+      : recipe.products[0];
+
+    if (!targetProduct) {
+      throw new BadRequestException('El producto comercial seleccionado no está asociado a esta receta.');
+    }
+
+    // Calcular deducciones requeridas con conversión de unidades
+    const deductions: Array<{
+      ingredientId: string;
+      name: string;
+      currentStock: number;
+      deductedQty: number;
+      newStock: number;
+      stockUnit: string;
+    }> = [];
+
+    for (const ri of recipe.ingredients) {
+      const ing = ri.ingredients;
+      if (!ing) continue;
+
+      const currentStock = Number(ing.stock ?? 0);
+      const stockUnit = ing.unit || 'kg';
+      const recipeQty = Number(ri.quantity) * dto.quantity;
+      const recipeUnit = ri.unit;
+
+      const reqNorm = toBaseUnits(recipeQty, recipeUnit);
+      const stockNorm = toBaseUnits(1, stockUnit);
+
+      let deductionInStockUnit = recipeQty;
+      if (reqNorm.type === stockNorm.type && stockNorm.value > 0) {
+        deductionInStockUnit = reqNorm.value / stockNorm.value;
+      }
+
+      if (currentStock < deductionInStockUnit) {
+        throw new BadRequestException(
+          `Stock insuficiente para el insumo "${ing.name}". Se requieren ${deductionInStockUnit.toFixed(2)} ${stockUnit}, pero solo hay ${currentStock.toFixed(2)} ${stockUnit} en bodega.`,
+        );
+      }
+
+      deductions.push({
+        ingredientId: ing.id,
+        name: ing.name,
+        currentStock,
+        deductedQty: deductionInStockUnit,
+        newStock: Math.max(0, currentStock - deductionInStockUnit),
+        stockUnit,
+      });
+    }
+
+    // Unidades de producto a sumar: si el usuario especificó unidades reales producidas, se usa ese valor;
+    // de lo contrario, se calcula (rendimiento de la receta * cantidad de tandas)
+    const unitsToAdd =
+      dto.producedUnits !== undefined && dto.producedUnits > 0
+        ? dto.producedUnits
+        : Number(recipe.yieldServings || 1) * dto.quantity;
+
+    // Ejecución atómica en base de datos
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Descontar stock de cada ingrediente
+      for (const d of deductions) {
+        await tx.ingredient.update({
+          where: { id: d.ingredientId },
+          data: { stock: d.newStock },
+        });
+      }
+
+      // 2. Incrementar stock del producto terminado
+      const currentProdStock = Number(targetProduct.stock ?? 0);
+      const newProdStock = currentProdStock + unitsToAdd;
+      await tx.product.update({
+        where: { id: targetProduct.id },
+        data: { stock: newProdStock },
+      });
+
+      return {
+        success: true,
+        message: `¡Producción registrada exitosamente! Se agregaron ${unitsToAdd} ${targetProduct.unit || 'un'} a "${targetProduct.name}".`,
+        recipe: {
+          id: recipe.id,
+          name: recipe.name,
+          batches: dto.quantity,
+        },
+        product: {
+          id: targetProduct.id,
+          name: targetProduct.name,
+          addedStock: unitsToAdd,
+          newStock: newProdStock,
+          unit: targetProduct.unit || 'un',
+        },
+        deductedIngredients: deductions.map((d) => ({
+          ingredientId: d.ingredientId,
+          name: d.name,
+          deducted: Number(d.deductedQty.toFixed(3)),
+          newStock: Number(d.newStock.toFixed(3)),
+          unit: d.stockUnit,
+        })),
+      };
+    });
+
+    return result;
   }
 }

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus,
+  ChefHat,
   Scale,
   CheckCircle2,
   AlertTriangle,
@@ -14,20 +16,37 @@ import type { User, Ingredient, ToastMessage, Recipe, Category } from '../../../
 import { recipeService } from '../../../services/recipeService';
 import { categoryService } from '../../../services/categoryService';
 import { CategoryManagerModal } from '../categories/CategoryManagerModal';
+import { ProduceRecipeModal } from './ProduceRecipeModal';
+import { DeleteRecipeModal } from './DeleteRecipeModal';
+import type { ProductionResult } from '../../../types';
 
 interface RecipesViewProps {
   user: User;
   ingredients: Ingredient[];
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
+  onRefresh?: () => void;
 }
 
-export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, addToast }) => {
+export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, addToast, onRefresh }) => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filterMode, setFilterMode] = useState<'all' | 'canProduce' | 'missing'>('all');
   const [search, setSearch] = useState('');
+  const [producingRecipe, setProducingRecipe] = useState<Recipe | null>(null);
+  const [recipeToDelete, setRecipeToDelete] = useState<Recipe | null>(null);
+  const [isDeletingRecipe, setIsDeletingRecipe] = useState(false);
+
+  const handleProductionSuccess = (result: ProductionResult) => {
+    addToast({
+      type: 'success',
+      title: '¡Producción completada!',
+      message: result.message,
+    });
+    loadRecipes();
+    onRefresh?.();
+  };
   
   // Toggle: mostrar masa en gramos (g) o en kilogramos (kg)
   const [massUnit, setMassUnit] = useState<'g' | 'kg'>('g');
@@ -134,14 +153,26 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
     }
   };
 
-  const handleDeleteRecipe = async (id: string, name: string) => {
-    if (!confirm(`¿Eliminar la receta "${name}"?`)) return;
+  const handleConfirmDeleteRecipe = async () => {
+    if (!recipeToDelete) return;
+    setIsDeletingRecipe(true);
     try {
-      await recipeService.delete(id);
-      addToast({ type: 'success', title: 'Receta eliminada' });
+      await recipeService.delete(recipeToDelete.id);
+      addToast({
+        type: 'warning',
+        title: 'Receta eliminada',
+        message: `Se eliminó "${recipeToDelete.name}".`,
+      });
+      setRecipeToDelete(null);
       loadRecipes();
     } catch (err: any) {
-      addToast({ type: 'error', title: 'Error', message: err.message });
+      addToast({
+        type: 'error',
+        title: 'Error al eliminar',
+        message: err?.message || 'No se pudo eliminar la receta.',
+      });
+    } finally {
+      setIsDeletingRecipe(false);
     }
   };
 
@@ -291,7 +322,7 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
                   </div>
                   {user.role === 'admin' && (
                     <button
-                      onClick={() => handleDeleteRecipe(recipe.id, recipe.name)}
+                      onClick={() => setRecipeToDelete(recipe)}
                       className="p-1.5 text-stone-400 hover:text-rose-500 rounded-lg hover:bg-stone-50 dark:hover:bg-[#201612]"
                       title="Eliminar"
                     >
@@ -350,8 +381,18 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
                 </div>
               </div>
 
+              {/* Botón de Producción */}
+              <button
+                type="button"
+                onClick={() => setProducingRecipe(recipe)}
+                className="w-full mt-3.5 py-2 px-3 rounded-xl bg-[#8C1F25] hover:bg-[#73191E] text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <ChefHat className="w-4 h-4" />
+                <span>Producir {recipe.name}</span>
+              </button>
+
               {/* Pie de tarjeta */}
-              <div className="mt-4 pt-3 border-t border-stone-100 dark:border-[#2C1D18] flex items-center justify-between text-xs text-stone-400">
+              <div className="mt-3 pt-2.5 border-t border-stone-100 dark:border-[#2C1D18] flex items-center justify-between text-xs text-stone-400">
                 <span>Rinde: <strong className="text-stone-600 dark:text-stone-300">{recipe.yieldServings} porciones</strong></span>
                 <span className="text-[10px]">{recipe.ingredients.length} insumos</span>
               </div>
@@ -360,9 +401,17 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
         </div>
       )}
 
+      {/* Modal Orden de Producción */}
+      <ProduceRecipeModal
+        recipe={producingRecipe}
+        isOpen={!!producingRecipe}
+        onClose={() => setProducingRecipe(null)}
+        onSuccess={handleProductionSuccess}
+      />
+
       {/* Modal Crear Receta */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+      {isModalOpen && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white dark:bg-[#16100E] rounded-2xl max-w-lg w-full p-6 border border-stone-200 dark:border-[#35251F] shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-[#2A1B16] dark:text-[#FDF5EE]">Nueva Receta</h3>
 
@@ -520,7 +569,8 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Administrador de Categorías */}
@@ -530,6 +580,15 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
         type="recipe"
         onCategoriesChanged={loadRecipes}
         addToast={addToast}
+      />
+
+      {/* Modal de confirmación para eliminar receta */}
+      <DeleteRecipeModal
+        isOpen={!!recipeToDelete}
+        recipe={recipeToDelete}
+        onClose={() => setRecipeToDelete(null)}
+        onConfirm={handleConfirmDeleteRecipe}
+        isDeleting={isDeletingRecipe}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   User,
@@ -150,9 +151,8 @@ export const UserModal: React.FC<UserModalProps> = ({
       color: 'border-emerald-600 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5',
     },
   ];
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
       <div
         className="w-full max-w-lg bg-white dark:bg-[#18110E] rounded-[26px] p-6 sm:p-7 shadow-modal border border-stone-200 dark:border-[#38261F] text-[#2A1B16] dark:text-[#FBF4EB] animate-modal-pop relative max-h-[90vh] flex flex-col"
         role="dialog"
@@ -354,6 +354,7 @@ export const UserModal: React.FC<UserModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
-  );
+    </div>,
+    document.body
+);
 };

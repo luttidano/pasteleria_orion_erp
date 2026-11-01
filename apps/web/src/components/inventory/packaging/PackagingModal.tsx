@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import type { Packaging, PackagingType, Supplier } from '../../../types';
 import { supplierService } from '../../../services/supplierService';
@@ -98,9 +99,8 @@ export const PackagingModal: React.FC<PackagingModalProps> = ({
       setIsSubmitting(false);
     }
   };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
       <div className="bg-white dark:bg-[#1E1512] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border border-[#EADBCE] dark:border-[#2C1D18] shadow-2xl p-6">
         <div className="flex items-center justify-between pb-4 border-b border-stone-200 dark:border-stone-800">
           <div className="flex items-center gap-2">
@@ -298,6 +298,7 @@ export const PackagingModal: React.FC<PackagingModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
-  );
+    </div>,
+    document.body
+);
 };

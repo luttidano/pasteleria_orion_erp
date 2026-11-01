@@ -63,6 +63,14 @@ export interface Recipe {
   category?: string;
   imageUrl?: string;
   ingredients: RecipeIngredientItem[];
+  products?: Array<{
+    id: string;
+    name: string;
+    stock: number;
+    unit: string;
+    salePrice?: number;
+    productType?: string;
+  }>;
   canProduce?: boolean;
   maxBatches?: number;
   missingIngredients?: Array<{
@@ -139,3 +147,24 @@ export interface Packaging {
   updatedAt?: string;
 }
 
+
+export interface ProduceRecipeData {
+  quantity: number;
+  productId?: string;
+  producedUnits?: number;
+  notes?: string;
+}
+
+export interface ProductionResult {
+  success: boolean;
+  message: string;
+  recipe: { id: string; name: string; batches: number };
+  product: { id: string; name: string; addedStock: number; newStock: number; unit: string };
+  deductedIngredients: Array<{
+    ingredientId: string;
+    name: string;
+    deducted: number;
+    newStock: number;
+    unit: string;
+  }>;
+}

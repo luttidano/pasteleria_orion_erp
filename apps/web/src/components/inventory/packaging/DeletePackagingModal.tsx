@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
 import type { Packaging } from '../../../types';
 
@@ -16,9 +17,8 @@ export const DeletePackagingModal: React.FC<DeletePackagingModalProps> = ({
   item,
 }) => {
   if (!isOpen || !item) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
       <div className="bg-white dark:bg-[#1E1512] rounded-2xl max-w-md w-full border border-stone-200 dark:border-stone-800 shadow-2xl p-6">
         <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-stone-800">
           <div className="flex items-center gap-2 text-rose-600">
@@ -51,7 +51,8 @@ export const DeletePackagingModal: React.FC<DeletePackagingModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
-  );
+    </div>,
+    document.body
+);
 };
 

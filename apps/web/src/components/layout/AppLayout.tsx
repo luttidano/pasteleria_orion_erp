@@ -244,9 +244,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
           {activeSection === 'recetas' && (
             <RecipesView
-            user={user}
-            ingredients={ingredients}
-            addToast={addToast}
+              user={user}
+              ingredients={ingredients}
+              addToast={addToast}
+              onRefresh={onRefresh}
             />
           )}
 

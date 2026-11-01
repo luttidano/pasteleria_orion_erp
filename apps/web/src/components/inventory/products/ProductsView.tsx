@@ -17,6 +17,7 @@ import { productService } from '../../../services/productService';
 import { recipeService } from '../../../services/recipeService';
 import { supplierService } from '../../../services/supplierService';
 import { ProductModal } from './ProductModal';
+import { DeleteProductModal } from './DeleteProductModal';
 
 interface ProductsViewProps {
   user: User;
@@ -36,6 +37,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
   const [statusFilter, setStatusFilter] = useState<'todos' | 'suficiente' | 'bajo' | 'agotado'>('todos');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+
+  // Confirm Delete Modal State
+  const [productToDelete, setProductToDelete] = useState<CatalogProduct | null>(null);
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -99,15 +104,17 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
   };
 
   // Eliminar
-  const handleDeleteProduct = async (product: CatalogProduct) => {
-    if (!window.confirm(`¿Estás seguro de eliminar el producto "${product.name}"?`)) return;
+  const handleConfirmDeleteProduct = async () => {
+    if (!productToDelete) return;
+    setIsDeletingProduct(true);
     try {
-      await productService.delete(product.id);
+      await productService.delete(productToDelete.id);
       addToast({
         type: 'warning',
         title: 'Producto eliminado',
-        message: `Se quitó "${product.name}" del catálogo.`,
+        message: `Se quitó "${productToDelete.name}" del catálogo.`,
       });
+      setProductToDelete(null);
       await loadData();
     } catch (err: unknown) {
       addToast({
@@ -115,6 +122,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
         title: 'Error al eliminar',
         message: err instanceof Error ? err.message : 'No se pudo eliminar el producto.',
       });
+    } finally {
+      setIsDeletingProduct(false);
     }
   };
 
@@ -457,7 +466,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteProduct(p)}
+                        onClick={() => setProductToDelete(p)}
                         className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
                         title="Eliminar"
                       >
@@ -531,7 +540,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDeleteProduct(p)}
+                          onClick={() => setProductToDelete(p)}
                           className="p-1 rounded text-rose-500 hover:text-rose-700 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -554,6 +563,15 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
         productToEdit={editingProduct}
         recipes={recipes}
         suppliers={suppliers}
+      />
+
+      {/* Modal de confirmación para eliminar producto */}
+      <DeleteProductModal
+        isOpen={!!productToDelete}
+        product={productToDelete}
+        onClose={() => setProductToDelete(null)}
+        onConfirm={handleConfirmDeleteProduct}
+        isDeleting={isDeletingProduct}
       />
     </div>
   );

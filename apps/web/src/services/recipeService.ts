@@ -1,6 +1,6 @@
 import { apiFetch } from '../lib/api';
 import { supabase } from '../lib/supabase';
-import type { Recipe } from '../types';
+import type { Recipe, ProduceRecipeData, ProductionResult } from '../types';
 
 function mapSupabaseRecipe(row: any): Recipe {
   const ingredients = (row.ingredients || []).map((ri: any) => ({
@@ -89,5 +89,15 @@ export const recipeService = {
       }
       throw err;
     }
+  },
+
+  /**
+   * Orden de producción: Hornea/produce una cantidad de tandas de la receta
+   */
+  async produce(id: string, data: ProduceRecipeData): Promise<ProductionResult> {
+    return await apiFetch<ProductionResult>(`/recipes/${id}/produce`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 };

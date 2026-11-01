@@ -12,6 +12,7 @@ import {
 import { RecipeService } from './recipe.service';
 import { CreateRecipeDto } from './dto/create-recipe.dto';
 import { UpdateRecipeDto } from './dto/update-recipe.dto';
+import { ProduceRecipeDto } from './dto/produce-recipe.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -33,6 +34,16 @@ export class RecipeController {
   @Roles(Role.admin, Role.baker)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.recipeService.findOne(id);
+  }
+
+  // Orden de producción (hornear tanda): admin y pastelero (baker)
+  @Post(':id/produce')
+  @Roles(Role.admin, Role.baker)
+  produce(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ProduceRecipeDto,
+  ) {
+    return this.recipeService.produce(id, dto);
   }
 
   // Creación de recetas: exclusivo admin

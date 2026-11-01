@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -743,8 +744,8 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
       )}
 
       {/* MODAL: REGISTRAR NUEVO ASIENTO */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+      {showModal && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white dark:bg-[#1C1411] w-full max-w-3xl rounded-3xl p-6 border border-[#EADBCE] dark:border-[#35251F] shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-[#2C1F1A] pb-3">
               <h4 className="font-bold text-base text-[#2A1B16] dark:text-white font-serif">
@@ -888,7 +889,8 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Plus, Trash2 } from 'lucide-react';
 import type { Category, CategoryType, ToastMessage } from '../../../types';
 import { categoryService } from '../../../services/categoryService';
@@ -86,9 +87,8 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
   };
 
   if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
       <div className="bg-white dark:bg-[#16100E] rounded-3xl max-w-lg w-full p-6 border border-stone-200 dark:border-[#35251F] shadow-2xl space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-stone-100 dark:border-[#2C1D18] pb-3">
@@ -201,6 +201,7 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
-  );
+    </div>,
+    document.body
+);
 };

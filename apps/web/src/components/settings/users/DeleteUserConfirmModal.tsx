@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import type { UserProfile } from '../../../types';
 
@@ -28,9 +29,8 @@ export const DeleteUserConfirmModal: React.FC<DeleteUserConfirmModalProps> = ({
       setIsDeleting(false);
     }
   };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
       <div
         className="w-full max-w-md bg-white dark:bg-[#18110E] rounded-[26px] p-6 shadow-modal border border-stone-200 dark:border-[#38261F] text-[#2A1B16] dark:text-[#FBF4EB] animate-modal-pop text-center"
         role="dialog"
@@ -74,6 +74,7 @@ export const DeleteUserConfirmModal: React.FC<DeleteUserConfirmModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
-  );
+    </div>,
+    document.body
+);
 };

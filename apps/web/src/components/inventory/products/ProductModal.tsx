@@ -96,6 +96,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       setError('Indica un precio de venta válido.');
       return;
     }
+    if (productType === 'manufactured' && !recipeId) {
+      setError('Debes seleccionar obligatoriamente una receta para un producto de elaboración propia')
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -225,25 +229,38 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             </div>
           </div>
 
-          {/* Campo Condicional: Receta vs Proveedor */}
+          {/* Campo Condicional: Receta Obligatoria para Elaboración Propia */}
           {productType === 'manufactured' ? (
             <div>
-              <label className="block text-xs font-bold text-[#2A1B16] dark:text-[#F5ECE5] mb-1.5 flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-[#8C1F25]" />
-                <span>Receta de elaboración asociada (Opcional)</span>
+              <label className="block text-xs font-bold text-[#2A1B16] dark:text-[#F5ECE5] mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-[#8C1F25]" />
+                  <span>Receta de elaboración asociada <span className="text-[#8C1F25]">*</span></span>
+                </span>
+                <span className="text-[10px] text-[#8C1F25] font-semibold">Obligatorio</span>
               </label>
               <select
+                required
                 value={recipeId}
                 onChange={(e) => setRecipeId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] bg-white dark:bg-[#1E1512] text-sm text-[#1C120D] dark:text-[#FBF4EB] focus:outline-none focus:ring-2 focus:ring-[#8C1F25]"
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm text-[#1C120D] dark:text-[#FBF4EB] focus:outline-none focus:ring-2 focus:ring-[#8C1F25] ${
+                  !recipeId
+                    ? 'border-rose-400 bg-rose-50/30 dark:bg-rose-950/20'
+                    : 'border-[#DFCAA9] dark:border-[#3D2C24] bg-white dark:bg-[#1E1512]'
+                }`}
               >
-                <option value="">-- Sin vincular a receta --</option>
+                <option value="">-- Selecciona una receta obligatoria --</option>
                 {recipes.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name} (Rinde {r.yieldServings} porciones)
                   </option>
                 ))}
               </select>
+              {recipes.length === 0 && (
+                <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1 font-medium">
+                  ⚠️ No tienes recetas registradas aún. Debes crear al menos una receta en el Recetario antes de poder crear productos de elaboración propia.
+                </p>
+              )}
             </div>
           ) : (
             <div>

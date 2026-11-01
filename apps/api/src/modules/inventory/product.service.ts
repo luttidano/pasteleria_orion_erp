@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -79,6 +79,11 @@ export class ProductService {
   }
 
   async create(dto: CreateProductDto) {
+
+    //Receta obligatoria para producto elab propia
+    if (dto.productType === 'manufactured' && !dto.recipeId) {
+      throw new BadRequestException('Para un producto de elaboración propia, la asignación de receta es obligatoria');
+    }
     const created = await this.prisma.product.create({
       data: {
         name: dto.name,
@@ -88,8 +93,8 @@ export class ProductService {
         unit: dto.unit,
         salePrice: dto.salePrice,
         costPrice: dto.costPrice ?? 0,
-        recipeId: dto.recipeId || null,
-        supplierId: dto.supplierId || null,
+        recipeId: dto.productType === 'manufactured' ? dto.recipeId : null,
+        supplierId: dto.productType === 'resale' ? (dto.supplierId || null) : null,
         categoryId: dto.categoryId || null,
         description: dto.description,
         imageUrl: dto.imageUrl,
@@ -100,7 +105,14 @@ export class ProductService {
   }
 
   async update(id: string, dto: UpdateProductDto) {
-    await this.findOne(id);
+    const current = await this.findOne(id);
+    const targetType = dto.productType ?? current.productType;
+    const targetRecipeId = dto.recipeId !== undefined ? dto.recipeId : current.recipeId;
+     //Si pasa a ser elab propia exige receta
+    if (targetType === 'manufactured' && !targetRecipeId) {
+      throw new BadRequestException('Para un producto de elaboración propia, la asignación de una receta es obligatoria');
+    }
+    
     await this.prisma.product.update({
       where: { id },
       data: {

@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, CheckCircle2, ShoppingCart, AlertTriangle, AlertCircle, Plus, Minus } from 'lucide-react';
-import type { Ingredient } from '../../../types';
+import type { ShoppingItem } from '../../../types';
 
 interface PurchaseItemModalProps {
   isOpen: boolean;
-  ingredient: Ingredient | null;
+  item: ShoppingItem | null;
   onClose: () => void;
-  onConfirmPurchase: (ingredient: Ingredient, quantityBought: number) => Promise<void>;
+  onConfirmPurchase: (item: ShoppingItem, quantityBought: number) => Promise<void>;
 }
 
 export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   isOpen,
-  ingredient,
+  item,
   onClose,
   onConfirmPurchase,
 }) => {
@@ -21,21 +21,21 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   // Cantidad faltante sugerida para cubrir el mínimo
-  const deficit = ingredient ? Math.max(0, ingredient.minStock - ingredient.stock) : 0;
+  const deficit = item ? Math.max(0, item.minStock - item.stock) : 0;
 
   useEffect(() => {
-    if (ingredient) {
+    if (item) {
       setQuantityBought(deficit > 0 ? deficit : 1);
       setError(null);
     }
-  }, [ingredient, deficit]);
+  }, [item, deficit]);
 
-  if (!isOpen || !ingredient) return null;
+  if (!isOpen || !item) return null;
 
-  const currentStock = ingredient.stock;
-  const minStock = ingredient.minStock;
+  const currentStock = item.stock;
+  const minStock = item.minStock;
   const isOutOfStock = currentStock <= 0;
-  const unit = ingredient.unit || 'un';
+  const unit = item.unit || 'un';
 
   const numericBought = typeof quantityBought === 'number' ? quantityBought : 0;
   const resultingStock = Math.max(0, currentStock + numericBought);
@@ -44,7 +44,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   const remainingDeficit = Math.max(0, minStock - resultingStock);
 
   // Cálculo de costo estimado referencial
-  const unitPrice = ingredient.price || 0;
+  const unitPrice = item.price || 0;
   const estimatedCost = unitPrice > 0 && numericBought > 0 ? unitPrice * numericBought : 0;
 
   const formatCurrency = (val: number) => {
@@ -71,7 +71,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
     setIsSubmitting(true);
     setError(null);
     try {
-      await onConfirmPurchase(ingredient, Number(quantityBought));
+      await onConfirmPurchase(item, Number(quantityBought));
       onClose();
     } catch {
       setError('Ocurrió un error al actualizar el inventario. Inténtalo nuevamente.');
@@ -89,12 +89,21 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
         <div className="relative px-6 py-4 border-b border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7] dark:bg-[#1F1512] shrink-0">
           <div className="flex items-center gap-3 pr-8">
             <div className="w-12 h-12 rounded-2xl bg-white dark:bg-[#2A1B16] border border-[#DFCAA9]/70 dark:border-[#422B22] flex items-center justify-center text-2xl shadow-xs shrink-0">
-              {ingredient.icon || '🌾'}
+              {item.icon || '🌾'}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-[#DFCAA9]/70 dark:border-stone-700">
-                  {ingredient.category}
+                  {item.category}
+                </span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                  item.kind === 'ingredient'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                    : item.kind === 'resale'
+                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
+                    : 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
+                }`}>
+                  {item.kind === 'ingredient' ? '🌾 Insumo' : item.kind === 'resale' ? '🥤 Reventa' : '📦 Empaque'}
                 </span>
                 {isOutOfStock ? (
                   <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800">
@@ -107,7 +116,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                 )}
               </div>
               <h3 className="text-lg sm:text-xl font-bold text-[#1C120D] dark:text-[#FBF4EB] font-serif leading-tight mt-0.5 truncate">
-                {ingredient.name}
+                {item.name}
               </h3>
             </div>
           </div>
@@ -134,16 +143,16 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
           {/* 1. Descripción de lo que se debe comprar */}
           <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1512] border border-[#EADBCE] dark:border-[#35251F] shadow-xs">
             <h4 className="text-[11px] font-bold text-[#8C1F25] dark:text-[#D4A373] uppercase tracking-wider mb-1">
-              📋 Descripción del Insumo
+              📋 {item.kind === 'ingredient' ? 'Descripción del Insumo' : item.kind === 'resale' ? 'Detalle del Producto de Reventa' : 'Detalle del Empaque'}
             </h4>
             <p className="text-xs sm:text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
-              {ingredient.description || 'Materia prima indispensable para la producción y repostería artesanal de Pastelería Orión.'}
+              {item.description || (item.kind === 'resale' ? 'Producto comercial para reventa en mostrador/caja.' : item.kind === 'packaging' ? 'Material de empaque y despacho de la pastelería.' : 'Materia prima indispensable para la producción y repostería artesanal.')}
             </p>
-            {ingredient.price && ingredient.price > 0 && (
+            {item.price && item.price > 0 && (
               <div className="mt-2 pt-2 border-t border-stone-100 dark:border-[#2C1D18] flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
                 <span>Costo unitario aprox:</span>
                 <span className="font-bold text-stone-800 dark:text-stone-200 font-mono">
-                  {formatCurrency(ingredient.price)} por {unit}
+                  {formatCurrency(item.price)} por {unit}
                 </span>
               </div>
             )}

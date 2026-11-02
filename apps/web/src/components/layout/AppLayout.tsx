@@ -6,7 +6,9 @@ import {
   Sun,
   Moon,
 } from 'lucide-react';
-import type { User, Ingredient, ToastMessage } from '../../types';
+import type { User, Ingredient, ToastMessage, CatalogProduct, Packaging } from '../../types';
+import { productService } from '../../services/productService';
+import { packagingService } from '../../services/packagingService';
 import { Sidebar } from './Sidebar';
 import type { AdminSection } from './Sidebar';
 import { IngredientsView } from '../inventory/ingredients/IngredientsView';
@@ -94,12 +96,32 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const { isDarkMode, toggleDarkMode } = useTheme();
 
-  // Contadores para insignias de la barra lateral
+  const [resaleItems, setResaleItems] = useState<CatalogProduct[]>([]);
+  const [packagingItems, setPackagingItems] = useState<Packaging[]>([]);
+
+  // Sincronizar catálogo de reventa y empaques para mantener exacto el badge de compras
+  useEffect(() => {
+    productService.getAll('resale').then(setResaleItems).catch(() => {});
+    packagingService.getAll().then(setPackagingItems).catch(() => {});
+  }, [activeSection, ingredients]);
+
+  // Contadores para insignias de la barra lateral (Insumos + Reventa + Empaques)
   const { restockCount, outOfStockCount } = useMemo(() => {
-    const low = ingredients.filter((p) => p.stock > 0 && p.stock <= p.minStock).length;
-    const out = ingredients.filter((p) => p.stock <= 0).length;
+    let low = ingredients.filter((p) => p.stock > 0 && p.stock <= p.minStock).length;
+    let out = ingredients.filter((p) => p.stock <= 0).length;
+
+    for (const p of resaleItems) {
+      if (p.stock <= 0) out++;
+      else if (p.stock <= p.minStock) low++;
+    }
+
+    for (const pack of packagingItems) {
+      if (pack.stock <= 0) out++;
+      else if (pack.stock <= pack.minStock) low++;
+    }
+
     return { restockCount: low, outOfStockCount: out };
-  }, [ingredients]);
+  }, [ingredients, resaleItems, packagingItems]);
 
   const getHeaderTitle = (sec: AdminSection): string => {
     switch (sec) {
@@ -110,7 +132,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       case 'productos':
         return 'Catálogo de Productos Comerciales'         
       case 'compras':
-        return 'Lista de Compras de Materias Primas';
+        return 'Lista de Compras & Reabastecimiento';
       case 'proveedores':
         return 'Directorio de Proveedores';
       case 'pos-caja':

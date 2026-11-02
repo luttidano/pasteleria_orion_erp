@@ -10,13 +10,7 @@ import {
   MinusCircle,
 } from 'lucide-react';
 import type { Packaging, ToastMessage } from '../../../types';
-import {
-  getPackagings,
-  createPackaging,
-  updatePackaging,
-  adjustPackagingStock,
-  deletePackaging,
-} from '../../../services/packagingService';
+import { packagingService } from '../../../services/packagingService';
 import { PackagingModal } from './PackagingModal';
 import { DeletePackagingModal } from './DeletePackagingModal';
 
@@ -38,7 +32,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const data = await getPackagings();
+      const data = await packagingService.getAll();
       setItems(data);
     } catch {
       addToast({ type: 'error', title: 'Error', message: 'No se pudo cargar el inventario de empaques.' });
@@ -85,10 +79,10 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
 
   const handleSave = async (data: Partial<Packaging>) => {
     if (editingItem) {
-      await updatePackaging(editingItem.id, data);
+      await packagingService.update(editingItem.id, data);
       addToast({ type: 'success', title: 'Actualizado', message: 'Empaque modificado con éxito.' });
     } else {
-      await createPackaging(data);
+      await packagingService.create(data);
       addToast({ type: 'success', title: 'Creado', message: 'Nuevo empaque registrado.' });
     }
     loadData();
@@ -97,7 +91,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
   const handleDelete = async () => {
     if (!deletingItem) return;
     try {
-      await deletePackaging(deletingItem.id);
+      await packagingService.delete(deletingItem.id);
       addToast({ type: 'success', title: 'Eliminado', message: 'Empaque eliminado.' });
       setDeletingItem(null);
       loadData();
@@ -108,7 +102,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
 
   const handleQuickAdjust = async (id: string, delta: number) => {
     try {
-      await adjustPackagingStock(id, delta);
+      await packagingService.adjustStock(id, delta);
       setItems((prev) =>
         prev.map((item) => {
           if (item.id === id) {

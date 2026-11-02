@@ -128,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {
           id: 'compras',
           label: 'Lista de Compras',
-          description: 'Insumos a reponer',
+          description: 'Reposición y compras',
           icon: ShoppingCart,
           badge: restockCount + outOfStockCount > 0 ? `${restockCount + outOfStockCount}` : null,
           badgeColor: outOfStockCount > 0 ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white',

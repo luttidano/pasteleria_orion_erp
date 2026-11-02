@@ -199,3 +199,19 @@ export interface ProductionResult {
     unit: string;
   }>;
 }
+
+export type ShoppingItemKind = 'ingredient' | 'resale' | 'packaging';
+
+export interface ShoppingItem {
+  id: string;
+  name: string;
+  kind: ShoppingItemKind;
+  category: string;
+  stock: number;
+  minStock: number;
+  unit: string;
+  price?: number;
+  description?: string;
+  icon?: string;
+  supplierName?: string;
+}

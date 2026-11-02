@@ -9,6 +9,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '../../common/enums';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+
 
 import { PosService } from './pos.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -20,11 +22,12 @@ import { Roles } from '../../common/decorators/roles.decorator';
 @UseGuards(AuthGuard, RolesGuard)
 export class PosController {
   constructor(private readonly posService: PosService) {}
+ 
 
   @Post()
   @Roles(Role.admin, Role.cashier)
-  createSale(@Body() dto: CreateSaleDto) {
-    return this.posService.createSale(dto);
+  createSale(@Body() dto: CreateSaleDto, @CurrentUser('id') userId?: string) {
+    return this.posService.createSale(dto, userId);
   }
 
   @Get()

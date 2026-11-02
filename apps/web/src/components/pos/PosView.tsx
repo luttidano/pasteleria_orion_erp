@@ -12,6 +12,7 @@ import {
   Package,
   RefreshCw,
   X,
+  User,
 } from 'lucide-react';
 import type { ToastMessage, CatalogProduct } from '../../types';
 
@@ -35,6 +36,8 @@ interface SaleTicket {
   id: string;
   ticketNumber: string;
   time: string;
+  cashierName?: string;
+  cashierRole?: string;
   itemsSummary: string;
   total: number;
   paymentMethod: string;
@@ -64,6 +67,8 @@ interface SaleApiResponse {
   accountingWarning?: string | null;
   soldAt: string;
   dataOrigin: 'demo' | 'real';
+  cashierName?: string;
+  cashierRole?: string;
   items: SaleApiItem[];
 }
 
@@ -91,6 +96,8 @@ const mapSaleToTicket = (sale: SaleApiResponse): SaleTicket => ({
     hour: '2-digit',
     minute: '2-digit',
   }),
+  cashierName: sale.cashierName || 'Caja Mostrador',
+  cashierRole: sale.cashierRole,
   itemsSummary: sale.items
     .map((item) => `${item.quantity}x ${item.product_name}`)
     .join(', '),
@@ -743,6 +750,7 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
                 <tr className="bg-[#FAF5ED] dark:bg-[#201613] border-b border-stone-200 dark:border-[#35251F] text-xs font-bold uppercase text-stone-700 dark:text-stone-300">
                   <th className="py-3 px-4">Ticket</th>
                   <th className="py-3 px-4">Hora</th>
+                  <th className="py-3 px-4">Atendido por</th>
                   <th className="py-3 px-6">Detalle de Compra</th>
                   <th className="py-3 px-4">Pago</th>
                   <th className="py-3 px-4 text-right">Total</th>
@@ -753,7 +761,7 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
                 {isLoadingTickets ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="py-8 text-center text-stone-500 text-sm"
                     >
                       Cargando ventas registradas...
@@ -762,7 +770,7 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
                 ) : tickets.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="py-8 text-center text-stone-500 text-sm"
                     >
                       No hay ventas registradas en la base de datos.
@@ -780,6 +788,13 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
 
                       <td className="py-3 px-4 text-xs text-stone-500 font-mono">
                         {t.time}
+                      </td>
+
+                      <td className="py-3 px-4 text-xs text-stone-700 dark:text-stone-300">
+                        <div className="flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-[#8C1F25] dark:text-[#E8A598]" />
+                          <span className="font-semibold">{t.cashierName || 'Caja Mostrador'}</span>
+                        </div>
                       </td>
 
                       <td className="py-3 px-6 text-xs text-stone-700 dark:text-stone-300">

@@ -129,6 +129,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
 
   // Ajuste rápido de stock (+ / -)
   const handleStockDelta = async (product: CatalogProduct, delta: number) => {
+    if (delta > 0 && product.productType === 'manufactured') {
+      addToast({
+        type: 'info',
+        title: 'Producción requerida',
+        message: `Para sumar existencias de "${product.name}", hornea una tanda desde Gestión de Recetas para descontar los insumos de bodega automáticamente.`,
+      });
+      return;
+    }
     try {
       await productService.adjustStock(product.id, delta, product.stock);
       await loadData();
@@ -447,7 +455,16 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
                     </span>
                     <button
                       onClick={() => handleStockDelta(p, 1)}
-                      className="w-7 h-7 rounded-lg border border-stone-300 dark:border-stone-700 font-bold text-xs hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                      className={`w-7 h-7 rounded-lg border font-bold text-xs cursor-pointer ${
+                        p.productType === 'manufactured'
+                          ? 'border-dashed border-stone-300 dark:border-stone-700 text-stone-400 hover:text-amber-700 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                          : 'border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800'
+                      }`}
+                      title={
+                        p.productType === 'manufactured'
+                          ? 'Para aumentar stock, hornea tandas en Gestión de Recetas'
+                          : 'Añadir 1 unidad'
+                      }
                     >
                       +
                     </button>

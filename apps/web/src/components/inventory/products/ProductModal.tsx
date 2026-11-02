@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, BookOpen, Truck } from 'lucide-react';
+import { X, Sparkles, BookOpen, Truck, Lock, ChefHat } from 'lucide-react';
 import type { CatalogProduct, ProductKind, Recipe, Supplier } from '../../../types';
 
 interface ProductModalProps {
@@ -72,6 +72,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     if (!productToEdit) {
       if (newType === 'manufactured') {
         setIcon('🧁');
+        setStock(0);
         if (!recipeId && recipes.length > 0) setRecipeId(recipes[0].id);
       } else {
         setIcon('🥤');
@@ -108,7 +109,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         productType,
         recipeId: productType === 'manufactured' ? recipeId || undefined : undefined,
         supplierId: productType === 'resale' ? supplierId || undefined : undefined,
-        stock: Number(stock),
+        stock: productType === 'manufactured' && !productToEdit ? 0 : Number(stock),
         minStock: Number(minStock) || 0,
         unit,
         salePrice: Number(salePrice),
@@ -284,17 +285,24 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           )}
 
           {/* Existencias y Stock Mínimo */}
-          <div className="grid grid-cols-3 gap-3 p-3.5 rounded-2xl bg-[#F7EFE4] dark:bg-[#211612] border border-[#E4CEB1] dark:border-[#3D2C24]">
+          <div className="p-3.5 rounded-2xl bg-[#F7EFE4] dark:bg-[#211612] border border-[#E4CEB1] dark:border-[#3D2C24] space-y-2.5">
+            <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-[11px] font-bold text-[#4A382C] dark:text-[#D5C2B4] mb-1">
-                Stock actual *
+              <label className="block text-[11px] font-bold text-[#4A382C] dark:text-[#D5C2B4] mb-1 flex items-center gap-1">
+                <span>Stock actual</span>
+                {productType === 'manufactured' && <Lock className="w-3 h-3 text-stone-400" />}
               </label>
               <input
                 type="number"
                 min="0"
+                disabled={productType === 'manufactured'}
                 value={stock}
                 onChange={(e) => setStock(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] bg-white dark:bg-[#19100D] text-sm font-bold text-[#1C120D] dark:text-[#FBF4EB] focus:outline-none focus:ring-2 focus:ring-[#8C1F25]"
+                className={`w-full px-3 py-2 rounded-xl border text-sm font-bold ${
+                  productType === 'manufactured'
+                    ? 'bg-stone-200/60 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 border-stone-300 dark:border-stone-700 cursor-not-allowed select-none'
+                    : 'border-[#DFCAA9] dark:border-[#3D2C24] bg-white dark:bg-[#19100D] text-[#1C120D] dark:text-[#FBF4EB] focus:outline-none focus:ring-2 focus:ring-[#8C1F25]'
+                }`}
               />
             </div>
             <div>
@@ -326,6 +334,21 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               </select>
             </div>
           </div>
+
+          {/* Aviso explicativo para elaboración propia */}
+          {productType === 'manufactured' && (
+            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[#6B4B32] dark:text-[#D4A373] text-[11px] leading-relaxed">
+              <ChefHat className="w-4 h-4 shrink-0 mt-0.5 text-[#8C1F25] dark:text-[#E07A5F]" />
+              <div>
+                <span className="font-semibold text-stone-900 dark:text-stone-100">
+                  {productToEdit ? 'Stock controlado por producción: ' : 'Stock inicial fijado en 0: '}
+                </span>
+                Las unidades de elaboración propia se ingresan horneando tandas desde el módulo de{' '}
+                <span className="font-semibold underline decoration-[#8C1F25]/40">Gestión de Recetas</span> para descontar automáticamente los insumos utilizados (harina, huevos, azúcar, etc.).
+              </div>
+            </div>
+          )}
+        </div>
 
           {/* Precios (Venta y Costo) */}
           <div className="grid grid-cols-2 gap-3">

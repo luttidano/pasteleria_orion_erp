@@ -19,7 +19,7 @@ export class PosService {
    * Registra una venta y sus productos.
    * Ejecuta la persistencia en una transacción atómica ACID mediante Prisma.
    */
-  async createSale(dto: CreateSaleDto) {
+  async createSale(dto: CreateSaleDto, createdById?: string) {
     if (!dto.items?.length) {
       throw new BadRequestException(
         'La venta debe contener al menos un producto.',
@@ -121,6 +121,7 @@ export class PosService {
             status: 'completada',
             accountingStatus: 'posted',
             dataOrigin: 'real',
+            createdById: createdById ?? null,
             items: {
               create: items.map((item) => ({
                 productId: item.productId,
@@ -133,6 +134,9 @@ export class PosService {
           },
           include: {
             items: true,
+            createdBy: {
+              select: { id: true, name: true, role: true },
+            },
           },
         });
       });
@@ -197,6 +201,8 @@ export class PosService {
       accountingWarning,
       soldAt: sale.soldAt.toISOString(),
       dataOrigin: sale.dataOrigin,
+      cashierName: sale.createdBy?.name || 'Cajero no asignado',
+      cashierRole: sale.createdBy?.role || 'cashier',
       accountingEntryCreated,
       items: sale.items.map((item) => ({
         id: item.id,
@@ -223,10 +229,11 @@ export class PosService {
       const sales = await this.prisma.posSale.findMany({
         include: {
           items: true,
+          createdBy: {
+            select: { id: true, name: true, role: true },
+          }
         },
-        orderBy: {
-          soldAt: 'desc',
-        },
+        orderBy: { soldAt: 'desc' },
         take: 20,
       });
 
@@ -242,6 +249,8 @@ export class PosService {
         accountingError: sale.accountingError ?? null,
         soldAt: sale.soldAt.toISOString(),
         dataOrigin: sale.dataOrigin,
+        cashierName: sale.createdBy?.name || 'Cajero no asignado',
+        cashierRole: sale.createdBy?.role || 'cashier',
         items: sale.items.map((item) => ({
           id: item.id,
           sale_id: item.saleId,
@@ -276,6 +285,9 @@ export class PosService {
         where: { id },
         include: {
           items: true,
+          createdBy: {
+            select: { id: true, name: true, role: true },
+          },
         },
       });
     } catch (error) {
@@ -302,6 +314,8 @@ export class PosService {
       accountingError: sale.accountingError ?? null,
       soldAt: sale.soldAt.toISOString(),
       dataOrigin: sale.dataOrigin,
+      cashierName: sale.createdBy?.name || 'Cajero no asignado',
+      cashierRole: sale.createdBy?.role || 'cashier',
       items: sale.items.map((item) => ({
         id: item.id,
         sale_id: item.saleId,

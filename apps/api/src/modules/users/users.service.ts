@@ -6,6 +6,7 @@ import {
 import { SupabaseService } from '../../common/supabase/supabase.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { syncUserCache, invalidateUserCache } from '../../common/guards/auth.guard';
 
 @Injectable()
 export class UsersService {

@@ -76,39 +76,77 @@ export class PosService {
       .slice(0, 6)
       .toUpperCase()}`;
 
-    // 1. Guardar la cabecera y el detalle en una transacción ACID atómica nativa de base de datos
+    // 1. Guardar la cabecera y el detalle en una transacción ACID y descontar stock
     let sale;
     try {
-      sale = await this.prisma.posSale.create({
-        data: {
-          ticketNumber,
-          paymentMethod: dto.paymentMethod,
-          subtotal: declaredSubtotal,
-          taxAmount: declaredTax,
-          total: declaredTotal,
-          status: 'completada',
-          accountingStatus: 'posted',
-          dataOrigin: 'demo',
-          items: {
-            create: items.map((item) => ({
-              productId: item.productId,
-              productName: item.productName,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              lineTotal: item.lineTotal,
-            })),
+      sale = await this.prisma.$transaction(async (tx) => {
+        // Descontar inventario de los productos reales vendidos
+        for (const item of items) {
+          if (item.productId) {
+            const product = await tx.product.findUnique({
+              where: { id: item.productId },
+              select: { id: true, name: true, stock: true },
+            });
+
+            if (!product) {
+              throw new BadRequestException(
+                `El producto "${item.productName}" no fue encontrado en el catálogo.`,
+              );
+            }
+
+            if (Number(product.stock) < item.quantity) {
+              throw new BadRequestException(
+                `Stock insuficiente para "${product.name}". Disponible: ${product.stock}, solicitado: ${item.quantity}.`,
+              );
+            }
+
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stock: {
+                  decrement: item.quantity,
+                },
+              },
+            });
+          }
+        }
+
+        return tx.posSale.create({
+          data: {
+            ticketNumber,
+            paymentMethod: dto.paymentMethod,
+            subtotal: declaredSubtotal,
+            taxAmount: declaredTax,
+            total: declaredTotal,
+            status: 'completada',
+            accountingStatus: 'posted',
+            dataOrigin: 'real',
+            items: {
+              create: items.map((item) => ({
+                productId: item.productId,
+                productName: item.productName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                lineTotal: item.lineTotal,
+              })),
+            },
           },
-        },
-        include: {
-          items: true,
-        },
+          include: {
+            items: true,
+          },
+        });
       });
     } catch (createError) {
+      if (createError instanceof BadRequestException) {
+        throw createError;
+      }
       console.error(
         '[PosService] Error registrando venta de forma atómica:',
         createError,
       );
-      throw new InternalServerErrorException('No se pudo registrar la venta.');
+      throw new InternalServerErrorException(
+        'No se pudo registrar la venta ni actualizar el inventario.',
+      );
     }
 
     // 2. Registrar el ingreso contable asociado a esta venta (desacoplado y con tolerancia a fallos)
@@ -189,7 +227,7 @@ export class PosService {
         orderBy: {
           soldAt: 'desc',
         },
-        take: 100,
+        take: 20,
       });
 
       return sales.map((sale) => ({

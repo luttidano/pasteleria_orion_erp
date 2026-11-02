@@ -52,9 +52,15 @@ export class ProductService {
     const items = await this.prisma.product.findMany({
       where,
       include: {
-        recipe: true,
-        supplier: true,
-        categoryRef: true,
+        recipe: {
+          select: { name: true }
+        },
+        supplier: {
+          select: { name: true },
+        },  
+        categoryRef: {
+          select: { name: true }
+        },
       },
       orderBy: { name: 'asc' },
     });
@@ -65,9 +71,15 @@ export class ProductService {
     const item = await this.prisma.product.findUnique({
       where: { id },
       include: {
-        recipe: true,
-        supplier: true,
-        categoryRef: true,
+         recipe: {
+          select: { name: true }
+        },
+        supplier: {
+          select: { name: true },
+        },  
+        categoryRef: {
+          select: { name: true }
+        },
       },
     });
 

@@ -12,7 +12,44 @@ interface CachedAuthProfile {
   expiresAt: number;
 }
 
+export const AUTH_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutos para navegación ultrarrápida (0ms)
 const tokenProfileCache = new Map<string, CachedAuthProfile>();
+
+/**
+ * Sincroniza en caliente el perfil en caché cuando un administrador modifica los datos de un usuario (ej. rol o nombre)
+ */
+export function syncUserCache(
+  userId: string,
+  updates: Partial<{ role: string; name: string; email: string | null }>,
+) {
+  for (const [, cached] of tokenProfileCache.entries()) {
+    if (cached.profile.id === userId) {
+      cached.profile = {
+        ...cached.profile,
+        ...updates,
+      };
+      cached.expiresAt = Date.now() + AUTH_CACHE_TTL_MS;
+    }
+  }
+}
+
+/**
+ * Invalida inmediatamente las sesiones en caché cuando un usuario es eliminado o bloqueado
+ */
+export function invalidateUserCache(userId: string) {
+  for (const [token, cached] of tokenProfileCache.entries()) {
+    if (cached.profile.id === userId) {
+      tokenProfileCache.delete(token);
+    }
+  }
+}
+
+/**
+ * Limpia toda la caché de autenticación en memoria
+ */
+export function clearAuthCache() {
+  tokenProfileCache.clear();
+}
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -112,7 +149,7 @@ export class AuthGuard implements CanActivate {
       if (profile) {
         tokenProfileCache.set(token, {
           profile,
-          expiresAt: Date.now() + 60_000,
+          expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
         });
       }
 

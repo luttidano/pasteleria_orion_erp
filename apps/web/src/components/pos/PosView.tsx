@@ -1,41 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { apiFetch } from '../../lib/api';
-import { authService } from  '../../services/authService';
+import { authService } from '../../services/authService';
+import { productService } from '../../services/productService';
 import {
   Store,
   CreditCard,
   Banknote,
   CheckCircle2,
   Calendar,
+  Search,
+  Package,
+  RefreshCw,
+  X,
 } from 'lucide-react';
-import type { ToastMessage } from '../../types';
+import type { ToastMessage, CatalogProduct } from '../../types';
 
 interface PosViewProps {
   section: 'pos-caja' | 'pos-historial' | 'pos-cierre';
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
 }
 
-interface PosProduct {
+interface CartItem {
   id: string;
   name: string;
   price: number;
+  quantity: number;
+  stock: number;
+  unit: string;
   category: string;
   icon: string;
-}
-
-const BAKERY_POS_ITEMS: PosProduct[] = [
-  { id: 'pos-1', name: 'Torta Selva Negra (Porción)', price: 3800, category: 'Tortas', icon: '🎂' },
-  { id: 'pos-2', name: 'Croissant Mantequilla', price: 1900, category: 'Bollería', icon: '🥐' },
-  { id: 'pos-3', name: 'Cheesecake Frutos Rojos', price: 3900, category: 'Postres', icon: '🍰' },
-  { id: 'pos-4', name: 'Pie de Limón Merengado', price: 3200, category: 'Tartas', icon: '🍋' },
-  { id: 'pos-5', name: 'Medialunas Artesanales (x3)', price: 2600, category: 'Bollería', icon: '🥐' },
-  { id: 'pos-6', name: 'Café Cappuccino Especial', price: 2400, category: 'Cafetería', icon: '☕' },
-  { id: 'pos-7', name: 'Brownie Chocolate Nuez', price: 2200, category: 'Chocolates', icon: '🍫' },
-  { id: 'pos-8', name: 'Torta Tres Leches (Porción)', price: 3600, category: 'Tortas', icon: '🧁' },
-];
-
-interface CartItem extends PosProduct {
-  quantity: number;
 }
 
 interface SaleTicket {
@@ -48,13 +41,7 @@ interface SaleTicket {
   status: 'completada' | 'anulada';
   accountingStatus?: 'posted' | 'pending';
 }
-//los tickets ficticios
-/* const INITIAL_TICKETS: SaleTicket[] = [
-  { id: 'tk-1', ticketNumber: '#TK-1082', time: '11:42 AM', itemsSummary: '2x Selva Negra, 1x Café Cappuccino', total: 10000, paymentMethod: 'Tarjeta Débito', status: 'completada' },
-  { id: 'tk-2', ticketNumber: '#TK-1081', time: '11:15 AM', itemsSummary: '1x Croissant Mantequilla, 1x Cappuccino', total: 4300, paymentMethod: 'Efectivo', status: 'completada' },
-  { id: 'tk-3', ticketNumber: '#TK-1080', time: '10:48 AM', itemsSummary: '3x Medialunas, 2x Pie de Limón', total: 9000, paymentMethod: 'Transferencia', status: 'completada' },
-  { id: 'tk-4', ticketNumber: '#TK-1079', time: '10:20 AM', itemsSummary: '1x Cheesecake Frutos Rojos', total: 3900, paymentMethod: 'Tarjeta Crédito', status: 'completada' },
-]; */
+
 interface SaleApiItem {
   id: string;
   sale_id: string;
@@ -117,64 +104,128 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
   const currentUser = authService.getCurrentUser();
   const isAdmin = currentUser?.role === 'admin';
 
+  // Productos del catálogo comercial
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [onlyInStock, setOnlyInStock] = useState(false);
+
+  // Carrito de mostrador
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
-  'efectivo' | 'debito' | 'credito' | 'transferencia'
+    'efectivo' | 'debito' | 'credito' | 'transferencia'
   >('debito');
 
+  // Historial de ventas
   const [tickets, setTickets] = useState<SaleTicket[]>([]);
   const [isLoadingTickets, setIsLoadingTickets] = useState(false);
   const [isSavingSale, setIsSavingSale] = useState(false);
 
+  // 1. Ref estable para addToast (evita re-ejecuciones por re-renders del padre)
+  const addToastRef = useRef(addToast);
+  useEffect(() => {
+    addToastRef.current = addToast;
+  }, [addToast]);
 
+  // 2. Candado para evitar peticiones duplicadas en paralelo (StrictMode / doble render)
+  const isFetchingSalesRef = useRef(false);
+
+  // Cargar catálogo de productos para el mostrador
+  const loadProducts = async () => {
+    setIsLoadingProducts(true);
+    try {
+      const data = await productService.getAll();
+      setProducts(data);
+    } catch (err: unknown) {
+      addToastRef.current({
+        type: 'error',
+        title: 'Error al cargar catálogo',
+        message:
+          err instanceof Error
+            ? err.message
+            : 'No se pudieron consultar los productos del catálogo.',
+      });
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (section === 'pos-caja') {
+      void loadProducts();
+    }
+  }, [section]);
+
+  // Cargar historial de ventas cuando se accede a esa sección
   useEffect(() => {
     if (section !== 'pos-historial' && section !== 'pos-cierre') {
       return;
     }
 
-    let cancelled = false;
+    // Si ya hay una consulta en vuelo, bloqueamos la segunda simultánea
+    if (isFetchingSalesRef.current) {
+      return;
+    }
+
+    let isMounted = true;
+    isFetchingSalesRef.current = true;
+    setIsLoadingTickets(true);
 
     const loadSales = async () => {
-      setIsLoadingTickets(true);
+      try {
+        const sales = await apiFetch<SaleApiResponse[]>('/pos/sales');
 
-    try {
-      const sales = await apiFetch<SaleApiResponse[]>('/pos/sales');
-
-      if (!cancelled) {
-        setTickets(sales.map(mapSaleToTicket));
+        if (isMounted) {
+          setTickets(sales.map(mapSaleToTicket));
+        }
+      } catch (error) {
+        if (isMounted) {
+          addToastRef.current({
+            type: 'error',
+            title: 'Error al cargar las ventas',
+            message:
+              error instanceof Error
+                ? error.message
+                : 'No se pudo consultar el historial de ventas.',
+          });
+        }
+      } finally {
+        isFetchingSalesRef.current = false;
+        if (isMounted) {
+          setIsLoadingTickets(false);
+        }
       }
-    } catch (error) {
-      if (!cancelled) {
-        addToast({
-          type: 'error',
-          title: 'Error al cargar las ventas',
-          message:
-            error instanceof Error
-              ? error.message
-              : 'No se pudo consultar el historial de ventas.',
-        });
-      }
-    } finally {
-      if (!cancelled) {
-        setIsLoadingTickets(false);
-      }
-    }
-  };
+    };
 
     void loadSales();
 
     return () => {
-      cancelled = true;
+      isMounted = false;
+      isFetchingSalesRef.current = false;
     };
-  },
-  [section, addToast]);
+  }, [section]);
 
-  /* // Totales
-  const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const iva = Math.round(subtotal * 0.19);
-  const total = subtotal; */
+  // Lista de categorías únicas derivadas de los productos existentes
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>();
+    products.forEach((p) => {
+      if (p.categoryName) set.add(p.categoryName);
+    });
+    return Array.from(set).sort();
+  }, [products]);
 
-  // Totales: los precios del catálogo incluyen IVA.
+  // Filtro en tiempo real por búsqueda, categoría y disponibilidad
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCat = categoryFilter === 'all' || p.categoryName === categoryFilter;
+      const matchesStock = !onlyInStock || p.stock > 0;
+      return matchesSearch && matchesCat && matchesStock;
+    });
+  }, [products, searchTerm, categoryFilter, onlyInStock]);
+
+  // Totales: los precios del catálogo incluyen IVA (19%)
   const subtotal = cart.reduce(
     (acc, item) => acc + item.price * item.quantity,
     0,
@@ -183,21 +234,62 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
   const iva = Math.round((subtotal * 19) / 119);
   const total = subtotal;
 
-  const addToCart = (product: PosProduct) => {
+  const addToCart = (product: CatalogProduct) => {
+    if (product.stock <= 0) {
+      addToast({
+        type: 'warning',
+        title: 'Producto agotado',
+        message: `"${product.name}" no cuenta con unidades disponibles en este momento.`,
+      });
+      return;
+    }
+
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {
+        if (existing.quantity >= product.stock) {
+          addToast({
+            type: 'warning',
+            title: 'Límite de stock alcanzado',
+            message: `Solo hay ${product.stock} ${product.unit} disponibles en inventario de "${product.name}".`,
+          });
+          return prev;
+        }
         return prev.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item,
         );
       }
-      return [...prev, { ...product, quantity: 1 }];
+      return [
+        ...prev,
+        {
+          id: product.id,
+          name: product.name,
+          price: product.salePrice,
+          quantity: 1,
+          stock: product.stock,
+          unit: product.unit,
+          category: product.categoryName || 'General',
+          icon: product.icon || '🧁',
+        },
+      ];
     });
   };
 
   const updateQuantity = (id: string, delta: number) => {
-    setCart((prev) =>
-      prev
+    setCart((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (!target) return prev;
+
+      if (delta > 0 && target.quantity >= target.stock) {
+        addToast({
+          type: 'warning',
+          title: 'Stock máximo alcanzado',
+          message: `Solo hay ${target.stock} ${target.unit} disponibles de "${target.name}".`,
+        });
+        return prev;
+      }
+
+      return prev
         .map((item) => {
           if (item.id === id) {
             const next = item.quantity + delta;
@@ -205,15 +297,13 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
           }
           return item;
         })
-        .filter(Boolean) as CartItem[]
-    );
+        .filter(Boolean) as CartItem[];
+    });
   };
 
   const clearCart = () => setCart([]);
 
   const handleCompleteSale = async () => {
-
-
     if (isSavingSale) {
       return;
     }
@@ -238,12 +328,10 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
           taxAmount: iva,
           total,
           items: cart.map((item) => ({
+            productId: item.id,
             productName: item.name,
             quantity: item.quantity,
             unitPrice: item.price,
-
-            // Los productos pos-1, pos-2, etc. son ficticios.
-            // No enviamos productId porque no son UUID de Supabase.
           })),
         }),
       });
@@ -255,15 +343,13 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
         ...previousTickets.filter((ticket) => ticket.id !== newTicket.id),
       ]);
 
-      //Solo si es admin se le notifica advertencia contable
-
       if (isAdmin && savedSale.accountingWarning) {
         addToast({
           type: 'warning',
           title: `¡Venta registrada ${newTicket.ticketNumber}!`,
           message: savedSale.accountingWarning,
         });
-      } else { // Cajeros
+      } else {
         addToast({
           type: 'success',
           title: `¡Venta registrada ${newTicket.ticketNumber}!`,
@@ -271,9 +357,9 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
         });
       }
 
-      // Solo vaciar el carrito después de recibir
-      // la confirmación satisfactoria del backend.
+      // Vaciar carrito y recargar productos para actualizar el stock visible
       clearCart();
+      await loadProducts();
     } catch (error) {
       addToast({
         type: 'error',
@@ -295,7 +381,8 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Lado Izquierdo: Catálogo de productos para mostrador */}
           <div className="lg:col-span-7 space-y-4">
-            <div className="bg-white dark:bg-[#16100E] p-5 rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs flex items-center justify-between">
+            {/* Header del mostrador */}
+            <div className="bg-white dark:bg-[#16100E] p-4 sm:p-5 rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-lg font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif">
                   Mostrador de Pastelería Orión
@@ -304,39 +391,191 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
                   Selecciona los productos listos para la venta al cliente.
                 </p>
               </div>
-              <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-full border border-emerald-300 dark:border-emerald-800">
-                ● Caja Abierta
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={loadProducts}
+                  disabled={isLoadingProducts}
+                  className="p-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-[#201612] text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+                  title="Refrescar catálogo"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoadingProducts ? 'animate-spin text-[#8C1F25]' : ''}`} />
+                </button>
+                <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-full border border-emerald-300 dark:border-emerald-800">
+                  ● Caja Abierta
+                </span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {BAKERY_POS_ITEMS.map((item) => (
+            {/* Barra de Filtros y Búsqueda */}
+            <div className="bg-white dark:bg-[#16100E] p-3 sm:p-4 rounded-[20px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-3">
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                {/* Input Búsqueda */}
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar producto por nombre..."
+                    className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-stone-200 dark:border-[#35251F] bg-stone-50 dark:bg-[#201612] text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-[#8C1F25]"
+                  />
+                  {searchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filtro Sólo con Stock */}
                 <button
-                  key={item.id}
                   type="button"
-                  onClick={() => addToCart(item)}
-                  className="p-4 rounded-2xl bg-white dark:bg-[#16100E] hover:bg-[#FAF5ED] dark:hover:bg-[#201511] border border-[#EADBCE] dark:border-[#35251F] hover:border-[#8C1F25] dark:hover:border-[#8C1F25] transition-all text-left shadow-xs flex flex-col justify-between group cursor-pointer"
+                  onClick={() => setOnlyInStock(!onlyInStock)}
+                  className={`px-3 py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    onlyInStock
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                      : 'bg-stone-50 dark:bg-[#201612] text-stone-600 dark:text-stone-400 border-stone-200 dark:border-[#35251F] hover:bg-stone-100'
+                  }`}
                 >
-                  <div>
-                    <span className="text-3xl select-none block mb-2">{item.icon}</span>
-                    <h4 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 leading-snug group-hover:text-[#8C1F25] dark:group-hover:text-[#E8A598]">
-                      {item.name}
-                    </h4>
-                    <span className="text-[10px] text-stone-400 dark:text-stone-500 uppercase font-semibold">
-                      {item.category}
-                    </span>
-                  </div>
-                  <div className="mt-3 pt-2 border-t border-stone-100 dark:border-[#281C17] flex items-center justify-between">
-                    <span className="text-sm font-extrabold text-[#8C1F25] dark:text-[#E25C64] font-sans">
-                      ${item.price.toLocaleString('es-CL')}
-                    </span>
-                    <span className="w-6 h-6 rounded-lg bg-stone-100 dark:bg-[#281C17] group-hover:bg-[#8C1F25] group-hover:text-white flex items-center justify-center text-xs text-stone-600 transition-colors">
-                      +
-                    </span>
-                  </div>
+                  <Package className="w-3.5 h-3.5" />
+                  <span>Solo con stock</span>
                 </button>
-              ))}
+              </div>
+
+              {/* Categorías (Pills) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                    categoryFilter === 'all'
+                      ? 'bg-[#8C1F25] text-white shadow-xs'
+                      : 'bg-stone-100 dark:bg-[#201612] text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
+                  }`}
+                >
+                  Todas ({products.length})
+                </button>
+                {availableCategories.map((cat) => {
+                  const count = products.filter((p) => p.categoryName === cat).length;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setCategoryFilter(cat)}
+                      className={`px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                        categoryFilter === cat
+                          ? 'bg-[#8C1F25] text-white shadow-xs'
+                          : 'bg-stone-100 dark:bg-[#201612] text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
+                      }`}
+                    >
+                      {cat} ({count})
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            {/* Grilla de Productos */}
+            {isLoadingProducts ? (
+              <div className="py-16 text-center text-stone-400 space-y-2">
+                <RefreshCw className="w-8 h-8 mx-auto animate-spin text-[#8C1F25]" />
+                <p className="text-xs">Cargando productos del catálogo...</p>
+              </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="py-14 text-center bg-white dark:bg-[#16100E] rounded-3xl border border-[#EADBCE] dark:border-[#35251F] p-6 space-y-2">
+                <Package className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-600" />
+                <h4 className="text-sm font-bold text-stone-700 dark:text-stone-300">
+                  No se encontraron productos
+                </h4>
+                <p className="text-xs text-stone-500 max-w-sm mx-auto">
+                  {searchTerm || categoryFilter !== 'all' || onlyInStock
+                    ? 'Intenta ajustar los filtros de búsqueda o categoría.'
+                    : 'Aún no hay productos registrados en el catálogo. Ve a Inventario > Productos para crearlos.'}
+                </p>
+                {(searchTerm || categoryFilter !== 'all' || onlyInStock) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setCategoryFilter('all');
+                      setOnlyInStock(false);
+                    }}
+                    className="text-xs text-[#8C1F25] font-bold hover:underline cursor-pointer pt-1"
+                  >
+                    Restablecer filtros
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {filteredProducts.map((item) => {
+                  const isOutOfStock = item.stock <= 0;
+                  const isLowStock = !isOutOfStock && item.stock <= item.minStock;
+                  const inCartItem = cart.find((c) => c.id === item.id);
+                  const isMaxInCart = inCartItem ? inCartItem.quantity >= item.stock : false;
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => addToCart(item)}
+                      disabled={isOutOfStock || isMaxInCart}
+                      className={`p-4 rounded-2xl border text-left shadow-xs flex flex-col justify-between group transition-all cursor-pointer relative overflow-hidden ${
+                        isOutOfStock
+                          ? 'bg-stone-50 dark:bg-[#18110E] border-stone-200 dark:border-stone-800 opacity-60 cursor-not-allowed'
+                          : 'bg-white dark:bg-[#16100E] hover:bg-[#FAF5ED] dark:hover:bg-[#201511] border-[#EADBCE] dark:border-[#35251F] hover:border-[#8C1F25] dark:hover:border-[#8C1F25]'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-3xl select-none">{item.icon || '🧁'}</span>
+                          {/* Badge de stock */}
+                          {isOutOfStock ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300">
+                              Agotado
+                            </span>
+                          ) : isLowStock ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200">
+                              {item.stock} {item.unit}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
+                              {item.stock} {item.unit}
+                            </span>
+                          )}
+                        </div>
+
+                        <h4 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 leading-snug group-hover:text-[#8C1F25] dark:group-hover:text-[#E8A598] line-clamp-2">
+                          {item.name}
+                        </h4>
+                        <span className="text-[10px] text-stone-400 dark:text-stone-500 uppercase font-semibold block mt-0.5">
+                          {item.categoryName || 'General'}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 pt-2 border-t border-stone-100 dark:border-[#281C17] flex items-center justify-between">
+                        <span className="text-sm font-extrabold text-[#8C1F25] dark:text-[#E25C64] font-sans">
+                          ${item.salePrice.toLocaleString('es-CL')}
+                        </span>
+                        <span
+                          className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs transition-colors ${
+                            isOutOfStock || isMaxInCart
+                              ? 'bg-stone-200 dark:bg-stone-800 text-stone-400'
+                              : 'bg-stone-100 dark:bg-[#281C17] group-hover:bg-[#8C1F25] group-hover:text-white text-stone-600'
+                          }`}
+                        >
+                          {inCartItem ? inCartItem.quantity : '+'}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Lado Derecho: Carrito de Compra y Cobro */}
@@ -377,7 +616,7 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
                           {item.name}
                         </div>
                         <div className="text-[11px] text-stone-500 font-sans">
-                          ${item.price.toLocaleString('es-CL')} c/u
+                          ${item.price.toLocaleString('es-CL')} c/u • Máx: {item.stock} {item.unit}
                         </div>
                       </div>
 
@@ -395,7 +634,8 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
                         <button
                           type="button"
                           onClick={() => updateQuantity(item.id, 1)}
-                          className="w-6 h-6 rounded-md bg-white dark:bg-[#2A1D18] flex items-center justify-center text-xs text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 cursor-pointer"
+                          disabled={item.quantity >= item.stock}
+                          className="w-6 h-6 rounded-md bg-white dark:bg-[#2A1D18] flex items-center justify-center text-xs text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           +
                         </button>

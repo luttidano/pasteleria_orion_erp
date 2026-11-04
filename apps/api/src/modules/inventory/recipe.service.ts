@@ -3,16 +3,8 @@ import { PrismaService } from '../../database/prisma.service';
 import { CreateRecipeDto } from './dto/create-recipe.dto';
 import { UpdateRecipeDto } from './dto/update-recipe.dto';
 import { ProduceRecipeDto } from './dto/produce-recipe.dto';
+import { toBaseUnits } from '../../common/utils/unit-converter';
 
-// Normalizador de unidades para comparar stock vs receta
-function toBaseUnits(qty: number, unit: string): { value: number; type: 'mass' | 'volume' | 'count' } {
-  const u = (unit || '').toLowerCase().trim();
-  if (['kg', 'kilos', 'kilogramo', 'kilogramos'].includes(u)) return { value: qty * 1000, type: 'mass' }; // a gramos
-  if (['g', 'gr', 'gramo', 'gramos'].includes(u)) return { value: qty, type: 'mass' };
-  if (['l', 'lt', 'litro', 'litros'].includes(u)) return { value: qty * 1000, type: 'volume' }; // a ml
-  if (['ml', 'cc', 'mililitro', 'mililitros'].includes(u)) return { value: qty, type: 'volume' };
-  return { value: qty, type: 'count' }; // unidades, bandejas
-}
 
 @Injectable()
 export class RecipeService {

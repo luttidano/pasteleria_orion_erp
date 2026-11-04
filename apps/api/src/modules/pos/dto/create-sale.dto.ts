@@ -8,7 +8,6 @@ import {
   IsInt,
   IsNotEmpty,
   IsNumber,
-  IsOptional,
   IsString,
   IsUUID,
   Max,
@@ -39,9 +38,9 @@ export class CreateSaleItemDto {
   @Max(9999999999.99)
   unitPrice: number;
 
-  @IsOptional()
   @IsUUID('4')
-  productId?: string;
+  @IsNotEmpty()
+  productId: string;
 }
 
 export class CreateSaleDto {

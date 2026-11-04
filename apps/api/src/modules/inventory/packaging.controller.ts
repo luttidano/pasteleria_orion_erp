@@ -24,13 +24,13 @@ export class PackagingController {
   constructor(private readonly packagingService: PackagingService) {}
 
   @Get()
-  @Roles(Role.admin, Role.baker)
+  @Roles(Role.admin, Role.baker, Role.cashier)
   findAll(@Query('type') type?: string) {
     return this.packagingService.findAll(type);
   }
 
   @Get(':id')
-  @Roles(Role.admin, Role.baker)
+  @Roles(Role.admin, Role.baker, Role.cashier)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.packagingService.findOne(id);
   }
@@ -51,7 +51,7 @@ export class PackagingController {
   }
 
   @Post(':id/adjust-stock')
-  @Roles(Role.admin, Role.baker)
+  @Roles(Role.admin, Role.baker, Role.cashier)
   adjustStock(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('delta') delta: number,

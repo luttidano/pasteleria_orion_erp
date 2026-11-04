@@ -100,6 +100,8 @@ export interface Supplier {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+  ingredientsCount?: number;
+  resaleProductsCount?: number;
 }
 
 export type ProductKind = 'manufactured' | 'resale';

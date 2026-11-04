@@ -16,6 +16,8 @@ export interface UserProfile {
   role: UserRole;
   createdAt?: string;
   updatedAt?: string;
+  ingredientsCount?: number;
+  resaleProductsCount?: number;
 }
 
 export interface CreateUserData {
@@ -132,6 +134,8 @@ export interface Supplier {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+  ingredientsCount?: number;
+  resaleProductsCount?: number;
 }
 
 export type PackagingType = 'primario' | 'secundario';

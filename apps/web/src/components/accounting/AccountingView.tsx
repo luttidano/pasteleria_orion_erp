@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { ToastMessage } from '../../types';
 import { apiFetch } from '../../lib/api';
+import { FinancialReportsTab } from './FinancialReportsTab';
 
 interface AccountingViewProps {
   section: 'contabilidad-diario' | 'contabilidad-mayor' | 'contabilidad-balances' | 'contabilidad-reportes';
@@ -741,6 +742,11 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
             </table>
           </div>
         </div>
+      )}
+
+      {/* SECCIÓN 4: ESTADOS FINANCIEROS FORMALES (P&L, BALANCE GENERAL, VALORIZACIÓN) */}
+      {section === 'contabilidad-reportes' && (
+        <FinancialReportsTab addToast={addToast} />
       )}
 
       {/* MODAL: REGISTRAR NUEVO ASIENTO */}

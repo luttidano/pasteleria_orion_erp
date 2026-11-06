@@ -14,6 +14,9 @@ describe('FinancialReportService', () => {
       ingredient: {
         findMany: jest.fn(),
       },
+      packaging: {
+        findMany: jest.fn(),
+      },
       product: {
         findMany: jest.fn(),
       },
@@ -161,12 +164,17 @@ describe('FinancialReportService', () => {
         { id: 'ing-2', name: 'Mantequilla Colún', stock: 20, unit: 'kg', price: 6500 },
       ];
 
+      const mockPackaging = [
+        { id: 'pack-1', name: 'Caja Torta Kraft 26cm', stock: 100, unit: 'un', costPrice: 500 },
+      ];
+
       const mockProducts = [
         { id: 'prod-1', name: 'Torta Selva Negra', stock: 15, unit: 'un', costPrice: 8000, salePrice: 15000 },
       ];
 
       prisma.accountingAccount.findMany.mockResolvedValue(mockAccounts);
       prisma.ingredient.findMany.mockResolvedValue(mockIngredients);
+      prisma.packaging.findMany.mockResolvedValue(mockPackaging);
       prisma.product.findMany.mockResolvedValue(mockProducts);
 
       const balanceSheet = await service.getBalanceSheet('2026-11-30');
@@ -194,9 +202,11 @@ describe('FinancialReportService', () => {
       // 6. Valorización de bodega
       // Harina: 50 * 1200 = 60.000 | Mantequilla: 20 * 6500 = 130.000 -> 190.000
       expect(balanceSheet.inventoryValuation.rawMaterialsValue).toBe(190000);
+      // Empaques: 100 * 500 = 50.000
+      expect(balanceSheet.inventoryValuation.packagingValue).toBe(50000);
       // Torta: 15 * 8000 = 120.000
       expect(balanceSheet.inventoryValuation.finishedProductsValue).toBe(120000);
-      expect(balanceSheet.inventoryValuation.totalWarehouseValue).toBe(310000);
+      expect(balanceSheet.inventoryValuation.totalWarehouseValue).toBe(360000);
     });
   });
 });

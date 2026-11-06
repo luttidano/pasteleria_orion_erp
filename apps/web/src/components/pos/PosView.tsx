@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { apiFetch } from '../../lib/api';
 import { authService } from '../../services/authService';
 import { productService } from '../../services/productService';
+import { packagingService } from '../../services/packagingService';
 import {
   Store,
   CreditCard,
@@ -13,8 +14,9 @@ import {
   RefreshCw,
   X,
   User,
+  ShoppingBag,
 } from 'lucide-react';
-import type { ToastMessage, CatalogProduct } from '../../types';
+import type { ToastMessage, CatalogProduct, Packaging } from '../../types';
 
 interface PosViewProps {
   section: 'pos-caja' | 'pos-historial' | 'pos-cierre';
@@ -30,6 +32,7 @@ interface CartItem {
   unit: string;
   category: string;
   icon: string;
+  isPackaging?: boolean;
 }
 
 interface SaleTicket {
@@ -158,9 +161,22 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
     }
   };
 
+  // Empaques secundarios para acceso rápido (Ley de Bolsas / Cajas)
+  const [secondaryPackaging, setSecondaryPackaging] = useState<Packaging[]>([]);
+
+  const loadPackaging = async () => {
+    try {
+      const data = await packagingService.getAll('secundario');
+      setSecondaryPackaging(data);
+    } catch {
+      // Ignorar fallo no bloqueante
+    }
+  };
+
   useEffect(() => {
     if (section === 'pos-caja') {
       void loadProducts();
+      void loadPackaging();
     }
   }, [section]);
 
@@ -308,6 +324,53 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
     });
   };
 
+  const addPackagingToCart = (pack: Packaging) => {
+    if (pack.stock <= 0) {
+      addToast({
+        type: 'warning',
+        title: 'Empaque agotado',
+        message: `No quedan unidades disponibles de "${pack.name}".`,
+      });
+      return;
+    }
+
+    // Precio por Ley de Bolsas o costo configurado (ej: $100 si es bolsa, o $0 si es caja incluida)
+    const salePrice = pack.name.toLowerCase().includes('bolsa') ? 100 : 0;
+
+    setCart((prev) => {
+      const existing = prev.find((item) => item.id === pack.id && item.isPackaging);
+      if (existing) {
+        if (existing.quantity >= pack.stock) {
+          addToast({
+            type: 'warning',
+            title: 'Límite de empaques alcanzado',
+            message: `Solo hay ${pack.stock} ${pack.unit} disponibles en inventario de "${pack.name}".`,
+          });
+          return prev;
+        }
+        return prev.map((item) =>
+          item.id === pack.id && item.isPackaging
+            ? { ...item, quantity: item.quantity + 1 }
+            : item,
+        );
+      }
+      return [
+        ...prev,
+        {
+          id: pack.id,
+          name: pack.name,
+          price: salePrice,
+          quantity: 1,
+          stock: pack.stock,
+          unit: pack.unit,
+          category: 'Empaque / Servicio',
+          icon: pack.icon || '🛍️',
+          isPackaging: true,
+        },
+      ];
+    });
+  };
+
   const clearCart = () => setCart([]);
 
   const handleCompleteSale = async () => {
@@ -335,7 +398,8 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
           taxAmount: iva,
           total,
           items: cart.map((item) => ({
-            productId: item.id,
+            productId: item.isPackaging ? undefined : item.id,
+            packagingId: item.isPackaging ? item.id : undefined,
             productName: item.name,
             quantity: item.quantity,
             unitPrice: item.price,
@@ -364,9 +428,9 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
         });
       }
 
-      // Vaciar carrito y recargar productos para actualizar el stock visible
+      // Vaciar carrito y recargar catálogo y empaques para actualizar el stock visible
       clearCart();
-      await loadProducts();
+      await Promise.all([loadProducts(), loadPackaging()]);
     } catch (error) {
       addToast({
         type: 'error',
@@ -485,6 +549,67 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
                 })}
               </div>
             </div>
+
+            {/* Barra de Acceso Rápido: Empaques & Ley de Bolsas */}
+            {secondaryPackaging.length > 0 && (
+              <div className="p-3.5 rounded-2xl bg-[#FAF5ED] dark:bg-[#1C1411] border border-[#EADBCE] dark:border-[#35251F] space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+                    <ShoppingBag className="w-3.5 h-3.5 text-[#8C1F25]" />
+                    Empaques Rápidos (Ley de Bolsas / Cajas)
+                  </span>
+                  <span className="text-[11px] text-stone-400">Clic para agregar al ticket</span>
+                </div>
+
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {secondaryPackaging.map((pack) => {
+                    const isOutOfStock = pack.stock <= 0;
+                    const inCartItem = cart.find((c) => c.id === pack.id && c.isPackaging);
+                    const packPrice = pack.name.toLowerCase().includes('bolsa') ? 100 : 0;
+
+                    return (
+                      <button
+                        key={pack.id}
+                        type="button"
+                        onClick={() => addPackagingToCart(pack)}
+                        disabled={isOutOfStock}
+                        className={`px-3 py-2 rounded-xl border text-left flex items-center gap-2.5 transition-all shrink-0 cursor-pointer ${
+                          isOutOfStock
+                            ? 'bg-stone-100 dark:bg-[#18110E] border-stone-200 dark:border-stone-800 opacity-50 cursor-not-allowed'
+                            : inCartItem
+                              ? 'bg-white dark:bg-[#201511] border-[#8C1F25] ring-1 ring-[#8C1F25]'
+                              : 'bg-white dark:bg-[#201511] border-stone-200 dark:border-[#35251F] hover:border-[#8C1F25]'
+                        }`}
+                      >
+                        <span className="text-xl select-none">{pack.icon || '🛍️'}</span>
+                        <div>
+                          <div className="font-bold text-xs text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                            <span>{pack.name}</span>
+                            {isOutOfStock ? (
+                              <span className="text-[9px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 px-1 py-0.2 rounded">
+                                Agotado
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-stone-400 font-mono">
+                                ({pack.stock} {pack.unit})
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] font-mono font-bold text-[#8C1F25] dark:text-[#E8A598]">
+                            {packPrice > 0 ? `+${packPrice.toLocaleString('es-CL')}` : 'Cortesía ($0)'}
+                          </div>
+                        </div>
+                        {inCartItem && (
+                          <span className="ml-1 w-5 h-5 rounded-full bg-[#8C1F25] text-white text-[10px] font-bold flex items-center justify-center">
+                            {inCartItem.quantity}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Grilla de Productos */}
             {isLoadingProducts ? (

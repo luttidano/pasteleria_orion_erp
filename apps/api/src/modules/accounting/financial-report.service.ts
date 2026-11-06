@@ -77,8 +77,17 @@ export interface BalanceSheetReport {
   inventoryValuation: {
     totalWarehouseValue: number;
     rawMaterialsValue: number;
+    packagingValue: number;
     finishedProductsValue: number;
     topRawMaterials: Array<{
+      id: string;
+      name: string;
+      stock: number;
+      unit: string;
+      unitCost: number;
+      totalValue: number;
+    }>;
+    topPackaging: Array <{
       id: string;
       name: string;
       stock: number;
@@ -331,11 +340,15 @@ export class FinancialReportService {
       const isBalanced = Math.abs(difference) < 0.01;
 
       // 5. Valorización física de inventario en bodega (harina/materias primas y productos listos para venta)
-      const [ingredients, products] = await Promise.all([
+      const [ingredients, packagingList, products] = await Promise.all([
         this.prisma.ingredient.findMany({
           select: { id: true, name: true, stock: true, unit: true, price: true },
           orderBy: { stock: 'desc' },
         }),
+        this.prisma.packaging.findMany({
+          select: { id: true, name: true, stock: true, unit:true, costPrice: true },
+          orderBy: { stock: 'desc' },
+        }), 
         this.prisma.product.findMany({
           select: { id: true, name: true, stock: true, unit: true, costPrice: true, salePrice: true },
           orderBy: { stock: 'desc' },
@@ -358,6 +371,22 @@ export class FinancialReportService {
         };
       }).sort((a, b) => b.totalValue - a.totalValue).slice(0, 8);
 
+      let packagingValue = 0;
+      const topPackaging = packagingList.map((pack) => {
+        const stockNum = Number(pack.stock ?? 0);
+        const unitCost = Number(pack.costPrice ?? 0);
+        const totalValue = Math.round(stockNum * unitCost * 100) / 100;
+        packagingValue += totalValue;
+        return {
+          id: pack.id,
+          name: pack.name,
+          stock: stockNum,
+          unit: pack.unit || 'un',
+          unitCost,
+          totalValue,
+        };
+      }).sort((a, b) => b.totalValue - a.totalValue).slice(0, 8);
+
       let finishedProductsValue = 0;
       const topProducts = products.map((prod) => {
         const stockNum = Number(prod.stock ?? 0);
@@ -375,8 +404,9 @@ export class FinancialReportService {
       }).sort((a, b) => b.totalValue - a.totalValue).slice(0, 8);
 
       rawMaterialsValue = Math.round(rawMaterialsValue * 100) / 100;
+      packagingValue = Math.round(packagingValue * 100) / 100;
       finishedProductsValue = Math.round(finishedProductsValue * 100) / 100;
-      const totalWarehouseValue = Math.round((rawMaterialsValue + finishedProductsValue) * 100) / 100;
+      const totalWarehouseValue = Math.round((rawMaterialsValue + packagingValue + finishedProductsValue ) * 100) / 100;
 
       return {
         asOfDate: cutoffDate.toISOString().slice(0, 10),
@@ -424,8 +454,11 @@ export class FinancialReportService {
         inventoryValuation: {
           totalWarehouseValue,
           rawMaterialsValue,
+          packagingValue,
+          
           finishedProductsValue,
           topRawMaterials,
+          topPackaging,
           topProducts,
         },
       };

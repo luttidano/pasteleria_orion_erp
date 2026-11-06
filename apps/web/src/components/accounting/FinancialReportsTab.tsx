@@ -14,107 +14,18 @@ import {
   CreditCard,
   FileSpreadsheet,
 } from 'lucide-react';
-import { apiFetch } from '../../lib/api';
 import type { ToastMessage } from '../../types';
+import {
+  financialReportService,
+  type ReportAccountLine,
+  type IncomeStatementData,
+  type BalanceSheetData,
+} from '../../services/financialReportService';
+
+export type { ReportAccountLine, IncomeStatementData, BalanceSheetData };
 
 interface FinancialReportsTabProps {
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
-}
-
-export interface ReportAccountLine {
-  id: string;
-  code: string;
-  name: string;
-  amount: number;
-}
-
-export interface IncomeStatementData {
-  period: {
-    startDate: string | null;
-    endDate: string | null;
-  };
-  ingresosOperacionales: {
-    total: number;
-    accounts: ReportAccountLine[];
-  };
-  costosMateriasPrimas: {
-    total: number;
-    accounts: ReportAccountLine[];
-  };
-  margenBruto: number;
-  margenBrutoPercentage: number;
-  gastosOperacionales: {
-    total: number;
-    accounts: ReportAccountLine[];
-  };
-  utilidadNeta: number;
-  margenNetoPercentage: number;
-}
-
-export interface BalanceSheetData {
-  asOfDate: string;
-  activos: {
-    total: number;
-    disponible: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-    inventarios: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-    otrosActivos: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-  };
-  pasivos: {
-    total: number;
-    obligaciones: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-    impuestos: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-    otrosPasivos: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-  };
-  patrimonio: {
-    total: number;
-    capital: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-    resultadoEjercicio: number;
-  };
-  totalPasivoMasPatrimonio: number;
-  isBalanced: boolean;
-  difference: number;
-  inventoryValuation: {
-    totalWarehouseValue: number;
-    rawMaterialsValue: number;
-    finishedProductsValue: number;
-    topRawMaterials: Array<{
-      id: string;
-      name: string;
-      stock: number;
-      unit: string;
-      unitCost: number;
-      totalValue: number;
-    }>;
-    topProducts: Array<{
-      id: string;
-      name: string;
-      stock: number;
-      unit: string;
-      unitCost: number;
-      totalValue: number;
-    }>;
-  };
 }
 
 const formatMoney = (val: number): string =>
@@ -157,18 +68,9 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
   const fetchReports = useCallback(async () => {
     setIsLoading(true);
     try {
-      const pnlParams = new URLSearchParams();
-      if (startDate) pnlParams.append('startDate', startDate);
-      if (endDate) pnlParams.append('endDate', endDate);
-      const pnlQuery = pnlParams.toString() ? `?${pnlParams.toString()}` : '';
-
-      const bsParams = new URLSearchParams();
-      if (endDate) bsParams.append('asOfDate', endDate);
-      const bsQuery = bsParams.toString() ? `?${bsParams.toString()}` : '';
-
       const [pnlRes, bsRes] = await Promise.all([
-        apiFetch<IncomeStatementData>(`/accounting/reports/income-statement${pnlQuery}`),
-        apiFetch<BalanceSheetData>(`/accounting/reports/balance-sheet${bsQuery}`),
+        financialReportService.getIncomeStatement(startDate, endDate),
+        financialReportService.getBalanceSheet(endDate),
       ]);
 
       setIncomeStatement(pnlRes);
@@ -814,7 +716,7 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Materias Primas */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200">
@@ -857,6 +759,57 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
                               </td>
                               <td className="py-2 px-3 text-right font-mono font-bold text-stone-900 dark:text-stone-100">
                                 ${formatMoney(ing.totalValue)}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                                {/* Empaques Secundarios */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-orange-50 dark:bg-orange-950/20 text-orange-900 dark:text-orange-200">
+                    <span className="font-bold text-xs">
+                      Cajas y Empaques (Stock)
+                    </span>
+                    <span className="font-mono font-bold text-sm">
+                      ${formatMoney(balanceSheet.inventoryValuation.packagingValue ?? 0)}
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-stone-200 dark:border-stone-800">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-stone-50 dark:bg-[#1E1512] text-[10px] uppercase font-bold text-stone-500">
+                          <th className="py-2 px-3">Empaque</th>
+                          <th className="py-2 px-3 text-right">Stock</th>
+                          <th className="py-2 px-3 text-right">Costo</th>
+                          <th className="py-2 px-3 text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
+                        {(!balanceSheet.inventoryValuation.topPackaging || balanceSheet.inventoryValuation.topPackaging.length === 0) ? (
+                          <tr>
+                            <td colSpan={4} className="py-4 text-center text-stone-400">
+                              Sin empaques registrados.
+                            </td>
+                          </tr>
+                        ) : (
+                          balanceSheet.inventoryValuation.topPackaging.map((pack) => (
+                            <tr key={pack.id} className="hover:bg-stone-50/50">
+                              <td className="py-2 px-3 font-medium text-stone-800 dark:text-stone-200">
+                                {pack.name}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
+                                {pack.stock} {pack.unit}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
+                                ${formatMoney(pack.unitCost)}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono font-bold text-stone-900 dark:text-stone-100">
+                                ${formatMoney(pack.totalValue)}
                               </td>
                             </tr>
                           ))

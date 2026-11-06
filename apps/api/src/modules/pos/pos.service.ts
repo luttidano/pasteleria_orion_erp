@@ -7,7 +7,7 @@ import { randomUUID } from 'crypto';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { EntryService } from '../accounting/entry.service';
 import { PrismaService } from '../../database/prisma.service';
-import { toBaseUnits } from '../../common/utils/unit-converter';
+
 
 @Injectable()
 export class PosService {
@@ -33,7 +33,8 @@ export class PosService {
       const lineTotal = this.roundMoney(item.quantity * item.unitPrice);
 
       return {
-        productId: item.productId,
+        productId: item.productId ?? null,
+        packagingId: item.packagingId,
         productName: item.productName.trim(),
         quantity: item.quantity,
         unitPrice: item.unitPrice,
@@ -81,111 +82,71 @@ export class PosService {
     let sale;
     try {
       sale = await this.prisma.$transaction(async (tx) => {
-        // Descontar inventario de los productos reales vendidos y sus recetas
-        const ingredientDeductionsMap = new Map<
-          string,
-          {
-            ingredientId: string;
-            ingredientName: string;
-            totalDeduction: number;
-            stockUnit: string;
-            currentStock: number;
-          }
-        >();
-
+        // Descontar inventario de productos y empaques secundarios vendidos en mostrador
         for (const item of items) {
-          const product = await tx.product.findUnique({
-            where: { id: item.productId },
-            include: {
-              recipe: {
-                include: {
-                  ingredients: {
-                    include: {
-                      ingredients: true,
-                    },
-                  },
+          if (item.productId) {
+            const product = await tx.product.findUnique({
+              where: { id: item.productId },
+              select: {
+                id: true,
+                name: true,
+                stock: true,
+              },
+            });
+
+            if (!product) {
+              throw new BadRequestException(
+                `El producto "${item.productName}" no fue encontrado en el catálogo.`,
+              );
+            }
+
+            if (Number(product.stock) < item.quantity) {
+              throw new BadRequestException(
+                `Stock insuficiente para "${product.name}". Disponible: ${product.stock}, solicitado: ${item.quantity}.`,
+              );
+            }
+
+            // Descontar existencias del producto terminado
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stock: {
+                  decrement: item.quantity,
                 },
               },
-            },
-          });
-
-          if (!product) {
-            throw new BadRequestException(
-              `El producto "${item.productName}" no fue encontrado en el catálogo.`,
-            );
-          }
-
-          if (Number(product.stock) < item.quantity) {
-            throw new BadRequestException(
-              `Stock insuficiente para "${product.name}". Disponible: ${product.stock}, solicitado: ${item.quantity}.`,
-            );
-          }
-
-          // Descontar existencias del producto comercial
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stock: {
-                decrement: item.quantity,
+            });
+          } else if (item.packagingId) {
+            const pkg = await tx.packaging.findUnique({
+              where: { id: item.packagingId },
+              select: {
+                id: true,
+                name: true,
+                stock: true,
               },
-            },
-          });
+            });
 
-          // Si el producto es de elaboración propia (manufactured), descontar insumos de su receta
-          if (
-            product.productType === 'manufactured' &&
-            product.recipe?.ingredients?.length
-          ) {
-            const yieldServings = Math.max(1, product.recipe.yieldServings || 1);
-
-            for (const ri of product.recipe.ingredients) {
-              const ing = ri.ingredients;
-              if (!ing) continue;
-
-              const currentStock = Number(ing.stock ?? 0);
-              const stockUnit = ing.unit || 'kg';
-              const recipeQtyForSale =
-                (Number(ri.quantity) / yieldServings) * item.quantity;
-              const recipeUnit = ri.unit;
-
-              const reqNorm = toBaseUnits(recipeQtyForSale, recipeUnit);
-              const stockNorm = toBaseUnits(1, stockUnit);
-
-              let deductionInStockUnit = recipeQtyForSale;
-              if (reqNorm.type === stockNorm.type && stockNorm.value > 0) {
-                deductionInStockUnit = reqNorm.value / stockNorm.value;
-              }
-
-              const existing = ingredientDeductionsMap.get(ing.id);
-              if (existing) {
-                existing.totalDeduction += deductionInStockUnit;
-              } else {
-                ingredientDeductionsMap.set(ing.id, {
-                  ingredientId: ing.id,
-                  ingredientName: ing.name,
-                  totalDeduction: deductionInStockUnit,
-                  stockUnit,
-                  currentStock,
-                });
-              }
+            if (!pkg) {
+              throw new BadRequestException(
+                `El empaque "${item.productName}" no fue encontrado en el catálogo.`,
+              );
             }
+
+            if (Number(pkg.stock) < item.quantity) {
+              throw new BadRequestException(
+                `Stock insuficiente para el empaque "${pkg.name}". Disponible: ${pkg.stock}, solicitado: ${item.quantity}.`,
+              );
+            }
+
+            // Descontar existencias del empaque secundario
+            await tx.packaging.update({
+              where: { id: item.packagingId },
+              data: {
+                stock: {
+                  decrement: item.quantity,
+                },
+              },
+            });
           }
-        }
-
-        // Aplicar deducciones acumuladas de ingredientes en bodega
-        for (const deduction of ingredientDeductionsMap.values()) {
-          const roundedDeduction = Number(deduction.totalDeduction.toFixed(3));
-          const newStock = Math.max(
-            0,
-            Number((deduction.currentStock - roundedDeduction).toFixed(3)),
-          );
-
-          await tx.ingredient.update({
-            where: { id: deduction.ingredientId },
-            data: {
-              stock: newStock,
-            },
-          });
         }
 
         return tx.posSale.create({

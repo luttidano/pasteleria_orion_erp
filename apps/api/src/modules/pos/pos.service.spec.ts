@@ -36,9 +36,8 @@ describe('PosService', () => {
   });
 
   describe('createSale', () => {
-    it('debe descontar stock de producto y de ingredientes de receta para productos de elaboración propia', async () => {
+    it('debe descontar únicamente el stock del producto vendido y NO los ingredientes en bodega (se deducen en producción)', async () => {
       const manufacturedProductId = '11111111-1111-4111-a111-111111111111';
-      const ingredientId = '22222222-2222-4222-a222-222222222222';
 
       const saleDto: CreateSaleDto = {
         paymentMethod: 'debito',
@@ -60,25 +59,6 @@ describe('PosService', () => {
         name: 'Torta Selva Negra',
         productType: 'manufactured',
         stock: 10,
-        recipe: {
-          id: 'rec-1',
-          name: 'Receta Selva Negra',
-          yieldServings: 1, // 1 porción por tanda
-          ingredients: [
-            {
-              id: 'ri-1',
-              ingredientId,
-              quantity: 250, // 250 gramos por porción
-              unit: 'g',
-              ingredients: {
-                id: ingredientId,
-                name: 'Harina de Trigo',
-                stock: 5, // 5 kg disponibles
-                unit: 'kg',
-              },
-            },
-          ],
-        },
       };
 
       const mockTx = {
@@ -137,13 +117,8 @@ describe('PosService', () => {
         },
       });
 
-      // 2. Debe descontar los insumos proporcionales de la receta (2 * 250g = 500g = 0.5kg -> stock: 5 - 0.5 = 4.5kg)
-      expect(mockTx.ingredient.update).toHaveBeenCalledWith({
-        where: { id: ingredientId },
-        data: {
-          stock: 4.5,
-        },
-      });
+      // 2. NO debe descontar insumos de la bodega (la deducción ocurre al producir en cocina)
+      expect(mockTx.ingredient.update).not.toHaveBeenCalled();
 
       // 3. Debe asociar el UUID real del producto en pos_sale_item
       expect(mockTx.posSale.create).toHaveBeenCalledWith(
@@ -300,6 +275,82 @@ describe('PosService', () => {
         /Stock insuficiente para "Brazo de Reina"/,
       );
     });
+    it('debe descontar stock de empaque secundario cuando se incluye en la venta (packagingId)', async () => {
+      const packagingId = '55555555-5555-4555-a555-555555555555';
+
+      const saleDto: CreateSaleDto = {
+        paymentMethod: 'efectivo',
+        subtotal: 500,
+        taxAmount: 95,
+        total: 595,
+        items: [
+          {
+            packagingId,
+            productName: 'Bolsa Kraft Grande',
+            quantity: 1,
+            unitPrice: 595,
+          },
+        ],
+      };
+
+      const mockPackaging = {
+        id: packagingId,
+        name: 'Bolsa Kraft Grande',
+        stock: 50,
+      };
+
+      const mockTx = {
+        product: { findUnique: jest.fn(), update: jest.fn() },
+        packaging: {
+          findUnique: jest.fn().mockResolvedValue(mockPackaging),
+          update: jest.fn().mockResolvedValue({}),
+        },
+        ingredient: { update: jest.fn() },
+        posSale: {
+          create: jest.fn().mockResolvedValue({
+            id: 'sale-uuid-pkg',
+            ticketNumber: 'TK-999999',
+            paymentMethod: 'efectivo',
+            subtotal: 500,
+            taxAmount: 95,
+            total: 595,
+            status: 'completada',
+            accountingStatus: 'posted',
+            dataOrigin: 'real',
+            soldAt: new Date('2026-11-03T20:00:00Z'),
+            items: [
+              {
+                id: 'item-uuid-pkg',
+                saleId: 'sale-uuid-pkg',
+                productId: null,
+                productName: 'Bolsa Kraft Grande',
+                quantity: 1,
+                unitPrice: 595,
+                lineTotal: 595,
+              },
+            ],
+            createdBy: null,
+          }),
+        },
+      };
+
+      prisma.$transaction.mockImplementation(async (callback: any) => {
+        return callback(mockTx);
+      });
+
+      const result = await service.createSale(saleDto);
+
+      expect(mockTx.packaging.update).toHaveBeenCalledWith({
+        where: { id: packagingId },
+        data: {
+          stock: {
+            decrement: 1,
+          },
+        },
+      });
+      expect(mockTx.product.update).not.toHaveBeenCalled();
+      expect(mockTx.ingredient.update).not.toHaveBeenCalled();
+      expect(result.items[0].product_id).toBeNull();
+    });
   });
 });
-

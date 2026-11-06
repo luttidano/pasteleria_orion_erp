@@ -285,31 +285,14 @@ DROP POLICY IF EXISTS "supplier_all_authenticated" ON public.supplier;
 CREATE POLICY "supplier_all_authenticated" ON public.supplier
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "supplier_select_anon" ON public.supplier;
-CREATE POLICY "supplier_select_anon" ON public.supplier
-  FOR SELECT TO anon USING (true);
-
 DROP POLICY IF EXISTS "packaging_all_authenticated" ON public.packaging;
 CREATE POLICY "packaging_all_authenticated" ON public.packaging
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "packaging_select_anon" ON public.packaging;
-CREATE POLICY "packaging_select_anon" ON public.packaging
-  FOR SELECT TO anon USING (true);
 
 DROP POLICY IF EXISTS "supplier_ingredient_all_authenticated" ON public.supplier_ingredient;
 CREATE POLICY "supplier_ingredient_all_authenticated" ON public.supplier_ingredient
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "supplier_ingredient_select_anon" ON public.supplier_ingredient;
-CREATE POLICY "supplier_ingredient_select_anon" ON public.supplier_ingredient
-  FOR SELECT TO anon USING (true);
-
 GRANT ALL ON TABLE public.supplier TO authenticated, service_role;
-GRANT SELECT ON TABLE public.supplier TO anon;
-
 GRANT ALL ON TABLE public.packaging TO authenticated, service_role;
-GRANT SELECT ON TABLE public.packaging TO anon;
-
 GRANT ALL ON TABLE public.supplier_ingredient TO authenticated, service_role;
-GRANT SELECT ON TABLE public.supplier_ingredient TO anon;

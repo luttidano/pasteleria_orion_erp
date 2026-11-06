@@ -1,17 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SupplierService } from './supplier.service';
 import { PrismaService } from '../../database/prisma.service';
-import { SupabaseService } from '../../common/supabase/supabase.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('SupplierService', () => {
   let service: SupplierService;
   let prisma: any;
-  let supabaseService: any;
 
   beforeEach(async () => {
     prisma = {
-      isAvailable: true,
       supplier: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
@@ -21,29 +18,10 @@ describe('SupplierService', () => {
       },
     };
 
-    const mockSupabaseQuery = {
-      select: jest.fn().mockReturnThis(),
-      order: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      contains: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn(),
-      single: jest.fn(),
-      insert: jest.fn().mockReturnThis(),
-      update: jest.fn().mockReturnThis(),
-      delete: jest.fn().mockReturnThis(),
-    };
-
-    supabaseService = {
-      client: {
-        from: jest.fn().mockReturnValue(mockSupabaseQuery),
-      },
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SupplierService,
         { provide: PrismaService, useValue: prisma },
-        { provide: SupabaseService, useValue: supabaseService },
       ],
     }).compile();
 
@@ -85,33 +63,6 @@ describe('SupplierService', () => {
     expect(result[1].supplyModality).toBe('despacho');
   });
 
-  it('debe recurrir a Supabase REST ante desconexión o fallo de Prisma', async () => {
-    prisma.isAvailable = false;
-    const mockQuery = supabaseService.client.from();
-    mockQuery.order.mockResolvedValue({
-      data: [
-        {
-          id: 'sup-sb-1',
-          name: 'Empaques del Valle',
-          phone: '+56955554444',
-          delivery_schedule: 'Despacho semanal',
-          category: 'Cajas y Bolsas',
-          approximate_prices: '$180 unidad',
-          icon: '📦',
-          supplier_types: ['empaque'],
-          supplierIngredients: [],
-          resaleProducts: [],
-        },
-      ],
-      error: null,
-    });
-
-    const result = await service.findAll();
-    expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('Empaques del Valle');
-    expect(result[0].supplierTypes).toContain('empaque');
-  });
-
   it('no debe permitir eliminar un proveedor si tiene productos de reventa asociados', async () => {
     prisma.supplier.findUnique.mockResolvedValue({
       id: 'sup-1',
@@ -133,5 +84,10 @@ describe('SupplierService', () => {
     const result = await service.remove('sup-1');
     expect(result).toEqual({ success: true, id: 'sup-1' });
   });
-});
 
+  it('debe lanzar NotFoundException si el proveedor no existe', async () => {
+    prisma.supplier.findUnique.mockResolvedValue(null);
+
+    await expect(service.findOne('sup-inexistente')).rejects.toThrow(NotFoundException);
+  });
+});

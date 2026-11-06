@@ -14,6 +14,7 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateSaleItemDto {
@@ -38,9 +39,16 @@ export class CreateSaleItemDto {
   @Max(9999999999.99)
   unitPrice: number;
 
-  @IsUUID('4')
-  @IsNotEmpty()
-  productId: string;
+  @ValidateIf((o: CreateSaleItemDto) => !o.packagingId)
+  @IsNotEmpty({ message: 'El campo productId es obligatorio si no se especifica un packagingId.' })
+  @IsUUID('4', { message: 'El campo productId debe ser un UUID válido.' })
+  productId?: string;
+
+  @ValidateIf((o: CreateSaleItemDto) => !o.productId)
+  @IsNotEmpty({ message
+    : 'El campo packagingId es obligatorio si no se especifica un productId.' })
+  @IsUUID('4', { message: 'El campo packagingId debe ser un UUID válido.' })
+  packagingId?: string;
 }
 
 export class CreateSaleDto {

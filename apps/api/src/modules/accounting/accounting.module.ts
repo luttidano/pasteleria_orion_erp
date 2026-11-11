@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AccountController } from './account.controller';
 import { AccountService } from './account.service';
+import { AccountingPeriodController } from './accounting-period.controller';
+import { AccountingPeriodService } from './accounting-period.service';
 import { EntryController } from './entry.controller';
 import { EntryService } from './entry.service';
 import { LedgerController } from './ledger.controller';
@@ -13,6 +15,7 @@ import { FinancialReportService } from './financial-report.service';
 @Module({
   controllers: [
     AccountController,
+    AccountingPeriodController,
     EntryController,
     LedgerController,
     BalanceController,
@@ -20,6 +23,7 @@ import { FinancialReportService } from './financial-report.service';
   ],
   providers: [
     AccountService,
+    AccountingPeriodService,
     EntryService,
     LedgerService,
     BalanceService,
@@ -27,6 +31,7 @@ import { FinancialReportService } from './financial-report.service';
   ],
   exports: [
     AccountService,
+    AccountingPeriodService,
     EntryService,
     LedgerService,
     BalanceService,

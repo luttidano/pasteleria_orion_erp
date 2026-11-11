@@ -129,6 +129,15 @@ export class FinancialReportService {
 
       const hasDateFilter = Boolean(startDate || endDate);
 
+      const entryFilter = {
+        origin: { not: 'closing' },
+        OR: [
+          { origin: { not: 'reversal' } },
+          { reversedEntry: { is: { origin: { not: 'closing' } } } },
+        ],
+        ...(hasDateFilter ? { entryDate: dateFilter } : {}),
+      };
+
       const accounts = await this.prisma.accountingAccount.findMany({
         where: {
           isActive: true,
@@ -136,7 +145,7 @@ export class FinancialReportService {
         },
         include: {
           entryItems: {
-            where: hasDateFilter ? { entry: { entryDate: dateFilter } } : undefined,
+            where: { entry: entryFilter },
           },
         },
         orderBy: { code: 'asc' },

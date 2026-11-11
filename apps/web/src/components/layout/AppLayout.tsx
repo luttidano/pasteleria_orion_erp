@@ -69,6 +69,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       'contabilidad-mayor',
       'contabilidad-balances',
       'contabilidad-reportes',
+      'contabilidad-periodos',
       'ajustes',
     ],
     baker: ['despensa', 'recetas', 'productos', 'empaques', 'insumos-generales'],
@@ -182,6 +183,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         return 'Costos y Balances de Producción';
       case 'contabilidad-reportes':
         return 'Informes y Reportes Financieros';
+      case 'contabilidad-periodos':
+        return 'Cierre de Períodos & Ejercicio Anual';
       case 'ajustes':
         return 'Configuración del Sistema ERP';
       default:
@@ -367,7 +370,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           {(activeSection === 'contabilidad-diario' ||
             activeSection === 'contabilidad-balances' ||
             activeSection === 'contabilidad-mayor' ||
-            activeSection === 'contabilidad-reportes') && (
+            activeSection === 'contabilidad-reportes' ||
+            activeSection === 'contabilidad-periodos') && (
             <AccountingView section={activeSection} addToast={addToast} />
           )}
 

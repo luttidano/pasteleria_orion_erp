@@ -21,3 +21,15 @@ export enum ProductType {
   manufactured = 'manufactured',
   resale = 'resale',
 }
+
+export enum AccountingPeriodStatus {
+  abierto = 'abierto',
+  cerrado = 'cerrado',
+}
+
+export enum AccountingEntryOrigin {
+  manual = 'manual',
+  pos = 'pos',
+  closing = 'closing',
+  reversal = 'reversal',
+}

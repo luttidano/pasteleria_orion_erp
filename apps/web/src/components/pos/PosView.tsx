@@ -1,8 +1,10 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { apiFetch } from '../../lib/api';
 import { authService } from '../../services/authService';
 import { productService } from '../../services/productService';
 import { packagingService } from '../../services/packagingService';
+import { posShiftService } from '../../services/posShiftService';
 import {
   Store,
   CreditCard,
@@ -15,8 +17,18 @@ import {
   X,
   User,
   ShoppingBag,
+  Printer,
+  AlertTriangle,
+  Clock,
+  Lock,
 } from 'lucide-react';
-import type { ToastMessage, CatalogProduct, Packaging } from '../../types';
+import type {
+  ToastMessage,
+  CatalogProduct,
+  Packaging,
+  PosActiveShiftOverview,
+  PosShiftRecord,
+} from '../../types';
 
 interface PosViewProps {
   section: 'pos-caja' | 'pos-historial' | 'pos-cierre';
@@ -38,6 +50,7 @@ interface CartItem {
 interface SaleTicket {
   id: string;
   ticketNumber: string;
+  date: string;
   time: string;
   cashierName?: string;
   cashierRole?: string;
@@ -75,6 +88,165 @@ interface SaleApiResponse {
   items: SaleApiItem[];
 }
 
+const EMPTY_SHIFT_OVERVIEW: PosActiveShiftOverview = {
+  hasOpenShift: false,
+  activeShiftId: null,
+  shiftNumber: null,
+  openedAt: null,
+  openedByName: null,
+  openingCash: 0,
+  totalSales: 0,
+  transactionsCount: 0,
+  cashSalesTotal: 0,
+  cardPosTotal: 0,
+  debitTotal: 0,
+  creditTotal: 0,
+  transferTotal: 0,
+  expectedCash: 0,
+  lastClosedShift: null,
+};
+
+const STORE_TIMEZONE = 'America/Santiago';
+
+const formatChileDate = (
+  value: Date | string,
+  options: Intl.DateTimeFormatOptions = {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  },
+): string =>
+  new Date(value).toLocaleDateString('es-CL', {
+    ...options,
+    timeZone: STORE_TIMEZONE,
+  });
+
+const formatChileTime = (
+  value: Date | string,
+  options: Intl.DateTimeFormatOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+  },
+): string =>
+  new Date(value).toLocaleTimeString('es-CL', {
+    ...options,
+    timeZone: STORE_TIMEZONE,
+  });
+
+const formatChileDateTime = (
+  value: Date | string,
+  options: Intl.DateTimeFormatOptions = {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  },
+): string =>
+  new Date(value).toLocaleString('es-CL', {
+    ...options,
+    timeZone: STORE_TIMEZONE,
+  });
+
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+const printShiftReceipt = (shift: PosShiftRecord): boolean => {
+  const printWindow = window.open('', '_blank', 'width=440,height=760');
+  if (!printWindow) {
+    return false;
+  }
+
+  const diff = Number(shift.cashDifference ?? 0);
+  const diffLabel =
+    Math.abs(diff) < 0.01
+      ? 'Cuadratura exacta ($0)'
+      : diff > 0
+      ? `Sobrante (+$${diff.toLocaleString('es-CL')})`
+      : `Faltante (-$${Math.abs(diff).toLocaleString('es-CL')})`;
+
+  const openedStr = formatChileDateTime(shift.openedAt);
+  const closedStr = shift.closedAt
+    ? formatChileDateTime(shift.closedAt)
+    : 'En curso';
+  const responsibleName = escapeHtml(
+    shift.closedBy?.name || shift.openedBy?.name || 'Cajero Mostrador',
+  );
+  const safeNotes = shift.notes ? escapeHtml(shift.notes) : '';
+
+  const html = `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Arqueo Turno #${shift.shiftNumber} - Pastelería Orion</title>
+  <style>
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; padding: 20px; color: #1c1917; background: #fff; font-size: 12px; }
+    .ticket { max-width: 340px; margin: 0 auto; border: 1px dashed #d6d3d1; padding: 16px; }
+    .center { text-align: center; }
+    h1 { font-size: 16px; margin: 0 0 4px; letter-spacing: 0.5px; }
+    .sub { color: #57534e; font-size: 11px; margin-bottom: 12px; }
+    .sep { border-top: 1px dashed #a8a29e; margin: 10px 0; }
+    .row { display: flex; justify-content: space-between; margin: 4px 0; gap: 8px; }
+    .bold { font-weight: 700; }
+    .big { font-size: 14px; font-weight: 800; }
+    .muted { color: #57534e; }
+    .box { background: #fafaf9; border: 1px solid #e7e5e4; padding: 8px; margin-top: 8px; }
+    @media print { body { padding: 0; } .ticket { border: none; } }
+  </style>
+</head>
+<body>
+  <div class="ticket">
+    <div class="center">
+      <h1>PASTELERÍA ORION</h1>
+      <div class="sub">Comprobante de Arqueo y Cierre de Caja</div>
+    </div>
+    <div class="sep"></div>
+    <div class="row"><span>Turno N°:</span><span class="bold">#${shift.shiftNumber}</span></div>
+    <div class="row"><span>Responsable:</span><span class="bold">${responsibleName}</span></div>
+    <div class="row"><span>Apertura:</span><span>${escapeHtml(openedStr)}</span></div>
+    <div class="row"><span>Cierre:</span><span>${escapeHtml(closedStr)}</span></div>
+    <div class="row"><span>Transacciones:</span><span>${shift.transactionsCount}</span></div>
+    <div class="sep"></div>
+    <div class="bold">RESUMEN POR MEDIO DE PAGO</div>
+    <div class="row"><span>Ventas Efectivo:</span><span>$${shift.cashSalesTotal.toLocaleString('es-CL')}</span></div>
+    <div class="row"><span>Tarjeta Débito:</span><span>$${shift.debitTotal.toLocaleString('es-CL')}</span></div>
+    <div class="row"><span>Tarjeta Crédito:</span><span>$${shift.creditTotal.toLocaleString('es-CL')}</span></div>
+    <div class="row"><span>Transferencias:</span><span>$${shift.transferTotal.toLocaleString('es-CL')}</span></div>
+    <div class="row bold"><span>Total Tarjetas POS:</span><span>$${shift.cardPosTotal.toLocaleString('es-CL')}</span></div>
+    <div class="row big"><span>TOTAL VENTAS TURNO:</span><span>$${shift.totalSales.toLocaleString('es-CL')}</span></div>
+    <div class="sep"></div>
+    <div class="bold">CUADRATURA DE GAVETA (EFECTIVO)</div>
+    <div class="row"><span>Fondo Inicial:</span><span>$${shift.openingCash.toLocaleString('es-CL')}</span></div>
+    <div class="row"><span>(+) Ventas Efectivo:</span><span>$${shift.cashSalesTotal.toLocaleString('es-CL')}</span></div>
+    <div class="row bold"><span>(=) Efectivo Esperado:</span><span>$${shift.expectedCash.toLocaleString('es-CL')}</span></div>
+    <div class="row bold"><span>Efectivo Contado:</span><span>$${Number(shift.countedCash ?? shift.expectedCash).toLocaleString('es-CL')}</span></div>
+    <div class="row big"><span>Diferencia:</span><span>${escapeHtml(diffLabel)}</span></div>
+    ${
+      shift.closingEntryNumber
+        ? `<div class="box"><div class="bold">Contabilidad:</div><div>Asiento de ajuste #${shift.closingEntryNumber} contabilizado automáticamente.</div></div>`
+        : shift.accountingStatus === 'pending'
+        ? `<div class="box"><div class="bold">Contabilidad:</div><div>Ajuste pendiente de contabilización (período bloqueado).</div></div>`
+        : `<div class="box"><div class="bold">Contabilidad:</div><div>Caja cuadrada sin asiento de diferencia requerido.</div></div>`
+    }
+    ${safeNotes ? `<div class="box"><div class="bold">Observaciones:</div><div>${safeNotes}</div></div>` : ''}
+    <div class="sep"></div>
+    <div class="center muted" style="margin-top: 24px;">______________________________<br/>Firma Cajero / Administrador</div>
+  </div>
+  <script>
+    window.addEventListener('load', () => { window.print(); });
+  </script>
+</body>
+</html>`;
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  return true;
+};
+
 const paymentMethodLabel = (
   method: SaleApiResponse['paymentMethod'],
 ): string => {
@@ -95,10 +267,8 @@ const mapSaleToTicket = (sale: SaleApiResponse): SaleTicket => ({
   ticketNumber: sale.ticketNumber.startsWith('#')
     ? sale.ticketNumber
     : `#${sale.ticketNumber}`,
-  time: new Date(sale.soldAt).toLocaleTimeString('es-CL', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }),
+  date: formatChileDate(sale.soldAt),
+  time: formatChileTime(sale.soldAt),
   cashierName: sale.cashierName || 'Caja Mostrador',
   cashierRole: sale.cashierRole,
   itemsSummary: sale.items
@@ -131,6 +301,25 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
   const [tickets, setTickets] = useState<SaleTicket[]>([]);
   const [isLoadingTickets, setIsLoadingTickets] = useState(false);
   const [isSavingSale, setIsSavingSale] = useState(false);
+
+  // Indicadores reales de turno de caja y cierre con reinicio
+  const [shiftOverview, setShiftOverview] =
+    useState<PosActiveShiftOverview>(EMPTY_SHIFT_OVERVIEW);
+  const todayKey =
+    shiftOverview.businessDate ??
+    new Date().toLocaleDateString('en-CA', { timeZone: STORE_TIMEZONE });
+  const [shiftsHistory, setShiftsHistory] = useState<PosShiftRecord[]>([]);
+  const [isLoadingShift, setIsLoadingShift] = useState(false);
+  const [openingCashInput, setOpeningCashInput] = useState('0');
+  const [isSavingOpeningCash, setIsSavingOpeningCash] = useState(false);
+
+  // Modal de Arqueo y Cierre
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [countedCashInput, setCountedCashInput] = useState('0');
+  const [closeNotes, setCloseNotes] = useState('');
+  const [printOnClose, setPrintOnClose] = useState(true);
+  const [isClosingShift, setIsClosingShift] = useState(false);
+  const [lastReceiptShift, setLastReceiptShift] = useState<PosShiftRecord | null>(null);
 
   // 1. Ref estable para addToast (evita re-ejecuciones por re-renders del padre)
   const addToastRef = useRef(addToast);
@@ -173,10 +362,42 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
     }
   };
 
+  const loadShiftSummary = async (silent = false) => {
+    if (!silent) {
+      setIsLoadingShift(true);
+    }
+    try {
+      const [overview, history] = await Promise.all([
+        posShiftService.getActiveOverview(),
+        posShiftService.getShifts(),
+      ]);
+      setShiftOverview(overview);
+      setOpeningCashInput(String(overview.openingCash));
+      setShiftsHistory(history);
+    } catch (err: unknown) {
+      if (!silent) {
+        addToastRef.current({
+          type: 'error',
+          title: 'Error al consultar turno de caja',
+          message:
+            err instanceof Error
+              ? err.message
+              : 'No se pudo obtener el estado actual de la caja.',
+        });
+      }
+    } finally {
+      if (!silent) {
+        setIsLoadingShift(false);
+      }
+    }
+  };
+
   useEffect(() => {
     if (section === 'pos-caja') {
       void loadProducts();
       void loadPackaging();
+    } else if (section === 'pos-cierre') {
+      void loadShiftSummary();
     }
   }, [section]);
 
@@ -428,9 +649,9 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
         });
       }
 
-      // Vaciar carrito y recargar catálogo y empaques para actualizar el stock visible
+      // Vaciar carrito y recargar catálogo, empaques y resumen de caja
       clearCart();
-      await Promise.all([loadProducts(), loadPackaging()]);
+      await Promise.all([loadProducts(), loadPackaging(), loadShiftSummary(true)]);
     } catch (error) {
       addToast({
         type: 'error',
@@ -442,6 +663,121 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
       });
     } finally {
       setIsSavingSale(false);
+    }
+  };
+
+  const parsedOpeningCash = Math.max(0, Number(openingCashInput) || 0);
+  const expectedCashPreview = parsedOpeningCash + shiftOverview.cashSalesTotal;
+  const hasClosingActivity =
+    shiftOverview.hasOpenShift ||
+    shiftOverview.transactionsCount > 0 ||
+    parsedOpeningCash > 0;
+  const parsedCountedCash = Math.max(0, Number(countedCashInput) || 0);
+  const modalCashDiff = parsedCountedCash - expectedCashPreview;
+  const isOpeningCashDirty =
+    parsedOpeningCash !== Number(shiftOverview.openingCash || 0);
+
+  const handleSaveOpeningCash = async () => {
+    if (isSavingOpeningCash) return;
+    setIsSavingOpeningCash(true);
+    try {
+      const updated = await posShiftService.updateOpeningCash({
+        openingCash: parsedOpeningCash,
+      });
+      setShiftOverview(updated);
+      setOpeningCashInput(String(updated.openingCash));
+      addToast({
+        type: 'success',
+        title: 'Fondo inicial guardado',
+        message: `Fondo en gaveta registrado en $${updated.openingCash.toLocaleString('es-CL')}.`,
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'No se pudo guardar el fondo inicial',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Inténtalo nuevamente en unos segundos.',
+      });
+    } finally {
+      setIsSavingOpeningCash(false);
+    }
+  };
+
+  const openCloseShiftModal = () => {
+    setCountedCashInput(String(expectedCashPreview));
+    setCloseNotes('');
+    setPrintOnClose(true);
+    setIsCloseModalOpen(true);
+  };
+
+  const handleConfirmCloseShift = async () => {
+    if (isClosingShift) return;
+    setIsClosingShift(true);
+    try {
+      const closedShift = await posShiftService.closeShift({
+        countedCash: parsedCountedCash,
+        openingCash: parsedOpeningCash,
+        notes: closeNotes.trim() || undefined,
+      });
+
+      setIsCloseModalOpen(false);
+      setLastReceiptShift(closedShift);
+      await loadShiftSummary();
+
+      let printed = true;
+      if (printOnClose) {
+        printed = printShiftReceipt(closedShift);
+      }
+
+      if (isAdmin && closedShift.accountingWarning) {
+        addToast({
+          type: 'warning',
+          title: `Turno #${closedShift.shiftNumber} cerrado (caja reiniciada)`,
+          message: closedShift.accountingWarning,
+        });
+      } else if (printOnClose && !printed) {
+        addToast({
+          type: 'info',
+          title: `¡Turno #${closedShift.shiftNumber} cerrado y caja en $0!`,
+          message:
+            'El navegador bloqueó la ventana de impresión. Usa "Reimprimir Comprobante" en el historial de arqueos.',
+        });
+      } else {
+        const diff = Number(closedShift.cashDifference ?? 0);
+        const diffDesc =
+          Math.abs(diff) < 0.01
+            ? 'Cuadratura exacta ($0).'
+            : diff > 0
+            ? `Sobrante de +$${diff.toLocaleString('es-CL')}${
+                closedShift.closingEntryNumber
+                  ? ` (Asiento #${closedShift.closingEntryNumber})`
+                  : ''
+              }.`
+            : `Faltante de -$${Math.abs(diff).toLocaleString('es-CL')}${
+                closedShift.closingEntryNumber
+                  ? ` (Asiento #${closedShift.closingEntryNumber})`
+                  : ''
+              }.`;
+
+        addToast({
+          type: 'success',
+          title: `¡Turno #${closedShift.shiftNumber} cerrado y caja reiniciada!`,
+          message: `${diffDesc} Indicadores de efectivo y POS reiniciados en $0.`,
+        });
+      }
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'No se pudo cerrar el turno',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error al generar el arqueo de caja.',
+      });
+    } finally {
+      setIsClosingShift(false);
     }
   };
 
@@ -845,12 +1181,12 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
                 Historial de Boletas & Tickets de Venta
               </h3>
               <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                Registro de ventas cerradas durante el día en mostrador.
+                Últimas 20 ventas registradas en mostrador.
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs text-stone-500 font-mono">
               <Calendar className="w-4 h-4 text-[#8C1F25]" />
-              <span>Hoy: {new Date().toLocaleDateString('es-CL')}</span>
+              <span>Hoy: {formatChileDate(new Date())}</span>
             </div>
           </div>
 
@@ -859,7 +1195,7 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
               <thead>
                 <tr className="bg-[#FAF5ED] dark:bg-[#201613] border-b border-stone-200 dark:border-[#35251F] text-xs font-bold uppercase text-stone-700 dark:text-stone-300">
                   <th className="py-3 px-4">Ticket</th>
-                  <th className="py-3 px-4">Hora</th>
+                  <th className="py-3 px-4">Fecha / Hora</th>
                   <th className="py-3 px-4">Atendido por</th>
                   <th className="py-3 px-6">Detalle de Compra</th>
                   <th className="py-3 px-4">Pago</th>
@@ -896,8 +1232,8 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
                         {t.ticketNumber}
                       </td>
 
-                      <td className="py-3 px-4 text-xs text-stone-500 font-mono">
-                        {t.time}
+                      <td className="py-3 px-4 text-xs text-stone-500 font-mono whitespace-nowrap">
+                        {t.date} • {t.time}
                       </td>
 
                       <td className="py-3 px-4 text-xs text-stone-700 dark:text-stone-300">
@@ -951,58 +1287,487 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
 
       {/* 3. SECCIÓN: CIERRE DE TURNO */}
       {section === 'pos-cierre' && (
-        <div className="bg-white dark:bg-[#16100E] p-6 sm:p-8 rounded-[26px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-6">
-          <div className="border-b border-[#EADBCE] dark:border-[#35251F] pb-4">
-            <h3 className="text-xl font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif">
-              Arqueo y Cierre de Turno de Caja
-            </h3>
-            <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-              Resumen de movimientos para cuadratura de caja antes del cambio de cajero.
-            </p>
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-[#16100E] p-6 sm:p-8 rounded-[26px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EADBCE] dark:border-[#35251F] pb-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h3 className="text-xl font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif">
+                    Arqueo y Cierre de Turno de Caja
+                  </h3>
+                  {shiftOverview.hasOpenShift ? (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50">
+                      Turno #{shiftOverview.shiftNumber} Abierto
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-stone-100 dark:bg-[#251A16] text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-[#35251F]">
+                      {shiftOverview.transactionsCount > 0
+                        ? 'Movimientos Previos del Día'
+                        : 'Caja Reiniciada ($0)'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                  {shiftOverview.hasOpenShift && shiftOverview.openedAt
+                    ? `Abierto el ${formatChileDateTime(shiftOverview.openedAt)}${
+                        shiftOverview.openedByName ? ` por ${shiftOverview.openedByName}` : ''
+                      }. Al cerrar el arqueo los indicadores vuelven a $0.`
+                    : `Cuadratura del turno actual (${todayKey}). Al confirmar el cierre se emite el comprobante y la caja vuelve a $0.`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadShiftSummary()}
+                disabled={isLoadingShift}
+                className="px-3.5 py-2 rounded-xl border border-stone-200 dark:border-[#35251F] bg-stone-50 dark:bg-[#201612] text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#2C1F1A] text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto cursor-pointer transition-colors"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${isLoadingShift ? 'animate-spin text-[#8C1F25]' : ''}`}
+                />
+                Actualizar
+              </button>
+            </div>
+
+            {!shiftOverview.hasOpenShift &&
+              shiftOverview.transactionsCount === 0 &&
+              shiftOverview.lastClosedShift && (
+                <div className="p-4 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/25 border border-emerald-200 dark:border-emerald-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="text-xs">
+                      <p className="font-bold text-emerald-900 dark:text-emerald-200">
+                        Último arqueo registrado: Turno #{shiftOverview.lastClosedShift.shiftNumber}
+                      </p>
+                      <p className="text-emerald-700 dark:text-emerald-400 mt-0.5">
+                        Cerrado el{' '}
+                        {formatChileDateTime(shiftOverview.lastClosedShift.closedAt)}{' '}
+                        por {shiftOverview.lastClosedShift.closedByName} • Ventas $
+                        {shiftOverview.lastClosedShift.totalSales.toLocaleString('es-CL')} •
+                        Contado $
+                        {shiftOverview.lastClosedShift.countedCash.toLocaleString('es-CL')}
+                      </p>
+                    </div>
+                  </div>
+                  {(lastReceiptShift || shiftsHistory[0]) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target =
+                          lastReceiptShift &&
+                          lastReceiptShift.id === shiftOverview.lastClosedShift?.id
+                            ? lastReceiptShift
+                            : shiftsHistory[0];
+                        if (target) {
+                          const ok = printShiftReceipt(target);
+                          if (!ok) {
+                            addToast({
+                              type: 'warning',
+                              title: 'Ventana bloqueada',
+                              message: 'Permite las ventanas emergentes del navegador para imprimir.',
+                            });
+                          }
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#16100E] border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto cursor-pointer hover:bg-emerald-100/60"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      Reimprimir Último Arqueo
+                    </button>
+                  )}
+                </div>
+              )}
+
+            {/* Fondo Inicial Configurable de Gaveta */}
+            <div className="p-4 rounded-2xl bg-stone-50 dark:bg-[#1C1411] border border-stone-200/80 dark:border-[#35251F] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-xs font-bold text-stone-700 dark:text-stone-200 block">
+                  Fondo Inicial en Gaveta (Sencillo)
+                </span>
+                <span className="text-[11px] text-stone-500 dark:text-stone-400">
+                  Monto base en efectivo asignado al turno actual ({todayKey}). Se reinicia a $0 después de cada cierre.
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-stone-500">$</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={500}
+                  value={openingCashInput}
+                  onChange={(e) => setOpeningCashInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      void handleSaveOpeningCash();
+                    }
+                  }}
+                  className="w-32 text-xs font-mono font-bold px-3 py-2 rounded-xl border border-[#EADBCE] dark:border-[#35251F] bg-white dark:bg-[#16100E] text-right"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSaveOpeningCash()}
+                  disabled={isSavingOpeningCash || !isOpeningCashDirty}
+                  className="px-3 py-2 rounded-xl bg-stone-800 hover:bg-stone-900 dark:bg-[#8C1F25] dark:hover:bg-[#74191E] text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                >
+                  {isSavingOpeningCash ? 'Guardando...' : 'Guardar Fondo'}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border border-[#EADBCE] dark:border-[#35251F]">
+                <span className="text-xs text-stone-500 font-bold uppercase tracking-wider block">
+                  Total Ventas Turno
+                </span>
+                <span className="text-2xl font-black text-stone-900 dark:text-white font-sans mt-1 block">
+                  {isLoadingShift ? '...' : `$${shiftOverview.totalSales.toLocaleString('es-CL')}`}
+                </span>
+                <span className="text-[11px] text-emerald-600 font-semibold">
+                  {shiftOverview.transactionsCount} transacciones en turno actual
+                </span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border border-[#EADBCE] dark:border-[#35251F]">
+                <span className="text-xs text-stone-500 font-bold uppercase tracking-wider block">
+                  Efectivo en Gaveta
+                </span>
+                <span className="text-2xl font-black text-emerald-700 dark:text-emerald-400 font-sans mt-1 block">
+                  {isLoadingShift ? '...' : `$${expectedCashPreview.toLocaleString('es-CL')}`}
+                </span>
+                <span className="text-[11px] text-stone-400">
+                  Fondo (${parsedOpeningCash.toLocaleString('es-CL')}) + Ventas efectivo ($
+                  {shiftOverview.cashSalesTotal.toLocaleString('es-CL')})
+                </span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border border-[#EADBCE] dark:border-[#35251F]">
+                <span className="text-xs text-stone-500 font-bold uppercase tracking-wider block">
+                  Tarjetas y POS Electrónico
+                </span>
+                <span className="text-2xl font-black text-[#8C1F25] dark:text-[#E8A598] font-sans mt-1 block">
+                  {isLoadingShift
+                    ? '...'
+                    : `$${shiftOverview.cardPosTotal.toLocaleString('es-CL')}`}
+                </span>
+                <span className="text-[11px] text-stone-400">
+                  Débito (${shiftOverview.debitTotal.toLocaleString('es-CL')}) • Crédito ($
+                  {shiftOverview.creditTotal.toLocaleString('es-CL')})
+                  {shiftOverview.transferTotal > 0
+                    ? ` • Transf. ($${shiftOverview.transferTotal.toLocaleString('es-CL')})`
+                    : ''}
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span className="text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-stone-400" />
+                {hasClosingActivity
+                  ? 'El comprobante de arqueo se emite al cerrar el turno y queda guardado en el historial.'
+                  : 'Registra una venta o asigna un fondo inicial para poder cerrar el turno.'}
+              </span>
+              <button
+                type="button"
+                onClick={openCloseShiftModal}
+                disabled={isLoadingShift || !hasClosingActivity}
+                className="px-6 py-3 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs sm:text-sm font-bold shadow-btn transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Lock className="w-4 h-4" />
+                <span>Arqueo y Cerrar Turno</span>
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border border-[#EADBCE] dark:border-[#35251F]">
-              <span className="text-xs text-stone-500 font-bold uppercase tracking-wider block">Total Ventas Turno</span>
-              <span className="text-2xl font-black text-stone-900 dark:text-white font-sans mt-1 block">
-                ${tickets.reduce((acc, t) => acc + t.total, 0).toLocaleString('es-CL')}
+          {/* HISTORIAL DE ARQUEOS CERRADOS */}
+          <div className="bg-white dark:bg-[#16100E] p-6 sm:p-8 rounded-[26px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-[#EADBCE] dark:border-[#35251F] pb-3">
+              <div>
+                <h4 className="text-base sm:text-lg font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif">
+                  Historial de Arqueos y Cierres de Caja
+                </h4>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  Comprobantes cerrados por turno, diferencia física en gaveta y respaldo contable.
+                </p>
+              </div>
+              <span className="text-xs font-mono text-stone-500">
+                {shiftsHistory.length} cierre{shiftsHistory.length === 1 ? '' : 's'}
               </span>
-              <span className="text-[11px] text-emerald-600 font-semibold">{tickets.length} transacciones registradas</span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border border-[#EADBCE] dark:border-[#35251F]">
-              <span className="text-xs text-stone-500 font-bold uppercase tracking-wider block">Efectivo en Gaveta</span>
-              <span className="text-2xl font-black text-emerald-700 dark:text-emerald-400 font-sans mt-1 block">
-                $44.300
-              </span>
-              <span className="text-[11px] text-stone-400">Incluye fondo inicial de $40.000</span>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                <thead>
+                  <tr className="bg-[#FAF5ED] dark:bg-[#201613] border-b border-stone-200 dark:border-[#35251F] text-[11px] font-bold uppercase text-stone-700 dark:text-stone-300">
+                    <th className="py-3 px-3">Turno</th>
+                    <th className="py-3 px-3">Cierre</th>
+                    <th className="py-3 px-3">Responsable</th>
+                    <th className="py-3 px-3 text-right">Ventas</th>
+                    <th className="py-3 px-3 text-right">Efectivo Esp. / Real</th>
+                    <th className="py-3 px-3 text-right">POS / Transf.</th>
+                    <th className="py-3 px-3 text-right">Diferencia</th>
+                    <th className="py-3 px-3 text-center">Contab.</th>
+                    <th className="py-3 px-3 text-center">Comprobante</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100 dark:divide-[#281C17]">
+                  {isLoadingShift ? (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-stone-500 text-xs">
+                        Cargando historial de arqueos...
+                      </td>
+                    </tr>
+                  ) : shiftsHistory.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-stone-500 text-xs">
+                        Aún no hay cierres de turno registrados. Al cerrar este turno aparecerá aquí.
+                      </td>
+                    </tr>
+                  ) : (
+                    shiftsHistory.map((s) => {
+                      const diff = Number(s.cashDifference ?? 0);
+                      const isZeroDiff = Math.abs(diff) < 0.01;
+                      const posPlusTransfer = s.cardPosTotal + s.transferTotal;
+                      return (
+                        <tr
+                          key={s.id}
+                          className="hover:bg-stone-50 dark:hover:bg-[#201613]/50 transition-colors"
+                        >
+                          <td className="py-3 px-3 font-bold text-[#8C1F25] dark:text-[#E8A598]">
+                            #{s.shiftNumber}
+                            <span className="block text-[10px] font-normal text-stone-400">
+                              {s.transactionsCount} vta{s.transactionsCount === 1 ? '' : 's'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-xs text-stone-600 dark:text-stone-300 font-mono">
+                            {s.closedAt ? formatChileDateTime(s.closedAt) : '-'}
+                          </td>
+                          <td className="py-3 px-3 text-xs font-medium text-stone-700 dark:text-stone-300">
+                            {s.closedBy?.name || s.openedBy?.name || 'Cajero'}
+                          </td>
+                          <td className="py-3 px-3 text-right font-bold font-sans">
+                            ${s.totalSales.toLocaleString('es-CL')}
+                          </td>
+                          <td className="py-3 px-3 text-right text-xs font-mono">
+                            <span className="text-stone-500 block">
+                              Esp: ${s.expectedCash.toLocaleString('es-CL')}
+                            </span>
+                            <span className="font-bold text-stone-900 dark:text-stone-100">
+                              Real: ${Number(s.countedCash ?? s.expectedCash).toLocaleString('es-CL')}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right text-xs font-mono text-stone-700 dark:text-stone-300">
+                            ${posPlusTransfer.toLocaleString('es-CL')}
+                          </td>
+                          <td className="py-3 px-3 text-right text-xs font-bold font-mono">
+                            <span
+                              className={
+                                isZeroDiff
+                                  ? 'text-emerald-700 dark:text-emerald-400'
+                                  : diff > 0
+                                  ? 'text-sky-700 dark:text-sky-400'
+                                  : 'text-rose-700 dark:text-rose-400'
+                              }
+                            >
+                              {isZeroDiff
+                                ? '$0'
+                                : diff > 0
+                                ? `+$${diff.toLocaleString('es-CL')}`
+                                : `-$${Math.abs(diff).toLocaleString('es-CL')}`}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            {s.accountingStatus === 'posted' && s.closingEntryNumber ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
+                                Asiento #{s.closingEntryNumber}
+                              </span>
+                            ) : s.accountingStatus === 'pending' ? (
+                              <span
+                                title={s.accountingWarning || 'Ajuste contable pendiente'}
+                                className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300"
+                              >
+                                Pendiente
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-stone-100 dark:bg-[#251A16] text-stone-500">
+                                Cuadrada
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const ok = printShiftReceipt(s);
+                                if (!ok) {
+                                  addToast({
+                                    type: 'warning',
+                                    title: 'Ventana bloqueada',
+                                    message:
+                                      'Permite las ventanas emergentes del navegador para imprimir.',
+                                  });
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-[#35251F] hover:bg-stone-100 dark:hover:bg-[#261A16] text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Printer className="w-3.5 h-3.5 text-[#8C1F25] dark:text-[#E8A598]" />
+                              <span>Reimprimir</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-
-            <div className="p-4 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border border-[#EADBCE] dark:border-[#35251F]">
-              <span className="text-xs text-stone-500 font-bold uppercase tracking-wider block">Tarjetas y POS Electrónico</span>
-              <span className="text-2xl font-black text-[#8C1F25] dark:text-[#E8A598] font-sans mt-1 block">
-                $22.900
-              </span>
-              <span className="text-[11px] text-stone-400">Transbank / WebPay conciliado</span>
-            </div>
-          </div>
-
-          <div className="pt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={() =>
-                addToast({
-                  type: 'success',
-                  title: '¡Turno Cerrado!',
-                  message: 'Comprobante de arqueo generado y enviado a contabilidad.',
-                })
-              }
-              className="px-6 py-3 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs sm:text-sm font-bold shadow-btn transition-all cursor-pointer"
-            >
-              Imprimir Arqueo y Cerrar Turno
-            </button>
           </div>
         </div>
+      )}
+
+      {/* MODAL DE ARQUEO FÍSICO Y CIERRE DE TURNO */}
+      {isCloseModalOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <div className="w-full max-w-lg my-auto bg-white dark:bg-[#16100E] rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] shadow-2xl p-6 space-y-5">
+            <div className="flex items-start justify-between gap-3 border-b border-[#EADBCE] dark:border-[#35251F] pb-3">
+              <div>
+                <h4 className="text-lg font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif">
+                  Confirmar Arqueo y Cierre de Turno
+                </h4>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                  Cuenta el efectivo físico en la gaveta. Al confirmar, el turno se cerrará y los indicadores volverán a $0.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isClosingShift && setIsCloseModalOpen(false)}
+                className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-[#261A16] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border border-[#EADBCE] dark:border-[#35251F] space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-stone-600 dark:text-stone-400">Fondo Inicial:</span>
+                <span className="font-mono font-semibold">
+                  ${parsedOpeningCash.toLocaleString('es-CL')}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-600 dark:text-stone-400">(+) Ventas en Efectivo:</span>
+                <span className="font-mono font-semibold">
+                  ${shiftOverview.cashSalesTotal.toLocaleString('es-CL')}
+                </span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-[#EADBCE] dark:border-[#35251F] text-sm font-bold text-stone-900 dark:text-white">
+                <span>(=) Efectivo Esperado en Gaveta:</span>
+                <span className="font-mono text-emerald-700 dark:text-emerald-400">
+                  ${expectedCashPreview.toLocaleString('es-CL')}
+                </span>
+              </div>
+              <div className="flex justify-between pt-1 text-[11px] text-stone-500">
+                <span>Tarjetas POS y Transferencias (referencia):</span>
+                <span className="font-mono">
+                  ${(shiftOverview.cardPosTotal + shiftOverview.transferTotal).toLocaleString('es-CL')}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-stone-700 dark:text-stone-200">
+                Efectivo Físico Contado en Gaveta ($)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={100}
+                value={countedCashInput}
+                onChange={(e) => setCountedCashInput(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#EADBCE] dark:border-[#35251F] bg-stone-50 dark:bg-[#201612] text-base font-mono font-bold text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8C1F25]"
+              />
+
+              <div
+                className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
+                  Math.abs(modalCashDiff) < 0.01
+                    ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300'
+                    : modalCashDiff > 0
+                    ? 'bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-900/40 text-sky-800 dark:text-sky-300'
+                    : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/40 text-rose-800 dark:text-rose-300'
+                }`}
+              >
+                {Math.abs(modalCashDiff) < 0.01 ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <p className="font-bold">
+                    {Math.abs(modalCashDiff) < 0.01
+                      ? 'Cuadratura exacta ($0 de diferencia)'
+                      : modalCashDiff > 0
+                      ? `Sobrante de caja: +$${modalCashDiff.toLocaleString('es-CL')}`
+                      : `Faltante de caja: -$${Math.abs(modalCashDiff).toLocaleString('es-CL')}`}
+                  </p>
+                  {Math.abs(modalCashDiff) >= 0.01 && (
+                    <p className="text-[11px] opacity-90 mt-0.5">
+                      Al confirmar, se contabilizará automáticamente el ajuste entre 1101 Caja Efectivo y{' '}
+                      {modalCashDiff > 0
+                        ? '4102 Sobrantes de Caja.'
+                        : '6103 Faltantes y Diferencias de Caja.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-stone-700 dark:text-stone-200">
+                Observaciones del cierre (opcional)
+              </label>
+              <textarea
+                rows={2}
+                maxLength={500}
+                value={closeNotes}
+                onChange={(e) => setCloseNotes(e.target.value)}
+                placeholder="Ej: Retiro de efectivo a caja fuerte, cambio entregado al turno tarde..."
+                className="w-full px-3 py-2 rounded-xl border border-[#EADBCE] dark:border-[#35251F] bg-stone-50 dark:bg-[#201612] text-xs text-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-[#8C1F25]"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-xs text-stone-700 dark:text-stone-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={printOnClose}
+                onChange={(e) => setPrintOnClose(e.target.checked)}
+                className="rounded border-stone-300 text-[#8C1F25] focus:ring-[#8C1F25]"
+              />
+              <span>Imprimir / descargar comprobante de arqueo automáticamente</span>
+            </label>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#EADBCE] dark:border-[#35251F]">
+              <button
+                type="button"
+                onClick={() => setIsCloseModalOpen(false)}
+                disabled={isClosingShift}
+                className="px-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#35251F] text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#261A16] cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmCloseShift()}
+                disabled={isClosingShift}
+                className="px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs font-bold shadow-btn cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>
+                  {isClosingShift ? 'Cerrando turno...' : 'Confirmar Cierre y Reiniciar Caja'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

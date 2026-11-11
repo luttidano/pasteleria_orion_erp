@@ -187,3 +187,149 @@ export interface ProductionResult {
     unit: string;
   }>;
 }
+
+export type AccountingPeriodStatus = 'abierto' | 'cerrado';
+export type AccountingEntryOrigin = 'manual' | 'pos' | 'closing' | 'reversal';
+export type AccountingEntryStatus = 'active' | 'voided';
+
+export interface AccountingPeriod {
+  id: string | null;
+  year: number;
+  month: number;
+  monthLabel: string;
+  status: AccountingPeriodStatus;
+  closedAt?: string | null;
+  closedBy?: { id: string; name: string } | null;
+  reopenedAt?: string | null;
+  reopenedBy?: { id: string; name: string } | null;
+  closingEntryId?: string | null;
+  notes?: string | null;
+  entriesCount: number;
+  activeEntriesCount: number;
+  pendingSalesCount: number;
+  isPersisted: boolean;
+  isBeforeAccountingStart?: boolean;
+}
+
+export interface AccountingSettings {
+  accountingStartDate: string | null;
+  updatedAt?: string | null;
+  updatedBy?: { id: string; name: string } | null;
+}
+
+export interface AccountingYearOverview {
+  year: number;
+  accountingStartDate: string | null;
+  isYearClosed: boolean;
+  closingEntry: {
+    id: string;
+    entryNumber: number;
+    entryDate: string;
+    concept: string;
+    createdAt: string;
+  } | null;
+  periods: AccountingPeriod[];
+}
+
+export interface AnnualClosingLinePreview {
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  accountType: 'ingreso' | 'costo' | 'gasto' | 'patrimonio';
+  currentBalance: number;
+  debit: number;
+  credit: number;
+  description: string;
+}
+
+export interface AnnualClosingPreview {
+  year: number;
+  closingDate: string;
+  alreadyClosed: boolean;
+  existingClosingEntryId?: string | null;
+  hasLaterYearClosed: boolean;
+  totalIngresos: number;
+  totalCostos: number;
+  totalGastos: number;
+  resultadoEjercicio: number;
+  equityAccount: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
+  openMonthsCount: number;
+  pendingSalesCount: number;
+  canExecute: boolean;
+  blockingReason?: string | null;
+  lines: AnnualClosingLinePreview[];
+}
+
+export interface PeriodCheckResult {
+  date: string;
+  year: number;
+  month: number;
+  monthLabel: string;
+  status: AccountingPeriodStatus;
+  isOpen: boolean;
+  isYearClosed: boolean;
+  isBeforeAccountingStart?: boolean;
+  accountingStartDate?: string | null;
+  reason?: string | null;
+}
+
+export type PosShiftStatus = 'abierto' | 'cerrado';
+export type PosShiftAccountingStatus = 'none' | 'posted' | 'pending';
+
+export interface PosShiftRecord {
+  id: string;
+  shiftNumber: number;
+  status: PosShiftStatus;
+  openedAt: string;
+  openedBy: { id: string; name: string } | null;
+  closedAt: string | null;
+  closedBy: { id: string; name: string } | null;
+  openingCash: number;
+  totalSales: number;
+  transactionsCount: number;
+  cashSalesTotal: number;
+  debitTotal: number;
+  creditTotal: number;
+  transferTotal: number;
+  cardPosTotal: number;
+  expectedCash: number;
+  countedCash: number | null;
+  cashDifference: number | null;
+  notes: string | null;
+  closingEntryId: string | null;
+  closingEntryNumber: number | null;
+  accountingStatus: PosShiftAccountingStatus;
+  accountingWarning: string | null;
+}
+
+export interface PosActiveShiftOverview {
+  businessDate?: string;
+  hasOpenShift: boolean;
+  activeShiftId: string | null;
+  shiftNumber: number | null;
+  openedAt: string | null;
+  openedByName: string | null;
+  openingCash: number;
+  totalSales: number;
+  transactionsCount: number;
+  cashSalesTotal: number;
+  cardPosTotal: number;
+  debitTotal: number;
+  creditTotal: number;
+  transferTotal: number;
+  expectedCash: number;
+  lastClosedShift: {
+    id: string;
+    shiftNumber: number;
+    closedAt: string;
+    closedByName: string;
+    totalSales: number;
+    expectedCash: number;
+    countedCash: number;
+    cashDifference: number;
+  } | null;
+}

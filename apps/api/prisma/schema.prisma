@@ -15,7 +15,13 @@ model Profile {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  sales     PosSale[]
+  sales                     PosSale[]
+  closedPeriods             AccountingPeriod[]   @relation("PeriodClosedBy")
+  reopenedPeriods           AccountingPeriod[]   @relation("PeriodReopenedBy")
+  voidedEntries             AccountingEntry[]    @relation("EntryVoidedBy")
+  updatedAccountingSettings AccountingSettings[] @relation("AccountingSettingsUpdatedBy")
+  openedShifts              PosShift[]           @relation("ShiftOpenedBy")
+  closedShifts              PosShift[]           @relation("ShiftClosedBy")
 
   @@map("profile")
 }
@@ -208,11 +214,14 @@ model PosSale {
 
   createdById       String?  @map("created_by") @db.Uuid
   createdBy         Profile? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  shiftId           String?  @map("shift_id") @db.Uuid
+  shift             PosShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
 
   items PosSaleItem[]
   accountingEntries AccountingEntry[]
 
   @@index([createdById], map: "idx_pos_sale_created_by")
+  @@index([shiftId], map: "idx_pos_sale_shift_id")
   @@index([soldAt], map: "idx_pos_sale_sold_at")
   @@index([paymentMethod], map: "idx_pos_sale_payment_method")
   @@index([status], map: "idx_pos_sale_status")
@@ -250,17 +259,29 @@ model AccountingAccount {
 }
 
 model AccountingEntry {
-  id          String                @id @default(uuid()) @db.Uuid
-  entryNumber BigInt                @default(autoincrement()) @map("entry_number")
-  entryDate   DateTime              @default(now()) @map("entry_date") @db.Date
-  concept     String
-  origin      String                @default("manual")
-  posSaleId   String?               @map("pos_sale_id") @db.Uuid
-  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  id              String                @id @default(uuid()) @db.Uuid
+  entryNumber     BigInt                @default(autoincrement()) @map("entry_number")
+  entryDate       DateTime              @default(now()) @map("entry_date") @db.Date
+  concept         String
+  origin          String                @default("manual")
+  status          String                @default("active")
+  posSaleId       String?               @map("pos_sale_id") @db.Uuid
+  voidedAt        DateTime?             @map("voided_at") @db.Timestamptz(6)
+  voidedById      String?               @map("voided_by") @db.Uuid
+  voidReason      String?               @map("void_reason")
+  reversedEntryId String?               @map("reversed_entry_id") @db.Uuid
+  closingYear     Int?                  @map("closing_year")
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  posSale     PosSale?              @relation(fields: [posSaleId], references: [id])
-  items       AccountingEntryItem[]
+  posSale         PosSale?              @relation(fields: [posSaleId], references: [id])
+  voidedBy        Profile?              @relation("EntryVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+  reversedEntry   AccountingEntry?      @relation("EntryReversal", fields: [reversedEntryId], references: [id], onDelete: SetNull)
+  reversalEntries AccountingEntry[]     @relation("EntryReversal")
+  closingPeriods  AccountingPeriod[]    @relation("PeriodClosingEntry")
+  posShifts       PosShift[]            @relation("ShiftClosingEntry")
+  items           AccountingEntryItem[]
 
+  @@index([reversedEntryId], map: "idx_accounting_entry_reversed")
   @@map("accounting_entry")
 }
 
@@ -276,5 +297,79 @@ model AccountingEntryItem {
   account     AccountingAccount @relation(fields: [accountId], references: [id])
 
   @@map("accounting_entry_item")
+}
+
+model AccountingPeriod {
+  id             String           @id @default(uuid()) @db.Uuid
+  year           Int
+  month          Int
+  status         String           @default("abierto")
+  closedAt       DateTime?        @map("closed_at") @db.Timestamptz(6)
+  closedById     String?          @map("closed_by") @db.Uuid
+  reopenedAt     DateTime?        @map("reopened_at") @db.Timestamptz(6)
+  reopenedById   String?          @map("reopened_by") @db.Uuid
+  closingEntryId String?          @map("closing_entry_id") @db.Uuid
+  notes          String?
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  closedBy     Profile?         @relation("PeriodClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  reopenedBy   Profile?         @relation("PeriodReopenedBy", fields: [reopenedById], references: [id], onDelete: SetNull)
+  closingEntry AccountingEntry? @relation("PeriodClosingEntry", fields: [closingEntryId], references: [id], onDelete: SetNull)
+
+  @@unique([year, month], map: "uq_accounting_period_year_month")
+  @@index([status], map: "idx_accounting_period_status")
+  @@map("accounting_period")
+}
+
+model AccountingSettings {
+  id                  String    @id @default("default")
+  accountingStartDate DateTime? @map("accounting_start_date") @db.Date
+  updatedById         String?   @map("updated_by") @db.Uuid
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  updatedBy Profile? @relation("AccountingSettingsUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("accounting_settings")
+}
+
+model PosShift {
+  id                String    @id @default(uuid()) @db.Uuid
+  shiftNumber       BigInt    @default(autoincrement()) @map("shift_number")
+  status            String    @default("abierto")
+  openedAt          DateTime  @default(now()) @map("opened_at") @db.Timestamptz(6)
+  openedById        String?   @map("opened_by") @db.Uuid
+  openingCash       Decimal   @default(0) @map("opening_cash") @db.Decimal(12, 2)
+  closedAt          DateTime? @map("closed_at") @db.Timestamptz(6)
+  closedById        String?   @map("closed_by") @db.Uuid
+  totalSales        Decimal   @default(0) @map("total_sales") @db.Decimal(12, 2)
+  transactionsCount Int       @default(0) @map("transactions_count")
+  cashSalesTotal    Decimal   @default(0) @map("cash_sales_total") @db.Decimal(12, 2)
+  debitTotal        Decimal   @default(0) @map("debit_total") @db.Decimal(12, 2)
+  creditTotal       Decimal   @default(0) @map("credit_total") @db.Decimal(12, 2)
+  transferTotal     Decimal   @default(0) @map("transfer_total") @db.Decimal(12, 2)
+  cardPosTotal      Decimal   @default(0) @map("card_pos_total") @db.Decimal(12, 2)
+  expectedCash      Decimal   @default(0) @map("expected_cash") @db.Decimal(12, 2)
+  countedCash       Decimal?  @map("counted_cash") @db.Decimal(12, 2)
+  cashDifference    Decimal?  @map("cash_difference") @db.Decimal(12, 2)
+  notes             String?
+  closingEntryId    String?   @map("closing_entry_id") @db.Uuid
+  accountingStatus  String    @default("none") @map("accounting_status")
+  accountingWarning String?   @map("accounting_warning")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  openedBy     Profile?         @relation("ShiftOpenedBy", fields: [openedById], references: [id], onDelete: SetNull)
+  closedBy     Profile?         @relation("ShiftClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closingEntry AccountingEntry? @relation("ShiftClosingEntry", fields: [closingEntryId], references: [id], onDelete: SetNull)
+  sales        PosSale[]
+
+  @@index([status], map: "idx_pos_shift_status")
+  @@index([openedAt], map: "idx_pos_shift_opened_at")
+  @@index([closedAt], map: "idx_pos_shift_closed_at")
+  @@index([openedById], map: "idx_pos_shift_opened_by")
+  @@index([closedById], map: "idx_pos_shift_closed_by")
+  @@index([closingEntryId], map: "idx_pos_shift_closing_entry")
+  @@map("pos_shift")
 }
 

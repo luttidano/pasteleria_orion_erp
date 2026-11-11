@@ -178,6 +178,33 @@ CREATE TABLE IF NOT EXISTS public.general_supply (
 -- 4. PUNTO DE VENTA (POS)
 -- =============================================================================
 
+CREATE TABLE IF NOT EXISTS public.pos_shift (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  shift_number bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  status text NOT NULL DEFAULT 'abierto'::text CHECK (status = ANY (ARRAY['abierto'::text, 'cerrado'::text])),
+  opened_at timestamp with time zone NOT NULL DEFAULT now(),
+  opened_by uuid REFERENCES public.profile(id) ON DELETE SET NULL,
+  opening_cash numeric(12, 2) NOT NULL DEFAULT 0 CHECK (opening_cash >= 0::numeric),
+  closed_at timestamp with time zone,
+  closed_by uuid REFERENCES public.profile(id) ON DELETE SET NULL,
+  total_sales numeric(12, 2) NOT NULL DEFAULT 0,
+  transactions_count integer NOT NULL DEFAULT 0,
+  cash_sales_total numeric(12, 2) NOT NULL DEFAULT 0,
+  debit_total numeric(12, 2) NOT NULL DEFAULT 0,
+  credit_total numeric(12, 2) NOT NULL DEFAULT 0,
+  transfer_total numeric(12, 2) NOT NULL DEFAULT 0,
+  card_pos_total numeric(12, 2) NOT NULL DEFAULT 0,
+  expected_cash numeric(12, 2) NOT NULL DEFAULT 0,
+  counted_cash numeric(12, 2),
+  cash_difference numeric(12, 2),
+  notes text,
+  closing_entry_id uuid REFERENCES public.accounting_entry(id) ON DELETE SET NULL,
+  accounting_status text NOT NULL DEFAULT 'none'::text CHECK (accounting_status = ANY (ARRAY['none'::text, 'posted'::text, 'pending'::text])),
+  accounting_warning text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS public.pos_sale (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   ticket_number text NOT NULL UNIQUE,
@@ -190,6 +217,7 @@ CREATE TABLE IF NOT EXISTS public.pos_sale (
   data_origin text NOT NULL DEFAULT 'demo'::text CHECK (data_origin = ANY (ARRAY['demo'::text, 'real'::text])),
   accounting_status text NOT NULL DEFAULT 'posted'::text CHECK (accounting_status = ANY (ARRAY['posted'::text, 'pending'::text, 'failed'::text])),
   accounting_error text,
+  shift_id uuid REFERENCES public.pos_shift(id) ON DELETE SET NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
@@ -212,8 +240,14 @@ CREATE TABLE IF NOT EXISTS public.accounting_entry (
   entry_number bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   entry_date date NOT NULL DEFAULT CURRENT_DATE,
   concept character varying NOT NULL CHECK (length(TRIM(BOTH FROM concept)) > 0),
-  origin text NOT NULL DEFAULT 'manual'::text CHECK (origin = ANY (ARRAY['manual'::text, 'pos'::text])),
+  origin text NOT NULL DEFAULT 'manual'::text CHECK (origin = ANY (ARRAY['manual'::text, 'pos'::text, 'closing'::text, 'reversal'::text])),
+  status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'voided'::text])),
   pos_sale_id uuid REFERENCES public.pos_sale(id) ON DELETE SET NULL,
+  voided_at timestamp with time zone,
+  voided_by uuid REFERENCES public.profile(id) ON DELETE SET NULL,
+  void_reason text,
+  reversed_entry_id uuid REFERENCES public.accounting_entry(id) ON DELETE SET NULL,
+  closing_year integer,
   created_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
@@ -224,6 +258,29 @@ CREATE TABLE IF NOT EXISTS public.accounting_entry_item (
   debit numeric NOT NULL DEFAULT 0 CHECK (debit >= 0::numeric),
   credit numeric NOT NULL DEFAULT 0 CHECK (credit >= 0::numeric),
   description text
+);
+
+CREATE TABLE IF NOT EXISTS public.accounting_period (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  year integer NOT NULL CHECK (year >= 2000 AND year <= 2100),
+  month integer NOT NULL CHECK (month >= 1 AND month <= 12),
+  status text NOT NULL DEFAULT 'abierto'::text CHECK (status = ANY (ARRAY['abierto'::text, 'cerrado'::text])),
+  closed_at timestamp with time zone,
+  closed_by uuid REFERENCES public.profile(id) ON DELETE SET NULL,
+  reopened_at timestamp with time zone,
+  reopened_by uuid REFERENCES public.profile(id) ON DELETE SET NULL,
+  closing_entry_id uuid REFERENCES public.accounting_entry(id) ON DELETE SET NULL,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT uq_accounting_period_year_month UNIQUE (year, month)
+);
+
+CREATE TABLE IF NOT EXISTS public.accounting_settings (
+  id text PRIMARY KEY DEFAULT 'default' CHECK (id = 'default'),
+  accounting_start_date date,
+  updated_by uuid REFERENCES public.profile(id) ON DELETE SET NULL,
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
 -- =============================================================================
@@ -244,8 +301,22 @@ CREATE INDEX IF NOT EXISTS idx_general_supply_category ON public.general_supply(
 CREATE INDEX IF NOT EXISTS idx_pos_sale_items_sale ON public.pos_sale_item(sale_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_items_product ON public.pos_sale_item(product_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_sold_at ON public.pos_sale(sold_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pos_sale_shift_id ON public.pos_sale(shift_id);
+CREATE INDEX IF NOT EXISTS idx_pos_sale_unshifted_completed ON public.pos_sale(sold_at DESC) WHERE shift_id IS NULL AND status = 'completada';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pos_shift_single_open ON public.pos_shift ((1)) WHERE status = 'abierto';
+CREATE INDEX IF NOT EXISTS idx_pos_shift_status ON public.pos_shift(status);
+CREATE INDEX IF NOT EXISTS idx_pos_shift_opened_at ON public.pos_shift(opened_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pos_shift_closed_at ON public.pos_shift(closed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pos_shift_opened_by ON public.pos_shift(opened_by);
+CREATE INDEX IF NOT EXISTS idx_pos_shift_closed_by ON public.pos_shift(closed_by);
+CREATE INDEX IF NOT EXISTS idx_pos_shift_closing_entry ON public.pos_shift(closing_entry_id);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_date ON public.accounting_entry(entry_date DESC);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_pos_sale ON public.accounting_entry(pos_sale_id);
+CREATE INDEX IF NOT EXISTS idx_accounting_entry_reversed ON public.accounting_entry(reversed_entry_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_accounting_entry_closing_year ON public.accounting_entry(closing_year) WHERE origin = 'closing' AND status = 'active' AND closing_year IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_accounting_period_year_month ON public.accounting_period(year DESC, month DESC);
+CREATE INDEX IF NOT EXISTS idx_accounting_period_status ON public.accounting_period(status);
+CREATE INDEX IF NOT EXISTS idx_accounting_period_closing_entry ON public.accounting_period(closing_entry_id);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_item_entry ON public.accounting_entry_item(entry_id);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_item_account ON public.accounting_entry_item(account_id);
 
@@ -289,10 +360,18 @@ VALUES
   ('1106', 'Inventario Productos Terminados', 'activo', true),
   ('2101', 'Proveedores por Pagar', 'pasivo', true),
   ('2102', 'IVA Débito Fiscal', 'pasivo', true),
+  ('3101', 'Capital Social Inicial', 'patrimonio', true),
+  ('3102', 'Resultado del Ejercicio', 'patrimonio', true),
   ('4101', 'Venta de Pastelería y Bollería', 'ingreso', true),
+  ('4102', 'Sobrantes de Caja y Otros Ingresos', 'ingreso', true),
   ('5101', 'Costo de Materias Primas e Insumos', 'costo', true),
-  ('6101', 'Gastos Operativos y Remuneraciones', 'gasto', true)
+  ('6101', 'Gastos Operativos y Remuneraciones', 'gasto', true),
+  ('6103', 'Faltantes y Diferencias de Caja', 'gasto', true)
 ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO public.accounting_settings (id, accounting_start_date)
+VALUES ('default', NULL)
+ON CONFLICT (id) DO NOTHING;
 
 
 -- =============================================================================
@@ -303,6 +382,9 @@ ALTER TABLE public.supplier ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.packaging ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.supplier_ingredient ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.general_supply ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accounting_period ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accounting_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pos_shift ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "supplier_all_authenticated" ON public.supplier;
 CREATE POLICY "supplier_all_authenticated" ON public.supplier
@@ -323,4 +405,24 @@ CREATE POLICY "supplier_ingredient_all_authenticated" ON public.supplier_ingredi
 GRANT ALL ON TABLE public.supplier TO authenticated, service_role;
 GRANT ALL ON TABLE public.packaging TO authenticated, service_role;
 GRANT ALL ON TABLE public.general_supply TO authenticated, service_role;
+DROP POLICY IF EXISTS "accounting_period_all_authenticated" ON public.accounting_period;
+CREATE POLICY "accounting_period_all_authenticated" ON public.accounting_period
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+REVOKE ALL ON TABLE public.accounting_period FROM anon;
 GRANT ALL ON TABLE public.supplier_ingredient TO authenticated, service_role;
+GRANT ALL ON TABLE public.accounting_period TO authenticated, service_role;
+
+DROP POLICY IF EXISTS "accounting_settings_all_authenticated" ON public.accounting_settings;
+CREATE POLICY "accounting_settings_all_authenticated" ON public.accounting_settings
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+REVOKE ALL ON TABLE public.accounting_settings FROM anon;
+GRANT ALL ON TABLE public.accounting_settings TO authenticated, service_role;
+
+DROP POLICY IF EXISTS "pos_shift_all_authenticated" ON public.pos_shift;
+CREATE POLICY "pos_shift_all_authenticated" ON public.pos_shift
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+REVOKE ALL ON TABLE public.pos_shift FROM anon;
+GRANT ALL ON TABLE public.pos_shift TO authenticated, service_role;

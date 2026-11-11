@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '../../common/enums';
@@ -14,6 +15,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 import { PosService } from './pos.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { PosSummaryQueryDto } from './dto/pos-summary-query.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -34,6 +36,12 @@ export class PosController {
   @Roles(Role.admin, Role.cashier)
   findAllSales() {
     return this.posService.findAllSales();
+  }
+
+  @Get('summary')
+  @Roles(Role.admin, Role.cashier)
+  getSalesSummary(@Query() query: PosSummaryQueryDto) {
+    return this.posService.getSalesSummary(query.from, query.to);
   }
 
   @Get(':id')

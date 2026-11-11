@@ -11,13 +11,22 @@ import {
   AlertTriangle,
   BookOpen,
   Calendar,
+  Lock,
+  Ban,
 } from 'lucide-react';
-import type { ToastMessage } from '../../types';
+import type { PeriodCheckResult, ToastMessage } from '../../types';
 import { apiFetch } from '../../lib/api';
+import { accountingPeriodService } from '../../services/accountingPeriodService';
 import { FinancialReportsTab } from './FinancialReportsTab';
+import { AccountingPeriodsTab } from './AccountingPeriodsTab';
 
 interface AccountingViewProps {
-  section: 'contabilidad-diario' | 'contabilidad-mayor' | 'contabilidad-balances' | 'contabilidad-reportes';
+  section:
+    | 'contabilidad-diario'
+    | 'contabilidad-mayor'
+    | 'contabilidad-balances'
+    | 'contabilidad-reportes'
+    | 'contabilidad-periodos';
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
 }
 
@@ -36,7 +45,13 @@ interface AccountingEntry {
   entryNumber: number;
   entryDate: string;
   concept: string;
-  origin: 'manual' | 'pos';
+  origin: 'manual' | 'pos' | 'closing' | 'reversal';
+  status?: 'active' | 'voided';
+  voidedAt?: string | null;
+  voidReason?: string | null;
+  reversedEntryId?: string | null;
+  closingYear?: number | null;
+  isPeriodLocked?: boolean;
   ticketNumber?: string;
   totalAmount: number;
   isBalanced: boolean;
@@ -137,8 +152,20 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
   ]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [periodCheck, setPeriodCheck] = useState<PeriodCheckResult | null>(null);
+  const [checkingPeriod, setCheckingPeriod] = useState(false);
+
+  // Estados del modal de anulación de asiento
+  const [voidModalEntry, setVoidModalEntry] = useState<AccountingEntry | null>(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voidingEntry, setVoidingEntry] = useState(false);
 
   const loadData = async () => {
+    if (section === 'contabilidad-periodos' || section === 'contabilidad-reportes') {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const [accsRes, entriesRes, pendingRes] = await Promise.all([
@@ -176,6 +203,31 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
   useEffect(() => {
     void loadData();
   }, [section]);
+
+  useEffect(() => {
+    if (!showModal || !entryDate) {
+      setPeriodCheck(null);
+      return;
+    }
+
+    let cancelled = false;
+    setCheckingPeriod(true);
+    accountingPeriodService
+      .checkDate(entryDate)
+      .then((res) => {
+        if (!cancelled) setPeriodCheck(res);
+      })
+      .catch(() => {
+        if (!cancelled) setPeriodCheck(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingPeriod(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showModal, entryDate]);
 
   // Carga del Libro Mayor de la cuenta seleccionada
   const fetchLedger = useCallback(
@@ -303,9 +355,36 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
     }
   };
 
+  const handleVoidEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!voidModalEntry || !voidReason.trim()) return;
+
+    setVoidingEntry(true);
+    try {
+      const res = await accountingPeriodService.voidEntry(voidModalEntry.id, voidReason.trim());
+      addToast({
+        type: 'success',
+        title: 'Asiento anulado',
+        message: res.message,
+      });
+      setVoidModalEntry(null);
+      setVoidReason('');
+      await loadData();
+    } catch (err) {
+      addToast({
+        type: 'error',
+        title: 'No se pudo anular el asiento',
+        message: err instanceof Error ? err.message : 'Error anulando asiento.',
+      });
+    } finally {
+      setVoidingEntry(false);
+    }
+  };
+
   const sumDebit = formLines.reduce((acc, l) => acc + (Number(l.debit) || 0), 0);
   const sumCredit = formLines.reduce((acc, l) => acc + (Number(l.credit) || 0), 0);
   const isSquare = Math.abs(sumDebit - sumCredit) <= 0.01 && sumDebit > 0;
+  const isSelectedPeriodClosed = periodCheck ? !periodCheck.isOpen : false;
 
   if (loading) {
     return (
@@ -365,30 +444,95 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
             </div>
           ) : (
             <div className="space-y-4">
-              {entries.map((entry) => (
+              {entries.map((entry) => {
+                const isVoided = entry.status === 'voided';
+                const canVoid =
+                  !isVoided &&
+                  entry.origin !== 'reversal' &&
+                  entry.origin !== 'closing';
+
+                const originBadge =
+                  entry.origin === 'pos'
+                    ? {
+                        label: 'Venta POS',
+                        cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
+                      }
+                    : entry.origin === 'closing'
+                    ? {
+                        label: 'Cierre Anual',
+                        cls: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
+                      }
+                    : entry.origin === 'reversal'
+                    ? {
+                        label: 'Reverso / Anulación',
+                        cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+                      }
+                    : {
+                        label: 'Manual',
+                        cls: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300',
+                      };
+
+                return (
                 <div
                   key={entry.id}
-                  className="rounded-2xl border border-stone-200/80 dark:border-[#35251F] bg-stone-50/40 dark:bg-[#1C1411]/50 p-4 space-y-3"
+                  className={`rounded-2xl border p-4 space-y-3 ${
+                    isVoided
+                      ? 'border-rose-200/70 dark:border-rose-900/40 bg-rose-50/20 dark:bg-rose-950/10 opacity-80'
+                      : 'border-stone-200/80 dark:border-[#35251F] bg-stone-50/40 dark:bg-[#1C1411]/50'
+                  }`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 dark:border-[#2C1F1A] pb-2 text-xs">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono font-bold text-stone-500">#{entry.entryNumber}</span>
-                      <span className="font-bold text-[#2A1B16] dark:text-[#FDF5EE]">{entry.concept}</span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          entry.origin === 'pos'
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                        }`}
-                      >
-                        {entry.origin === 'pos' ? 'Venta POS' : 'Manual'}
+                      <span className={`font-bold text-[#2A1B16] dark:text-[#FDF5EE] ${isVoided ? 'line-through opacity-75' : ''}`}>
+                        {entry.concept}
                       </span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${originBadge.cls}`}>
+                        {originBadge.label}
+                      </span>
+                      {isVoided && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                          Anulado
+                        </span>
+                      )}
+                      {entry.isPeriodLocked && (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-stone-200/80 text-stone-600 dark:bg-[#2C1F1A] dark:text-stone-300"
+                          title="Mes contable cerrado"
+                        >
+                          <Lock className="w-2.5 h-2.5" /> Cerrado
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 font-mono text-stone-500 text-[11px]">
                       <span>{entry.entryDate}</span>
                       <span>Total: ${formatMoney(entry.totalAmount)}</span>
+                      {canVoid && (
+                        <button
+                          type="button"
+                          disabled={Boolean(entry.isPeriodLocked)}
+                          onClick={() => {
+                            setVoidReason('');
+                            setVoidModalEntry(entry);
+                          }}
+                          title={
+                            entry.isPeriodLocked
+                              ? 'Período contable cerrado: no se puede anular este asiento.'
+                              : 'Anular mediante contra-asiento'
+                          }
+                          className="px-2.5 py-1 rounded-lg border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 font-sans font-bold text-[11px] flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                        >
+                          <Ban className="w-3 h-3" />
+                          Anular
+                        </button>
+                      )}
                     </div>
                   </div>
+                  {isVoided && entry.voidReason && (
+                    <p className="text-[11px] text-rose-700 dark:text-rose-300 italic">
+                      Motivo de anulación: {entry.voidReason}
+                    </p>
+                  )}
 
                   <table className="w-full text-xs text-left">
                     <thead>
@@ -417,7 +561,8 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
                     </tbody>
                   </table>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -749,6 +894,11 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
         <FinancialReportsTab addToast={addToast} />
       )}
 
+      {/* SECCIÓN 5: CIERRE DE PERÍODOS CONTABLES Y REFUNDICIÓN ANUAL */}
+      {section === 'contabilidad-periodos' && (
+        <AccountingPeriodsTab addToast={addToast} />
+      )}
+
       {/* MODAL: REGISTRAR NUEVO ASIENTO */}
       {showModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
@@ -757,10 +907,19 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
               <h4 className="font-bold text-base text-[#2A1B16] dark:text-white font-serif">
                 Nuevo Asiento Contable (Partida Doble)
               </h4>
-              <button onClick={() => setShowModal(false)} className="text-stone-400 hover:text-stone-600">
+              <button onClick={() => setShowModal(false)} className="text-stone-400 hover:text-stone-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {isSelectedPeriodClosed && periodCheck && (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-xs border border-amber-300 dark:border-amber-800 flex items-center gap-2">
+                <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  <b>Período bloqueado:</b> {periodCheck.reason || `${periodCheck.monthLabel} ${periodCheck.year} está cerrado.`} Cambia la fecha a un mes abierto para registrar este asiento.
+                </span>
+              </div>
+            )}
 
             {formError && (
               <div className="p-3 rounded-xl bg-rose-50 text-rose-700 text-xs border border-rose-200">
@@ -775,6 +934,7 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
                   <input
                     type="date"
                     value={entryDate}
+                    min={periodCheck?.accountingStartDate ?? undefined}
                     onChange={(e) => setEntryDate(e.target.value)}
                     className="w-full text-xs p-2.5 rounded-xl border border-stone-200 dark:border-[#35251F]"
                     required
@@ -887,10 +1047,77 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
                 </button>
                 <button
                   type="submit"
-                  disabled={!isSquare || saving}
+                  disabled={!isSquare || saving || isSelectedPeriodClosed || checkingPeriod}
                   className="px-5 py-2 rounded-xl bg-[#8C1F25] text-white text-xs font-bold disabled:opacity-50 cursor-pointer"
                 >
                   {saving ? 'Guardando...' : 'Asentar en Diario'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL: ANULAR ASIENTO CONTABLE */}
+      {voidModalEntry && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-[#1C1411] w-full max-w-md rounded-3xl p-6 border border-[#EADBCE] dark:border-[#35251F] shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-[#2C1F1A] pb-3">
+              <h4 className="font-bold text-base text-[#2A1B16] dark:text-white font-serif flex items-center gap-2">
+                <Ban className="w-4 h-4 text-rose-600" />
+                Anular Asiento #{voidModalEntry.entryNumber}
+              </h4>
+              <button
+                type="button"
+                onClick={() => setVoidModalEntry(null)}
+                className="text-stone-400 hover:text-stone-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="text-xs text-stone-600 dark:text-stone-300 space-y-1">
+              <p>
+                <b>Concepto:</b> {voidModalEntry.concept}
+              </p>
+              <p>
+                <b>Fecha:</b> {voidModalEntry.entryDate} &bull; <b>Total:</b> ${formatMoney(voidModalEntry.totalAmount)}
+              </p>
+              <p className="text-[11px] text-stone-500 pt-1">
+                Se generará automáticamente un contra-asiento de reversión para mantener trazabilidad contable intacta.
+              </p>
+            </div>
+
+            <form onSubmit={handleVoidEntry} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold text-stone-600 dark:text-stone-300 block mb-1">
+                  Motivo de anulación *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={voidReason}
+                  onChange={(e) => setVoidReason(e.target.value)}
+                  placeholder="Ej.: Error de digitación en monto o cuenta"
+                  className="w-full text-xs p-2.5 rounded-xl border border-stone-200 dark:border-[#35251F] bg-white dark:bg-[#16100E]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-stone-100 dark:border-[#2C1F1A]">
+                <button
+                  type="button"
+                  onClick={() => setVoidModalEntry(null)}
+                  className="px-4 py-2 rounded-xl text-xs text-stone-500 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={voidingEntry || !voidReason.trim()}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold disabled:opacity-50 cursor-pointer"
+                >
+                  {voidingEntry ? 'Anulando...' : 'Confirmar Anulación'}
                 </button>
               </div>
             </form>

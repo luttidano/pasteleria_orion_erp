@@ -20,6 +20,7 @@ import {
   PieChart,
   FileSpreadsheet,
   Wrench,
+  Lock,
 } from 'lucide-react';
 import type { User, UserRole } from '../../types';
 
@@ -41,6 +42,7 @@ export type AdminSection =
   | 'contabilidad-mayor'
   | 'contabilidad-balances'
   | 'contabilidad-reportes'
+  | 'contabilidad-periodos'
   // Configuración general
   | 'ajustes';
 
@@ -218,6 +220,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: FileSpreadsheet,
           allowedRoles: ['admin'],
         },
+        {
+          id: 'contabilidad-periodos',
+          label: 'Cierre de Períodos',
+          description: 'Bloqueo mensual y cierre anual',
+          icon: Lock,
+          allowedRoles: ['admin'],
+        },
       ],
     },
   ];
@@ -261,7 +270,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       'contabilidad-diario',
       'contabilidad-mayor', 
       'contabilidad-balances', 
-      'contabilidad-reportes']
+      'contabilidad-reportes',
+      'contabilidad-periodos']
       .includes(activeSection),
   }));
 
@@ -271,7 +281,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setOpenDropdowns((prev) => ({ ...prev, inventario: true }));
     } else if (['pos-caja', 'pos-historial', 'pos-cierre'].includes(activeSection)) {
       setOpenDropdowns((prev) => ({ ...prev, pos: true }));
-    } else if (['contabilidad-diario', 'contabilidad-balances', 'contabilidad-reportes'].includes(activeSection)) {
+    } else if (['contabilidad-diario', 'contabilidad-mayor', 'contabilidad-balances', 'contabilidad-reportes', 'contabilidad-periodos'].includes(activeSection)) {
       setOpenDropdowns((prev) => ({ ...prev, contabilidad: true }));
     }
   }, [activeSection]);

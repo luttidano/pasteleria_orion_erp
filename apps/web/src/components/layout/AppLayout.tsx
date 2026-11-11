@@ -312,7 +312,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               onRefresh={onRefresh}
               addToast={addToast}
               externalFilter="todos"
-              onNavigateToShoppingList={() => handleSelectSection('compras')}
+              onNavigateToShoppingList={
+                user.role === 'admin' ? () => handleSelectSection('compras') : undefined
+              }
               isLoading={isLoading}
             />
           )}

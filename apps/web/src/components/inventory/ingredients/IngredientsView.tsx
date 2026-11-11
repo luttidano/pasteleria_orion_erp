@@ -397,7 +397,8 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
 
           {/* Botón de Lista de Compras (filtro rápido o módulo completo) y Modo de Vista */}
           <div className="flex items-center gap-2">
-            {onNavigateToShoppingList ? (
+            {isAdmin && 
+            (onNavigateToShoppingList ? (
               <button
                 type="button"
                 onClick={onNavigateToShoppingList}
@@ -420,7 +421,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                 <ShoppingBag className="w-3.5 h-3.5" />
                 <span>{statusFilter === 'comprar' ? 'Viendo lista de compras' : 'Ver lo que falta comprar'}</span>
               </button>
-            )}
+            ))}
 
             {/* Alternar tarjetas o tabla */}
             <div className="flex items-center bg-stone-100 dark:bg-[#221713] p-1 rounded-xl">

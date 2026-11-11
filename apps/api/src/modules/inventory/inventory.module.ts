@@ -11,6 +11,8 @@ import { SupplierService } from './supplier.service';
 import { SupplierController } from './supplier.controller';
 import { PackagingService } from './packaging.service';
 import { PackagingController } from './packaging.controller';
+import { GeneralSupplyService } from './general-supply.service';
+import { GeneralSupplyController } from './general-supply.controller';
 @Module({
   controllers: [
     CategoryController,
@@ -18,7 +20,8 @@ import { PackagingController } from './packaging.controller';
     IngredientController,
     ProductController,
     SupplierController,
-    PackagingController
+    PackagingController,
+    GeneralSupplyController,
   ],
   providers: [
     IngredientService,
@@ -26,7 +29,8 @@ import { PackagingController } from './packaging.controller';
     CategoryService,
     ProductService,
     SupplierService,
-    PackagingService
+    PackagingService,
+    GeneralSupplyService,
   ],
   exports: [
     IngredientService,
@@ -34,7 +38,8 @@ import { PackagingController } from './packaging.controller';
     CategoryService,
     ProductService,
     SupplierService,
-    PackagingService
+    PackagingService,
+    GeneralSupplyService,
   ],
 })
 export class InventoryModule {}

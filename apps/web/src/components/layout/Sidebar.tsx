@@ -19,6 +19,7 @@ import {
   TrendingUp,
   PieChart,
   FileSpreadsheet,
+  Wrench,
 } from 'lucide-react';
 import type { User, UserRole } from '../../types';
 
@@ -28,6 +29,7 @@ export type AdminSection =
   | 'recetas'
   | 'productos'
   | 'empaques'
+  | 'insumos-generales'
   | 'compras'
   | 'proveedores'
   // Módulo Punto de Venta
@@ -124,7 +126,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           description: 'Cajas, bolsas y envases',
           icon: Package,
           allowedRoles: ['admin', 'baker'],
-        },              
+        },
+        {
+          id: 'insumos-generales',
+          label: 'Insumos Generales',
+          description: 'Guantes, aseo y utensilios',
+          icon: Wrench,
+          allowedRoles: ['admin', 'baker'],
+        },
         {
           id: 'compras',
           label: 'Lista de Compras',
@@ -238,7 +247,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       'despensa', 
       'compras', 
       'recetas', 
+      'productos',
       'empaques', 
+      'insumos-generales',
       'proveedores']
       .includes(activeSection),
     pos: [
@@ -256,7 +267,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Auto-expandir el dropdown si la sección activa cambia externamente
   useEffect(() => {
-    if (['despensa', 'compras', 'recetas', 'empaques', 'proveedores'].includes(activeSection)) {
+    if (['despensa', 'compras', 'recetas', 'productos', 'empaques', 'insumos-generales', 'proveedores'].includes(activeSection)) {
       setOpenDropdowns((prev) => ({ ...prev, inventario: true }));
     } else if (['pos-caja', 'pos-historial', 'pos-cierre'].includes(activeSection)) {
       setOpenDropdowns((prev) => ({ ...prev, pos: true }));

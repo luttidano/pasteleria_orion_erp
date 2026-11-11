@@ -49,7 +49,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
   const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [modalityFilter, setModalityFilter] = useState<'all' | 'despacho' | 'presencial'>('all');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'materia_prima' | 'empaque' | 'reventa'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'materia_prima' | 'empaque' | 'reventa' | 'insumo_general'>('all');
 
   // Vista en dispositivos móviles: 'list' (directorio) o 'detail' (ficha activa)
   const [mobileTab, setMobileTab] = useState<'list' | 'detail'>('list');
@@ -90,7 +90,8 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
     const materiaPrima = suppliers.filter((s) => s.supplierTypes?.includes('materia_prima')).length;
     const empaques = suppliers.filter((s) => s.supplierTypes?.includes('empaque')).length;
     const reventa = suppliers.filter((s) => s.supplierTypes?.includes('reventa')).length;
-    return { total, despacho, presencial, materiaPrima, empaques, reventa };
+    const insumosGenerales = suppliers.filter((s) => s.supplierTypes?.includes('insumo_general')).length;
+    return { total, despacho, presencial, materiaPrima, empaques, reventa, insumosGenerales };
   }, [suppliers]);
 
   // Lista de rubros para filtros rápidos
@@ -414,6 +415,18 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
                 <span>🛍️</span>
                 <span>Reventa ({counts.reventa})</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setTypeFilter('insumo_general')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  typeFilter === 'insumo_general'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-stone-600 dark:text-stone-300 hover:bg-[#FAF5ED] dark:hover:bg-[#2A1D18]'
+                }`}
+              >
+                <span>🧤</span>
+                <span>Insumos Generales ({counts.insumosGenerales})</span>
+              </button>
             </div>
           </div>
 
@@ -663,6 +676,11 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
                             {selectedSupplier.supplierTypes?.includes('reventa') && (
                               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-800">
                                 🛍️ Reventa
+                              </span>
+                            )}
+                            {selectedSupplier.supplierTypes?.includes('insumo_general') && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-500/10 text-teal-800 dark:text-teal-200 border border-teal-300 dark:border-teal-800">
+                                🧤 Insumos Generales
                               </span>
                             )}
                           </div>

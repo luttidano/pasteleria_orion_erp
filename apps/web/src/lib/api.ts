@@ -1,5 +1,10 @@
 import { supabase } from './supabase';
 import { authService } from '../services/authService';
+import {
+  reportApiNetworkError,
+  reportApiServerError,
+  reportApiSuccess,
+} from './connectionStatus';
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '') + '/api';
 
@@ -58,6 +63,9 @@ export async function apiFetch<T>(
         await new Promise((r) => setTimeout(r, 600));
         continue;
       }
+      reportApiNetworkError(
+        networkErr instanceof Error ? networkErr.message : 'Fallo de red al contactar API.',
+      );
       throw networkErr;
     }
   }
@@ -74,8 +82,12 @@ export async function apiFetch<T>(
           headers['Authorization'] = `Bearer ${newToken}`;
           const retryRes = await fetch(url, { ...options, headers });
           if (retryRes.ok) {
+            reportApiSuccess();
             if (retryRes.status === 204) return null as T;
             return retryRes.json();
+          }
+          if (retryRes.status >= 500) {
+            reportApiServerError(retryRes.status, `Error del servidor (HTTP ${retryRes.status})`);
           }
         }
       } catch {
@@ -90,8 +102,13 @@ export async function apiFetch<T>(
     } catch {
       // Ignorar si la respuesta de error no es JSON
     }
+    if (response.status >= 500) {
+      reportApiServerError(response.status, errorMessage);
+    }
     throw new Error(errorMessage);
   }
+
+  reportApiSuccess();
 
   // Si la respuesta es 204 No Content
   if (response.status === 204) {

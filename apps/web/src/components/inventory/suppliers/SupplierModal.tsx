@@ -40,6 +40,8 @@ const COMMON_CATEGORIES = [
   'Esencias y Colorantes',
   'Café y Bebidas',
   'Artículos de Repostería',
+  'Artículos de Aseo e Higiene',
+  'Protección y Utensilios',
   'Abarrotes y Varios',
 ];
 
@@ -255,7 +257,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
               </label>
               <span className="text-[10px] text-stone-500 dark:text-stone-400">Múltiple selección</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {/* 1. Materia Prima */}
               <button
                 type="button"
@@ -310,6 +312,25 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                 </div>
                 <p className="text-[11px] text-[#6B584C] dark:text-[#B39F93] mt-1 leading-tight">
                   Bebidas, velas de cumpleaños, confites
+                </p>
+              </button>
+
+              {/* 4. Insumos Generales */}
+              <button
+                type="button"
+                onClick={() => toggleSupplierType('insumo_general')}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  supplierTypes.includes('insumo_general')
+                    ? 'border-teal-600 bg-teal-500/10 text-teal-900 dark:text-teal-200 ring-1 ring-teal-600 shadow-xs'
+                    : 'border-[#DFCAA9]/70 dark:border-[#35251F] bg-white/70 dark:bg-[#1E1512] text-stone-500 opacity-70 hover:opacity-100'
+                }`}
+              >
+                <div className="font-bold text-xs flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">🧤 Insumos Generales</span>
+                  {supplierTypes.includes('insumo_general') && <span className="text-teal-600 dark:text-teal-400 font-bold">✓</span>}
+                </div>
+                <p className="text-[11px] text-[#6B584C] dark:text-[#B39F93] mt-1 leading-tight">
+                  Guantes, cofias, artículos de aseo y utensilios
                 </p>
               </button>
             </div>

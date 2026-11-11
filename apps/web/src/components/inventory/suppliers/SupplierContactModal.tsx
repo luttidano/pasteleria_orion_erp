@@ -64,6 +64,7 @@ export const SupplierContactModal: React.FC<SupplierContactModalProps> = ({
     if (supplier.supplierTypes?.includes('materia_prima')) terms.push('materias primas');
     if (supplier.supplierTypes?.includes('empaque')) terms.push('empaques y cajas');
     if (supplier.supplierTypes?.includes('reventa')) terms.push('productos de reventa');
+    if (supplier.supplierTypes?.includes('insumo_general')) terms.push('insumos generales');
     const defaultProductTerm =
       supplier.category.split(/[,•]/)[0]?.trim() ||
       (terms.length > 0 ? terms.join(' y ') : 'insumos');

@@ -9,6 +9,13 @@ import { ToastContainer } from './components/common/Toast';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthGuard, RoleGuard, GuestGuard } from './guards';
 import { UnauthorizedView } from './components/common/UnauthorizedView';
+import {
+  checkServerHealth,
+  getConnectionStatus,
+  reportApiNetworkError,
+  subscribeConnectionStatus,
+  type ConnectionStatusSnapshot,
+} from './lib/connectionStatus';
 import './App.css';
 
 /**
@@ -34,9 +41,10 @@ function AppContent() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isIngredientsLoading, setIsIngredientsLoading] = useState(false);
-  const [isOnline, setIsOnline] = useState<boolean>(() =>
-    typeof navigator !== 'undefined' ? navigator.onLine : true
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatusSnapshot>(() =>
+    getConnectionStatus()
   );
+  const prevHealthRef = useRef(connectionStatus.health);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const isFetchingRef = useRef(false);
 
@@ -128,43 +136,78 @@ function AppContent() {
     };
   }, [loadIngredients]);
 
-  // 3. Re-sincronizar automáticamente ante eventos de red (online/offline) y recuperación de foco
+  // 3. Monitoreo real de conexión (Red + API NestJS + PostgreSQL) y re-sincronización
   useEffect(() => {
-    const handleRecheck = () => {
+    const unsubscribe = subscribeConnectionStatus((next) => {
+      setConnectionStatus(next);
+      const prev = prevHealthRef.current;
+
+      if (next.health === 'online' && (prev === 'offline' || prev === 'degraded')) {
+        addToast({
+          type: 'success',
+          title: 'Conexión Restablecida',
+          message: 'El servidor ERP y la base de datos vuelven a estar operativos.',
+        });
+        if (currentUser?.id && !isFetchingRef.current) {
+          void loadIngredients();
+        }
+      } else if (next.health === 'degraded' && prev !== 'degraded') {
+        addToast({
+          type: 'error',
+          title: 'Error de Servidor / Base de Datos',
+          message: next.detail,
+        });
+      } else if (next.health === 'offline' && prev === 'online') {
+        addToast({
+          type: 'warning',
+          title: 'Sin Conexión con el Servidor',
+          message: next.detail,
+        });
+      }
+
+      prevHealthRef.current = next.health;
+    });
+
+    void checkServerHealth();
+
+    const handleFocusOrOnline = () => {
+      void checkServerHealth();
       if (currentUser?.id && !isFetchingRef.current) {
-        loadIngredients();
+        void loadIngredients();
       }
     };
 
-    const handleOnline = () => {
-      setIsOnline(true);
-      addToast({
-        type: 'success',
-        title: 'Conexión Restablecida',
-        message: 'El sistema vuelve a estar en línea. Sincronizando catálogo con el servidor...',
-      });
-      handleRecheck();
-    };
-
     const handleOffline = () => {
-      setIsOnline(false);
-      addToast({
-        type: 'warning',
-        title: 'Modo Sin Conexión',
-        message: 'Has perdido la conexión de red. La despensa operará con la copia local resiliente.',
-      });
+      reportApiNetworkError('Has perdido la conexión de red local.');
     };
 
-    window.addEventListener('focus', handleRecheck);
-    window.addEventListener('online', handleOnline);
+    window.addEventListener('focus', handleFocusOrOnline);
+    window.addEventListener('online', handleFocusOrOnline);
     window.addEventListener('offline', handleOffline);
 
     return () => {
-      window.removeEventListener('focus', handleRecheck);
-      window.removeEventListener('online', handleOnline);
+      unsubscribe();
+      window.removeEventListener('focus', handleFocusOrOnline);
+      window.removeEventListener('online', handleFocusOrOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, [currentUser?.id, loadIngredients, addToast]);
+
+  // 3b. Polling adaptativo de salud solo cuando la pestaña está visible
+  useEffect(() => {
+    const intervalMs =
+      connectionStatus.health === 'offline' || connectionStatus.health === 'degraded'
+        ? 10000
+        : 30000;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void checkServerHealth();
+      }
+    }, intervalMs);
+
+    return () => window.clearInterval(intervalId);
+  }, [connectionStatus.health]);
 
   // 4. Sincronización reactiva del catálogo ante cualquier cambio de sesión o usuario
   useEffect(() => {
@@ -251,7 +294,9 @@ function AppContent() {
                 onRefresh={loadIngredients}
                 addToast={addToast}
                 isLoading={isIngredientsLoading}
-                isOnline={isOnline}
+                isOnline={connectionStatus.health === 'online'}
+                connectionStatus={connectionStatus}
+                onCheckConnection={() => void checkServerHealth({ showCheckingState: true })}
               />
             </RoleGuard>
           }

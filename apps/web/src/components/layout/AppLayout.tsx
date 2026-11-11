@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Menu,
@@ -6,9 +6,10 @@ import {
   Sun,
   Moon,
 } from 'lucide-react';
-import type { User, Ingredient, ToastMessage, CatalogProduct, Packaging } from '../../types';
+import type { User, Ingredient, ToastMessage, CatalogProduct, Packaging, GeneralSupply } from '../../types';
 import { productService } from '../../services/productService';
 import { packagingService } from '../../services/packagingService';
+import { generalSupplyService } from '../../services/generalSupplyService';
 import { Sidebar } from './Sidebar';
 import type { AdminSection } from './Sidebar';
 import { IngredientsView } from '../inventory/ingredients/IngredientsView';
@@ -18,10 +19,12 @@ import { RecipesView } from '../inventory/recipes/RecipesView';
 import { ShoppingListView } from '../inventory/shopping/ShoppingListView';
 import { SuppliersView } from '../inventory/suppliers/SuppliersView';
 import { PackagingView } from '../inventory/packaging/PackagingView';
+import { GeneralSuppliesView } from '../inventory/general-supplies/GeneralSuppliesView';
 import { PosView } from '../pos/PosView';
 import { AccountingView } from '../accounting/AccountingView';
 import { useTheme } from '../../context/ThemeContext';
 import { SettingsView } from '../settings/SettingsView';
+import type { ConnectionStatusSnapshot } from '../../lib/connectionStatus';
 
 interface AdminLayoutProps {
   user: User;
@@ -31,6 +34,8 @@ interface AdminLayoutProps {
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   isLoading?: boolean;
   isOnline?: boolean;
+  connectionStatus?: ConnectionStatusSnapshot;
+  onCheckConnection?: () => void;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
@@ -41,6 +46,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   addToast,
   isLoading = false,
   isOnline = true,
+  connectionStatus,
+  onCheckConnection,
 }) => {
   const navigate = useNavigate();
   const { section } = useParams<{ section?: string }>();
@@ -52,6 +59,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       'recetas',
       'productos',
       'empaques',
+      'insumos-generales',
       'compras',
       'proveedores',
       'pos-caja',
@@ -63,7 +71,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       'contabilidad-reportes',
       'ajustes',
     ],
-    baker: ['despensa', 'recetas', 'productos', 'empaques'],
+    baker: ['despensa', 'recetas', 'productos', 'empaques', 'insumos-generales'],
     cashier: ['pos-caja', 'pos-historial', 'pos-cierre'],
   };
 
@@ -98,14 +106,30 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
   const [resaleItems, setResaleItems] = useState<CatalogProduct[]>([]);
   const [packagingItems, setPackagingItems] = useState<Packaging[]>([]);
+  const [generalSupplyItems, setGeneralSupplyItems] = useState<GeneralSupply[]>([]);
 
-  // Sincronizar catálogo de reventa y empaques para mantener exacto el badge de compras
+  const refreshRestockInventory = useCallback(async () => {
+    const [resale, packs, supplies] = await Promise.all([
+      productService.getAll('resale').catch(() => []),
+      packagingService.getAll().catch(() => []),
+      generalSupplyService.getAll().catch(() => []),
+    ]);
+    setResaleItems(resale);
+    setPackagingItems(packs);
+    setGeneralSupplyItems(supplies);
+  }, []);
+
+  // Sincronizar catálogo de reventa, empaques e insumos generales para mantener exacto el badge de compras
   useEffect(() => {
-    productService.getAll('resale').then(setResaleItems).catch(() => {});
-    packagingService.getAll().then(setPackagingItems).catch(() => {});
-  }, [activeSection, ingredients]);
+    void refreshRestockInventory();
+  }, [activeSection, ingredients, refreshRestockInventory]);
 
-  // Contadores para insignias de la barra lateral (Insumos + Reventa + Empaques)
+  const handleRefreshAll = useCallback(async () => {
+    await onRefresh();
+    await refreshRestockInventory();
+  }, [onRefresh, refreshRestockInventory]);
+
+  // Contadores para insignias de la barra lateral (Insumos + Reventa + Empaques + Insumos Generales)
   const { restockCount, outOfStockCount } = useMemo(() => {
     let low = ingredients.filter((p) => p.stock > 0 && p.stock <= p.minStock).length;
     let out = ingredients.filter((p) => p.stock <= 0).length;
@@ -120,8 +144,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       else if (pack.stock <= pack.minStock) low++;
     }
 
+    for (const sup of generalSupplyItems) {
+      if (sup.stock <= 0) out++;
+      else if (sup.stock <= sup.minStock) low++;
+    }
+
     return { restockCount: low, outOfStockCount: out };
-  }, [ingredients, resaleItems, packagingItems]);
+  }, [ingredients, resaleItems, packagingItems, generalSupplyItems]);
 
   const getHeaderTitle = (sec: AdminSection): string => {
     switch (sec) {
@@ -130,7 +159,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       case 'recetas':
         return 'Recetario & Fichas Técnicas'; 
       case 'productos':
-        return 'Catálogo de Productos Comerciales'         
+        return 'Catálogo de Productos Comerciales';
+      case 'empaques':
+        return 'Empaques & Despacho';
+      case 'insumos-generales':
+        return 'Insumos Generales & Operativos';
       case 'compras':
         return 'Lista de Compras & Reabastecimiento';
       case 'proveedores':
@@ -204,28 +237,48 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
             {/* Lado derecho: Estado de Conexión + Botón Dark Mode */}
             <div className="flex items-center justify-end gap-2.5 min-w-[36px] shrink-0">
-              {/* Indicador de conexión Online / Offline */}
-              <div
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold select-none transition-all shadow-2xs ${
-                  isOnline
-                    ? 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                    : 'border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200'
-                }`}
-                title={
-                  isOnline
-                    ? 'En línea: Comunicación activa con el servidor ERP y Supabase'
-                    : 'Sin conexión: Mostrando datos locales resilientes'
-                }
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-                  }`}
-                />
-                <span className="hidden sm:inline">
-                  {isOnline ? 'En línea' : 'Sin conexión'}
-                </span>
-              </div>
+              {/* Indicador Real de Estado de Conexión (Red + API + BD) */}
+              {(() => {
+                const health = connectionStatus?.health ?? (isOnline ? 'online' : 'offline');
+                const statusConfig = {
+                  online: {
+                    label: 'En línea',
+                    container:
+                      'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
+                    dot: 'bg-emerald-500 animate-pulse',
+                  },
+                  degraded: {
+                    label: 'Error BD / API',
+                    container:
+                      'border-rose-300 dark:border-rose-800/70 bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300',
+                    dot: 'bg-rose-500 animate-ping',
+                  },
+                  offline: {
+                    label: 'Sin conexión',
+                    container:
+                      'border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200',
+                    dot: 'bg-amber-500',
+                  },
+                  checking: {
+                    label: 'Verificando...',
+                    container:
+                      'border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900/50 text-stone-600 dark:text-stone-300',
+                    dot: 'bg-stone-400 animate-pulse',
+                  },
+                }[health];
+
+                return (
+                  <button
+                    type="button"
+                    onClick={onCheckConnection}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold select-none transition-all shadow-2xs cursor-pointer hover:opacity-85 active:scale-95 ${statusConfig.container}`}
+                    title={`${connectionStatus?.detail || statusConfig.label} (Clic para comprobar ahora)`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${statusConfig.dot}`} />
+                    <span className="hidden sm:inline">{statusConfig.label}</span>
+                  </button>
+                );
+              })()}
 
               <button
                 type="button"
@@ -280,15 +333,21 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           {activeSection === 'compras' && (
             <ShoppingListView
               ingredients={ingredients}
-              onRefresh={onRefresh}
+              onRefresh={handleRefreshAll}
               addToast={addToast}
             />
           )}
 
-
-
           {activeSection === 'empaques' && (
             <PackagingView addToast={addToast} />
+          )}
+
+          {activeSection === 'insumos-generales' && (
+            <GeneralSuppliesView
+              user={user}
+              addToast={addToast}
+              onInventoryChange={() => void refreshRestockInventory()}
+            />
           )}
 
           {activeSection === 'proveedores' && (

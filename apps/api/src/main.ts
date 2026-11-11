@@ -52,9 +52,13 @@ async function bootstrap() {
     res.setHeader('Expires', '0');
     const start = Date.now();
     res.on('finish', () => {
+      const url = req.originalUrl || req.url || '';
+      if (url.startsWith('/api/health') && res.statusCode < 400) {
+        return;
+      }
       const authHeader = req.headers.authorization;
       const authSummary = !authHeader ? 'SIN_AUTH' : authHeader.startsWith('Bearer ') ? 'BEARER_OK' : 'AUTH_MALFORMADO';
-      console.log(`[API ${req.method}] ${req.originalUrl || req.url} -> ${res.statusCode} (${Date.now() - start}ms) [${authSummary}]`);
+      console.log(`[API ${req.method}] ${url} -> ${res.statusCode} (${Date.now() - start}ms) [${authSummary}]`);
     });
     next();
   });

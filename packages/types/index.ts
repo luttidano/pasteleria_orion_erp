@@ -83,7 +83,7 @@ export interface Recipe {
   updatedAt?: string;
 }
 
-export type SupplierType = 'materia_prima' | 'empaque' | 'reventa';
+export type SupplierType = 'materia_prima' | 'empaque' | 'reventa' | 'insumo_general';
 
 export interface Supplier {
   id: string;
@@ -144,6 +144,23 @@ export interface Packaging {
   supplier?: Supplier;
   icon?: string;
   description?: string;
+  status?: StockStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface GeneralSupply {
+  id: string;
+  name: string;
+  category: string;
+  stock: number;
+  minStock: number;
+  unit: string;
+  costPrice?: number;
+  supplierId?: string | null;
+  supplier?: Supplier | null;
+  icon?: string;
+  description?: string | null;
   status?: StockStatus;
   createdAt?: string;
   updatedAt?: string;

@@ -106,6 +106,7 @@ model Supplier {
   supplierIngredients SupplierIngredient[]
   resaleProducts      Product[]
   packagings          Packaging[]
+  generalSupplies     GeneralSupply[]
 
   @@map("supplier")
 }
@@ -168,6 +169,27 @@ model Packaging {
   @@index([supplierId], map: "idx_packaging_supplier")
   @@index([packageType], map: "idx_packaging_package_type")
   @@map("packaging")
+}
+
+model GeneralSupply {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  category    String
+  stock       Decimal  @default(0) @db.Decimal(12, 3)
+  minStock    Decimal  @default(0) @map("min_stock") @db.Decimal(12, 3)
+  unit        String   @default("un")
+  costPrice   Decimal? @default(0) @map("cost_price") @db.Decimal(12, 2)
+  supplierId  String?  @map("supplier_id") @db.Uuid
+  icon        String?  @default("🧤")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  supplier    Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@index([supplierId], map: "idx_general_supply_supplier")
+  @@index([category], map: "idx_general_supply_category")
+  @@map("general_supply")
 }
 
 model PosSale {

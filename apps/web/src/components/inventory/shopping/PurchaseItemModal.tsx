@@ -101,9 +101,17 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                     ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
                     : item.kind === 'resale'
                     ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
-                    : 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
+                    : item.kind === 'packaging'
+                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
+                    : 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300'
                 }`}>
-                  {item.kind === 'ingredient' ? '🌾 Insumo' : item.kind === 'resale' ? '🥤 Reventa' : '📦 Empaque'}
+                  {item.kind === 'ingredient'
+                    ? '🌾 Insumo'
+                    : item.kind === 'resale'
+                    ? '🥤 Reventa'
+                    : item.kind === 'packaging'
+                    ? '📦 Empaque'
+                    : '🧤 Insumo General'}
                 </span>
                 {isOutOfStock ? (
                   <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800">
@@ -143,10 +151,24 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
           {/* 1. Descripción de lo que se debe comprar */}
           <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1512] border border-[#EADBCE] dark:border-[#35251F] shadow-xs">
             <h4 className="text-[11px] font-bold text-[#8C1F25] dark:text-[#D4A373] uppercase tracking-wider mb-1">
-              📋 {item.kind === 'ingredient' ? 'Descripción del Insumo' : item.kind === 'resale' ? 'Detalle del Producto de Reventa' : 'Detalle del Empaque'}
+              📋{' '}
+              {item.kind === 'ingredient'
+                ? 'Descripción del Insumo'
+                : item.kind === 'resale'
+                ? 'Detalle del Producto de Reventa'
+                : item.kind === 'packaging'
+                ? 'Detalle del Empaque'
+                : 'Detalle del Insumo General'}
             </h4>
             <p className="text-xs sm:text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
-              {item.description || (item.kind === 'resale' ? 'Producto comercial para reventa en mostrador/caja.' : item.kind === 'packaging' ? 'Material de empaque y despacho de la pastelería.' : 'Materia prima indispensable para la producción y repostería artesanal.')}
+              {item.description ||
+                (item.kind === 'resale'
+                  ? 'Producto comercial para reventa en mostrador/caja.'
+                  : item.kind === 'packaging'
+                  ? 'Material de empaque y despacho de la pastelería.'
+                  : item.kind === 'general_supply'
+                  ? 'Insumo general operativo (protección, higiene o utensilios).'
+                  : 'Materia prima indispensable para la producción y repostería artesanal.')}
             </p>
             {item.price && item.price > 0 && (
               <div className="mt-2 pt-2 border-t border-stone-100 dark:border-[#2C1D18] flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">

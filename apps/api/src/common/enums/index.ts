@@ -14,6 +14,7 @@ export enum SupplierType {
   materia_prima = 'materia_prima',
   empaque = 'empaque',
   reventa = 'reventa',
+  insumo_general = 'insumo_general',
 }
 
 export enum ProductType {

@@ -452,32 +452,6 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Lado Izquierdo: Catálogo de productos para mostrador */}
           <div className="lg:col-span-7 space-y-4">
-            {/* Header del mostrador */}
-            <div className="bg-white dark:bg-[#16100E] p-4 sm:p-5 rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif">
-                  Mostrador de Pastelería Orión
-                </h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400">
-                  Selecciona los productos listos para la venta al cliente.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={loadProducts}
-                  disabled={isLoadingProducts}
-                  className="p-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-[#201612] text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
-                  title="Refrescar catálogo"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isLoadingProducts ? 'animate-spin text-[#8C1F25]' : ''}`} />
-                </button>
-                <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-full border border-emerald-300 dark:border-emerald-800">
-                  ● Caja Abierta
-                </span>
-              </div>
-            </div>
-
             {/* Barra de Filtros y Búsqueda */}
             <div className="bg-white dark:bg-[#16100E] p-3 sm:p-4 rounded-[20px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-3">
               <div className="flex flex-col sm:flex-row gap-2.5">
@@ -514,6 +488,17 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
                 >
                   <Package className="w-3.5 h-3.5" />
                   <span>Solo con stock</span>
+                </button>
+
+                {/* Refrescar catálogo compacto */}
+                <button
+                  type="button"
+                  onClick={() => void Promise.all([loadProducts(), loadPackaging()])}
+                  disabled={isLoadingProducts}
+                  className="px-2.5 py-2 rounded-xl border border-stone-200 dark:border-[#35251F] bg-stone-50 dark:bg-[#201612] text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                  title="Refrescar catálogo y empaques"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingProducts ? 'animate-spin text-[#8C1F25]' : ''}`} />
                 </button>
               </div>
 

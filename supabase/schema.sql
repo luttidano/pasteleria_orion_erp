@@ -155,6 +155,26 @@ CREATE TABLE IF NOT EXISTS public.packaging (
 );
 
 -- =============================================================================
+-- Insumos Generales / Operativos (Guantes, limpieza, higiene, utensilios)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.general_supply (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  category text NOT NULL,
+  stock numeric(12, 3) NOT NULL DEFAULT 0 CHECK (stock >= 0::numeric),
+  min_stock numeric(12, 3) NOT NULL DEFAULT 0 CHECK (min_stock >= 0::numeric),
+  unit text NOT NULL DEFAULT 'un'::text,
+  cost_price numeric(12, 2) DEFAULT 0 CHECK (cost_price >= 0::numeric),
+  supplier_id uuid REFERENCES public.supplier(id) ON DELETE SET NULL,
+  icon text DEFAULT '🧤'::text,
+  description text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);
+-- =============================================================================
+
+-- =============================================================================
 -- 4. PUNTO DE VENTA (POS)
 -- =============================================================================
 
@@ -219,6 +239,8 @@ CREATE INDEX IF NOT EXISTS idx_product_recipe ON public.product(recipe_id);
 CREATE INDEX IF NOT EXISTS idx_product_supplier ON public.product(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_packaging_supplier ON public.packaging(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_packaging_package_type ON public.packaging(package_type);
+CREATE INDEX IF NOT EXISTS idx_general_supply_supplier ON public.general_supply(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_general_supply_category ON public.general_supply(category);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_items_sale ON public.pos_sale_item(sale_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_items_product ON public.pos_sale_item(product_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_sold_at ON public.pos_sale(sold_at DESC);
@@ -280,6 +302,7 @@ ON CONFLICT (code) DO NOTHING;
 ALTER TABLE public.supplier ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.packaging ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.supplier_ingredient ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.general_supply ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "supplier_all_authenticated" ON public.supplier;
 CREATE POLICY "supplier_all_authenticated" ON public.supplier
@@ -289,10 +312,15 @@ DROP POLICY IF EXISTS "packaging_all_authenticated" ON public.packaging;
 CREATE POLICY "packaging_all_authenticated" ON public.packaging
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "general_supply_all_authenticated" ON public.general_supply;
+CREATE POLICY "general_supply_all_authenticated" ON public.general_supply
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
 DROP POLICY IF EXISTS "supplier_ingredient_all_authenticated" ON public.supplier_ingredient;
 CREATE POLICY "supplier_ingredient_all_authenticated" ON public.supplier_ingredient
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 GRANT ALL ON TABLE public.supplier TO authenticated, service_role;
 GRANT ALL ON TABLE public.packaging TO authenticated, service_role;
+GRANT ALL ON TABLE public.general_supply TO authenticated, service_role;
 GRANT ALL ON TABLE public.supplier_ingredient TO authenticated, service_role;

@@ -54,9 +54,9 @@ export class CreateSupplierDto {
   @IsOptional()
   @IsArray({ message: 'Los tipos de proveedor deben ser una lista '})
   @ArrayNotEmpty({ message: 'Debe seleccionar al menos un tipo de proveedor' })
-  @IsIn(['materia_prima', 'empaque', 'reventa'], {
+  @IsIn(['materia_prima', 'empaque', 'reventa', 'insumo_general'], {
     each: true,
-    message: 'El tipo debe ser: materia_prima, empaque o reventa.',
+    message: 'El tipo debe ser: materia_prima, empaque, reventa o insumo_general.',
   })
-  supplierTypes?: ('materia_prima' | 'empaque' |'reventa')[];
+  supplierTypes?: ('materia_prima' | 'empaque' | 'reventa' | 'insumo_general')[];
 }

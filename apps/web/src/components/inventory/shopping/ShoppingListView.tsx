@@ -12,6 +12,7 @@ import type {
   Ingredient,
   CatalogProduct,
   Packaging,
+  GeneralSupply,
   ToastMessage,
   ShoppingItem,
   ShoppingItemKind,
@@ -19,6 +20,7 @@ import type {
 import { ingredientService } from '../../../services/ingredientService';
 import { productService } from '../../../services/productService';
 import { packagingService } from '../../../services/packagingService';
+import { generalSupplyService } from '../../../services/generalSupplyService';
 import { PurchaseItemModal } from './PurchaseItemModal';
 
 interface ShoppingListViewProps {
@@ -37,23 +39,26 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
   const [selectedItemForPurchase, setSelectedItemForPurchase] = useState<ShoppingItem | null>(null);
   const [copiedRecently, setCopiedRecently] = useState(false);
 
-  // Estados locales para productos de reventa y empaques
+  // Estados locales para productos de reventa, empaques e insumos generales
   const [resaleProducts, setResaleProducts] = useState<CatalogProduct[]>([]);
   const [packagings, setPackagings] = useState<Packaging[]>([]);
+  const [generalSupplies, setGeneralSupplies] = useState<GeneralSupply[]>([]);
   const [isLoadingExtras, setIsLoadingExtras] = useState(false);
 
-  // Cargar productos de reventa y empaques desde el backend
+  // Cargar productos de reventa, empaques e insumos generales desde el backend
   const loadExtras = async () => {
     setIsLoadingExtras(true);
     try {
-      const [prods, packs] = await Promise.all([
+      const [prods, packs, supplies] = await Promise.all([
         productService.getAll('resale').catch(() => []),
         packagingService.getAll().catch(() => []),
+        generalSupplyService.getAll().catch(() => []),
       ]);
       setResaleProducts(prods);
       setPackagings(packs);
+      setGeneralSupplies(supplies);
     } catch (err) {
-      console.error('[ShoppingList] Error cargando catálogo de reventa y empaques:', err);
+      console.error('[ShoppingList] Error cargando catálogo de reventa, empaques e insumos generales:', err);
     } finally {
       setIsLoadingExtras(false);
     }
@@ -123,8 +128,27 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
       }
     });
 
+    // 4. Insumos Generales (guantes, aseo, protección y utensilios)
+    generalSupplies.forEach((sup) => {
+      if (sup.stock <= sup.minStock) {
+        list.push({
+          id: sup.id,
+          name: sup.name,
+          kind: 'general_supply',
+          category: sup.category || 'Insumo General',
+          stock: sup.stock,
+          minStock: sup.minStock,
+          unit: sup.unit || 'un',
+          price: sup.costPrice ?? 0,
+          description: sup.description ?? undefined,
+          icon: sup.icon || '🧤',
+          supplierName: sup.supplier?.name,
+        });
+      }
+    });
+
     return list;
-  }, [ingredients, resaleProducts, packagings]);
+  }, [ingredients, resaleProducts, packagings, generalSupplies]);
 
   // Contadores clave
   const totalCount = allNeededItems.length;
@@ -134,6 +158,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
   const ingredientCount = allNeededItems.filter((p) => p.kind === 'ingredient').length;
   const resaleCount = allNeededItems.filter((p) => p.kind === 'resale').length;
   const packagingCount = allNeededItems.filter((p) => p.kind === 'packaging').length;
+  const generalSupplyCount = allNeededItems.filter((p) => p.kind === 'general_supply').length;
 
   // Lista según los filtros activos de urgencia y rubro
   const filteredItems = useMemo(() => {
@@ -155,10 +180,17 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
         await productService.adjustStock(item.id, quantityBought, item.stock);
         const prods = await productService.getAll('resale');
         setResaleProducts(prods);
+        await onRefresh();
       } else if (item.kind === 'packaging') {
         await packagingService.adjustStock(item.id, quantityBought);
         const packs = await packagingService.getAll();
         setPackagings(packs);
+        await onRefresh();
+      } else if (item.kind === 'general_supply') {
+        await generalSupplyService.adjustStock(item.id, quantityBought);
+        const supplies = await generalSupplyService.getAll();
+        setGeneralSupplies(supplies);
+        await onRefresh();
       }
 
       const newStock = item.stock + quantityBought;
@@ -207,6 +239,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
     const ingItems = allNeededItems.filter((p) => p.kind === 'ingredient');
     const resItems = allNeededItems.filter((p) => p.kind === 'resale');
     const packItems = allNeededItems.filter((p) => p.kind === 'packaging');
+    const supplyItems = allNeededItems.filter((p) => p.kind === 'general_supply');
 
     let text = `🛒 *LISTA DE COMPRAS - PASTELERÍA ORIÓN*\n`;
     text += `📅 Fecha: ${today}\n`;
@@ -235,6 +268,16 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
     if (packItems.length > 0) {
       text += `📦 *EMPAQUES Y ENVASES (${packItems.length}):*\n`;
       packItems.forEach((item) => {
+        const deficit = Math.max(0, item.minStock - item.stock);
+        const status = item.stock <= 0 ? '🚨 AGOTADO' : `quedan ${item.stock} ${item.unit}`;
+        text += `• ${item.name}: Comprar *${deficit} ${item.unit}* (${status})\n`;
+      });
+      text += `\n`;
+    }
+
+    if (supplyItems.length > 0) {
+      text += `🧤 *INSUMOS GENERALES (${supplyItems.length}):*\n`;
+      supplyItems.forEach((item) => {
         const deficit = Math.max(0, item.minStock - item.stock);
         const status = item.stock <= 0 ? '🚨 AGOTADO' : `quedan ${item.stock} ${item.unit}`;
         text += `• ${item.name}: Comprar *${deficit} ${item.unit}* (${status})\n`;
@@ -287,7 +330,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                 </span>
               </div>
               <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5">
-                Central de compras: Insumos de pastelería, productos de reventa y materiales de empaque.
+                Central de compras: Insumos de pastelería, productos de reventa, empaques e insumos generales.
               </p>
             </div>
           </div>
@@ -361,6 +404,17 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
             >
               <span>📦 Empaques ({packagingCount})</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setKindFilter('general_supply')}
+              className={`flex items-center gap-1 px-3 py-1 rounded-xl font-bold transition-all cursor-pointer ${
+                kindFilter === 'general_supply'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-900/60 text-teal-800 dark:text-teal-200 hover:bg-teal-100'
+              }`}
+            >
+              <span>🧤 Insumos Generales ({generalSupplyCount})</span>
+            </button>
           </div>
         </div>
 
@@ -426,7 +480,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
             </h3>
             <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-sm mx-auto">
               {allNeededItems.length === 0
-                ? 'Todos los insumos, productos de reventa y empaques cuentan con existencias suficientes.'
+                ? 'Todos los insumos, productos de reventa, empaques e insumos generales cuentan con existencias suficientes.'
                 : 'Selecciona otro filtro para revisar los pendientes.'}
             </p>
             {allNeededItems.length > 0 && (
@@ -494,14 +548,18 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                               ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
                               : item.kind === 'resale'
                               ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
-                              : 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
+                              : item.kind === 'packaging'
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
+                              : 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300'
                           }`}
                         >
                           {item.kind === 'ingredient'
                             ? '🌾 Insumo'
                             : item.kind === 'resale'
                             ? '🥤 Reventa'
-                            : '📦 Empaque'}
+                            : item.kind === 'packaging'
+                            ? '📦 Empaque'
+                            : '🧤 Insumo General'}
                         </span>
 
                         <span className="text-[11px] text-stone-400 font-medium">
@@ -571,7 +629,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
         {allNeededItems.length > 0 && (
           <div className="p-4 bg-[#FAF5ED]/70 dark:bg-[#1E1512] border-t border-[#EADBCE] dark:border-[#35251F] text-xs text-stone-600 dark:text-stone-400 flex flex-col sm:flex-row items-center justify-between gap-2">
             <span>
-              💡 Al anotar la compra, el inventario se actualizará automáticamente según corresponda (Despensa, Catálogo o Empaques).
+              💡 Al anotar la compra, el inventario se actualizará automáticamente según corresponda (Despensa, Catálogo, Empaques o Insumos Generales).
             </span>
             <span className="font-bold text-stone-800 dark:text-stone-200 shrink-0">
               Total: {totalCount} ítems por reponer

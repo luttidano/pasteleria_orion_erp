@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Search,
   Plus,
@@ -15,9 +15,10 @@ import {
   X,
   Tag,
 } from 'lucide-react';
-import type { Ingredient, IngredientCategory, ToastMessage, User } from '../../../types';
+import type { Category, Ingredient, ToastMessage, User } from '../../../types';
 import { ingredientService } from '../../../services/ingredientService';
-import { IngredientModal } from './IngredientModal';
+import { categoryService } from '../../../services/categoryService';
+import { IngredientModal, getCategoryDefaultIcon } from './IngredientModal';
 import { DeleteConfirmModal } from './DeleteIngredientModal';
 import { CategoryManagerModal } from '../categories/CategoryManagerModal';
 
@@ -33,16 +34,6 @@ interface IngredientsViewProps {
   isLoading?: boolean;
 }
 
-const CATEGORIES: Array<{ label: string; value: 'Todas' | IngredientCategory; icon: string }> = [
-  { label: 'Todos', value: 'Todas', icon: '🧁' },
-  { label: 'Harinas y Polvos', value: 'Harinas y Polvos', icon: '🌾' },
-  { label: 'Lácteos y Huevos', value: 'Lácteos y Huevos', icon: '🥛' },
-  { label: 'Azúcares y Dulces', value: 'Azúcares y Dulces', icon: '🍬' },
-  { label: 'Chocolates y Cacaos', value: 'Chocolates y Cacaos', icon: '🍫' },
-  { label: 'Frutas y Esencias', value: 'Frutas y Esencias', icon: '🍓' },
-  { label: 'Grasas y Aceites', value: 'Grasas y Aceites', icon: '🧈' },
-];
-
 export const IngredientsView: React.FC<IngredientsViewProps> = ({
   user,
   ingredients,
@@ -53,10 +44,56 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
   isLoading = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<'Todas' | IngredientCategory>('Todas');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
+  const [categories, setCategories] = useState<Category[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>('todos');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const isAdmin = user.role === 'admin';
+
+  const refreshCategories = useCallback(async () => {
+    try {
+      const data = await categoryService.getAll('ingredient');
+      setCategories(data);
+      setSelectedCategory((prev) =>
+        prev !== 'Todas' && !data.some((c) => c.name === prev) ? 'Todas' : prev
+      );
+    } catch (err) {
+      console.error('[IngredientsView] Error cargando categorías de ingredientes:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    categoryService
+      .getAll('ingredient')
+      .then((data) => {
+        if (!cancelled) {
+          setCategories(data);
+        }
+      })
+      .catch((err) => {
+        console.error('[IngredientsView] Error cargando categorías de ingredientes:', err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const categoryFilters = useMemo(() => {
+    const base: Array<{ key: string; label: string; value: string; icon: string }> = [
+      { key: 'todas', label: 'Todos', value: 'Todas', icon: '🧁' },
+    ];
+    for (const cat of categories) {
+      base.push({
+        key: cat.id,
+        label: cat.name,
+        value: cat.name,
+        icon: cat.icon || getCategoryDefaultIcon(cat.name, categories),
+      });
+    }
+    return base;
+  }, [categories]);
 
   // Sync external filter from sidebar if provided
   useEffect(() => {
@@ -98,7 +135,8 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
 
       // 2. Category Tab
       const matchesCategory =
-        selectedCategory === 'Todas' || item.category === selectedCategory;
+        selectedCategory === 'Todas' ||
+        item.category.trim().toLowerCase() === selectedCategory.trim().toLowerCase();
 
       // 3. Exact Status Filter
       let matchesStatus = true;
@@ -410,13 +448,13 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
           </div>
         </div>
 
-        {/* Categorías con Emojis visuales */}
+        {/* Categorías con Emojis visuales desde categoryService */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
-          {CATEGORIES.map((cat) => {
+          {categoryFilters.map((cat) => {
             const isSelected = selectedCategory === cat.value;
             return (
               <button
-                key={cat.value}
+                key={cat.key}
                 type="button"
                 onClick={() => setSelectedCategory(cat.value)}
                 className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl whitespace-nowrap font-medium transition-all cursor-pointer ${
@@ -785,7 +823,10 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
         isOpen={isCategoryModalOpen}
         onClose={() => setIsCategoryModalOpen(false)}
         type="ingredient"
-        onCategoriesChanged={onRefresh}
+        onCategoriesChanged={() => {
+          void refreshCategories();
+          void onRefresh();
+        }}
         addToast={addToast}
       />
     </div>

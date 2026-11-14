@@ -91,42 +91,24 @@ export class AccountingPeriodService {
       );
     }
 
-    const existing = await db.accountingPeriod.findUnique({
-      where: { year_month: { year, month } },
-    });
+    await db.$executeRaw`
+      INSERT INTO public.accounting_period ("id", "year", "month", "status", "created_at", "updated_at")
+      VALUES (gen_random_uuid(), ${year}, ${month}, 'abierto', NOW(), NOW())
+      ON CONFLICT ("year", "month") DO NOTHING
+    `;
 
-    if (existing && existing.status === AccountingPeriodStatus.cerrado) {
+    const periods = await db.$queryRaw<Array<{ status: string }>>`
+      SELECT status
+      FROM public.accounting_period
+      WHERE "year" = ${year} AND "month" = ${month}
+      FOR SHARE
+    `;
+
+    const currentPeriod = periods[0];
+    if (currentPeriod && currentPeriod.status === AccountingPeriodStatus.cerrado) {
       throw new ConflictException(
         `El período contable ${this.getMonthLabel(month)} ${year} (${String(month).padStart(2, '0')}/${year}) está cerrado. No se pueden registrar ni anular asientos en ese mes.`,
       );
-    }
-
-    if (!existing) {
-      try {
-        await db.accountingPeriod.upsert({
-          where: { year_month: { year, month } },
-          create: {
-            year,
-            month,
-            status: AccountingPeriodStatus.abierto,
-          },
-          update: {},
-        });
-      } catch (err) {
-        const raced = await db.accountingPeriod.findUnique({
-          where: { year_month: { year, month } },
-        });
-        if (raced?.status === AccountingPeriodStatus.cerrado) {
-          throw new ConflictException(
-            `El período contable ${this.getMonthLabel(month)} ${year} (${String(month).padStart(2, '0')}/${year}) está cerrado.`,
-          );
-        }
-        if (
-          !(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')
-        ) {
-          throw err;
-        }
-      }
     }
 
     return { year, month };

@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   Calendar,
@@ -14,7 +13,6 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldAlert,
-  X,
 } from 'lucide-react';
 import type {
   AccountingPeriod,
@@ -24,6 +22,9 @@ import type {
 } from '../../types';
 import { accountingPeriodService } from '../../services/accountingPeriodService';
 import { formatChileShortDate, formatMoney } from '../../utils/formatters';
+import { MonthPeriodActionModal } from './periods/MonthPeriodActionModal';
+import { AnnualClosingModal } from './periods/AnnualClosingModal';
+import { AnnualClosingReverseModal } from './periods/AnnualClosingReverseModal';
 
 interface AccountingPeriodsTabProps {
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
@@ -692,218 +693,39 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
       </div>
 
       {/* Modal: Confirmar cierre / reapertura mensual */}
-      {periodModal &&
-        createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-            <div className="bg-white dark:bg-[#1C1411] w-full max-w-md rounded-3xl p-6 border border-[#EADBCE] dark:border-[#35251F] shadow-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-stone-100 dark:border-[#2C1F1A] pb-3">
-                <h4 className="font-bold text-base text-[#2A1B16] dark:text-white font-serif flex items-center gap-2">
-                  {periodModal.action === 'close' ? (
-                    <>
-                      <Lock className="w-4 h-4 text-[#8C1F25]" />
-                      Cerrar {periodModal.period.monthLabel} {periodModal.period.year}
-                    </>
-                  ) : (
-                    <>
-                      <LockOpen className="w-4 h-4 text-emerald-600" />
-                      Reabrir {periodModal.period.monthLabel} {periodModal.period.year}
-                    </>
-                  )}
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => setPeriodModal(null)}
-                  className="text-stone-400 hover:text-stone-600 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
-                {periodModal.action === 'close'
-                  ? `Una vez cerrado ${periodModal.period.monthLabel} ${periodModal.period.year}, ningún usuario podrá registrar nuevos asientos ni anular asientos existentes con fecha dentro de este mes.`
-                  : `Al reabrir ${periodModal.period.monthLabel} ${periodModal.period.year}, volverá a permitirse el registro y la anulación de asientos en este mes.`}
-              </p>
-
-              <form onSubmit={handleConfirmPeriodAction} className="space-y-4">
-                <div>
-                  <label className="text-[11px] font-bold text-stone-600 dark:text-stone-300 block mb-1">
-                    Observación / Nota contable (opcional)
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={periodNotes}
-                    onChange={(e) => setPeriodNotes(e.target.value)}
-                    placeholder={
-                      periodModal.action === 'close'
-                        ? 'Ej.: Conciliación bancaria y F29 revisados.'
-                        : 'Ej.: Ajuste solicitado por auditoría.'
-                    }
-                    className="w-full text-xs p-2.5 rounded-xl border border-stone-200 dark:border-[#35251F] bg-white dark:bg-[#16100E]"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2 border-t border-stone-100 dark:border-[#2C1F1A]">
-                  <button
-                    type="button"
-                    onClick={() => setPeriodModal(null)}
-                    className="px-4 py-2 rounded-xl text-xs text-stone-500 cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submittingPeriod}
-                    className={`px-4 py-2 rounded-xl text-white text-xs font-bold disabled:opacity-50 cursor-pointer ${
-                      periodModal.action === 'close'
-                        ? 'bg-[#8C1F25] hover:bg-[#73191E]'
-                        : 'bg-emerald-600 hover:bg-emerald-700'
-                    }`}
-                  >
-                    {submittingPeriod
-                      ? 'Procesando...'
-                      : periodModal.action === 'close'
-                      ? 'Confirmar Cierre'
-                      : 'Confirmar Reapertura'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>,
-          document.body,
-        )}
+      {periodModal && (
+        <MonthPeriodActionModal
+          modalData={periodModal}
+          notes={periodNotes}
+          submitting={submittingPeriod}
+          onNotesChange={setPeriodNotes}
+          onClose={() => setPeriodModal(null)}
+          onSubmit={handleConfirmPeriodAction}
+        />
+      )}
 
       {/* Modal: Ejecutar Cierre Anual */}
-      {showClosingModal &&
-        preview &&
-        createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-            <div className="bg-white dark:bg-[#1C1411] w-full max-w-lg rounded-3xl p-6 border border-[#EADBCE] dark:border-[#35251F] shadow-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-stone-100 dark:border-[#2C1F1A] pb-3">
-                <h4 className="font-bold text-base text-[#2A1B16] dark:text-white font-serif flex items-center gap-2">
-                  <FileCheck2 className="w-4 h-4 text-[#8C1F25]" />
-                  Confirmar Cierre Anual {selectedYear}
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => setShowClosingModal(false)}
-                  className="text-stone-400 hover:text-stone-600 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-900 dark:text-amber-200 space-y-1">
-                <p className="font-bold">Se generará el asiento de refundición al 31-12-{selectedYear}:</p>
-                <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
-                  <li>Todas las cuentas de ingresos, costos y gastos quedarán saldadas en $0.</li>
-                  <li>
-                    El resultado neto (<b>{formatMoney(preview.resultadoEjercicio)}</b>) se traspasará a{' '}
-                    <b>{preview.equityAccount?.code} {preview.equityAccount?.name}</b>.
-                  </li>
-                  {preview.openMonthsCount > 0 && (
-                    <li>
-                      Los <b>{preview.openMonthsCount}</b> meses aún abiertos de {selectedYear} se cerrarán automáticamente.
-                    </li>
-                  )}
-                </ul>
-              </div>
-
-              <form onSubmit={handleExecuteAnnualClosing} className="space-y-4">
-                <div>
-                  <label className="text-[11px] font-bold text-stone-600 dark:text-stone-300 block mb-1">
-                    Notas del Cierre Anual (opcional)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={closingNotes}
-                    onChange={(e) => setClosingNotes(e.target.value)}
-                    placeholder="Ej.: Cierre tributario y balance anual aprobado."
-                    className="w-full text-xs p-2.5 rounded-xl border border-stone-200 dark:border-[#35251F] bg-white dark:bg-[#16100E]"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2 border-t border-stone-100 dark:border-[#2C1F1A]">
-                  <button
-                    type="button"
-                    onClick={() => setShowClosingModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs text-stone-500 cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={executingClosing}
-                    className="px-5 py-2 rounded-xl bg-[#8C1F25] hover:bg-[#73191E] text-white text-xs font-bold disabled:opacity-50 cursor-pointer"
-                  >
-                    {executingClosing ? 'Ejecutando...' : `Confirmar Cierre Anual ${selectedYear}`}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>,
-          document.body,
-        )}
+      <AnnualClosingModal
+        isOpen={showClosingModal}
+        selectedYear={selectedYear}
+        preview={preview}
+        notes={closingNotes}
+        submitting={executingClosing}
+        onNotesChange={setClosingNotes}
+        onClose={() => setShowClosingModal(false)}
+        onSubmit={handleExecuteAnnualClosing}
+      />
 
       {/* Modal: Reversar Cierre Anual */}
-      {showReverseModal &&
-        createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-            <div className="bg-white dark:bg-[#1C1411] w-full max-w-md rounded-3xl p-6 border border-[#EADBCE] dark:border-[#35251F] shadow-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-stone-100 dark:border-[#2C1F1A] pb-3">
-                <h4 className="font-bold text-base text-[#2A1B16] dark:text-white font-serif flex items-center gap-2">
-                  <RotateCcw className="w-4 h-4 text-rose-600" />
-                  Reversar Cierre Anual {selectedYear}
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => setShowReverseModal(false)}
-                  className="text-stone-400 hover:text-stone-600 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <p className="text-xs text-stone-600 dark:text-stone-300">
-                Se generará un contra-asiento contable para revertir la refundición del 31-12-{selectedYear}. Los 12 meses permanecerán cerrados hasta que decidas reabrir alguno manualmente.
-              </p>
-
-              <form onSubmit={handleReverseAnnualClosing} className="space-y-4">
-                <div>
-                  <label className="text-[11px] font-bold text-stone-600 dark:text-stone-300 block mb-1">
-                    Motivo del reverso *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={reverseReason}
-                    onChange={(e) => setReverseReason(e.target.value)}
-                    placeholder="Ej.: Corrección de gasto omitido en diciembre"
-                    className="w-full text-xs p-2.5 rounded-xl border border-stone-200 dark:border-[#35251F] bg-white dark:bg-[#16100E]"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2 border-t border-stone-100 dark:border-[#2C1F1A]">
-                  <button
-                    type="button"
-                    onClick={() => setShowReverseModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs text-stone-500 cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={reversingClosing || !reverseReason.trim()}
-                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold disabled:opacity-50 cursor-pointer"
-                  >
-                    {reversingClosing ? 'Reversando...' : 'Confirmar Reverso'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>,
-          document.body,
-        )}
+      <AnnualClosingReverseModal
+        isOpen={showReverseModal}
+        selectedYear={selectedYear}
+        reason={reverseReason}
+        submitting={reversingClosing}
+        onReasonChange={setReverseReason}
+        onClose={() => setShowReverseModal(false)}
+        onSubmit={handleReverseAnnualClosing}
+      />
     </div>
   );
 };

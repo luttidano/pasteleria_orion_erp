@@ -123,6 +123,7 @@ describe('PosShiftService', () => {
       $queryRaw: jest.fn().mockResolvedValue([{ id: openShift.id }]),
       posShift: {
         findFirst: jest.fn().mockResolvedValue(openShift),
+        findUnique: jest.fn().mockResolvedValue(openShift),
         update: jest.fn().mockResolvedValue(closedRecord),
       },
       posSale: {
@@ -214,6 +215,7 @@ describe('PosShiftService', () => {
       $queryRaw: jest.fn().mockResolvedValue([{ id: openShift.id }]),
       posShift: {
         findFirst: jest.fn().mockResolvedValue(openShift),
+        findUnique: jest.fn().mockResolvedValue(openShift),
         update: jest.fn().mockResolvedValue(closedRecord),
       },
       posSale: {
@@ -285,6 +287,7 @@ describe('PosShiftService', () => {
       $queryRaw: jest.fn().mockResolvedValue([{ id: openShift.id }]),
       posShift: {
         findFirst: jest.fn().mockResolvedValue(openShift),
+        findUnique: jest.fn().mockResolvedValue(openShift),
         update: jest.fn().mockResolvedValue(closedRecord),
       },
       posSale: {
@@ -314,11 +317,13 @@ describe('PosShiftService', () => {
 
   it('debe rechazar con ConflictException el doble cierre secuencial y BadRequestException sin actividad', async () => {
     const mockTxAlreadyClosed = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
       posShift: {
         findFirst: jest
           .fn()
           .mockResolvedValueOnce(null)
           .mockResolvedValueOnce({ id: 'shift-closed-prev' }),
+        findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -335,11 +340,13 @@ describe('PosShiftService', () => {
     expect(outboxProcessor.processEvent).not.toHaveBeenCalled();
 
     const mockTxEmpty = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
       posShift: {
         findFirst: jest
           .fn()
           .mockResolvedValueOnce(null)
           .mockResolvedValueOnce(null),
+        findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -371,6 +378,7 @@ describe('PosShiftService', () => {
       $queryRaw: jest.fn().mockResolvedValue([{ id: openShift.id }]),
       posShift: {
         findFirst: jest.fn().mockResolvedValue(openShift),
+        findUnique: jest.fn().mockResolvedValue(openShift),
         update: jest.fn().mockRejectedValue(p2025Error),
       },
       posSale: { groupBy: jest.fn().mockResolvedValue([]) },

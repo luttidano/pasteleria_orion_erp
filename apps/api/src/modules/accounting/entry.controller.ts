@@ -15,13 +15,17 @@ import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
 import { EntryService } from './entry.service';
+import { EntryVoidService } from './entry-void.service';
 import { CreateAccountingEntryDto } from './dto/create-accounting-entry.dto';
 import { VoidAccountingEntryDto } from './dto/accounting-period.dto';
 
 @Controller('accounting')
 @UseGuards(AuthGuard, RolesGuard)
 export class EntryController {
-  constructor(private readonly entryService: EntryService) {}
+  constructor(
+    private readonly entryService: EntryService,
+    private readonly entryVoidService: EntryVoidService,
+  ) {}
 
   @Get('entries')
   @Roles(Role.admin)
@@ -44,6 +48,6 @@ export class EntryController {
     @Body() dto: VoidAccountingEntryDto,
     @CurrentUser('id') userId?: string,
   ) {
-    return this.entryService.voidEntry(id, dto, userId);
+    return this.entryVoidService.voidEntry(id, dto, userId);
   }
 }

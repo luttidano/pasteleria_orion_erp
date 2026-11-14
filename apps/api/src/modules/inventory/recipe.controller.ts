@@ -11,6 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { RecipeService } from './recipe.service';
+import { RecipeProductionService } from './recipe-production.service';
 import { CreateRecipeDto } from './dto/create-recipe.dto';
 import { UpdateRecipeDto } from './dto/update-recipe.dto';
 import { ProduceRecipeDto } from './dto/produce-recipe.dto';
@@ -24,7 +25,10 @@ import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.in
 @Controller('recipes')
 @UseGuards(AuthGuard, RolesGuard)
 export class RecipeController {
-  constructor(private readonly recipeService: RecipeService) {}
+  constructor(
+    private readonly recipeService: RecipeService,
+    private readonly recipeProductionService: RecipeProductionService,
+  ) {}
 
   // Consulta de recetas y disponibilidad: admin y pastelero (baker)
   @Get()
@@ -48,7 +52,7 @@ export class RecipeController {
     @Body() dto: ProduceRecipeDto,
     @CurrentUser('id') userId?: string,
   ) {
-    return this.recipeService.produce(id, dto, userId);
+    return this.recipeProductionService.produce(id, dto, userId);
   }
 
   // Creación de recetas: exclusivo admin

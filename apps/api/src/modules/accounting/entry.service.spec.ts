@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { EntryService } from './entry.service';
+import { EntryVoidService } from './entry-void.service';
 import { PrismaService } from '../../database/prisma.service';
 import { AccountingPeriodService } from './accounting-period.service';
 import { InventoryValuationService } from '../inventory/inventory-valuation.service';
@@ -93,6 +94,7 @@ describe('EntryService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EntryService,
+        EntryVoidService,
         { provide: PrismaService, useValue: prisma },
         { provide: AccountingPeriodService, useValue: periodService },
         { provide: InventoryValuationService, useValue: valuationService },

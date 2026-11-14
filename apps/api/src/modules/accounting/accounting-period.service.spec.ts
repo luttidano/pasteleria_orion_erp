@@ -36,6 +36,7 @@ describe('AccountingPeriodService', () => {
       accountingSettings: {
         findUnique: jest.fn().mockResolvedValue(null),
       },
+      $executeRaw: jest.fn().mockResolvedValue(1),
       $queryRaw: jest.fn().mockResolvedValue([]),
       $transaction: jest.fn(async (cb: (tx: any) => Promise<any>) => cb(prisma)),
     };
@@ -74,12 +75,7 @@ describe('AccountingPeriodService', () => {
   describe('assertPeriodOpen', () => {
     it('debe bloquear con ConflictException si el mes está cerrado', async () => {
       prisma.accountingEntry.findFirst.mockResolvedValue(null);
-      prisma.accountingPeriod.findUnique.mockResolvedValue({
-        id: 'per-1',
-        year: 2026,
-        month: 1,
-        status: AccountingPeriodStatus.cerrado,
-      });
+      prisma.$queryRaw.mockResolvedValue([{ status: AccountingPeriodStatus.cerrado }]);
 
       await expect(service.assertPeriodOpen('2026-01-15')).rejects.toThrow(
         ConflictException,
@@ -99,17 +95,12 @@ describe('AccountingPeriodService', () => {
 
     it('debe permitir e inicializar en abierto un mes sin registro previo', async () => {
       prisma.accountingEntry.findFirst.mockResolvedValue(null);
-      prisma.accountingPeriod.findUnique.mockResolvedValue(null);
-      prisma.accountingPeriod.upsert.mockResolvedValue({
-        id: 'per-2',
-        year: 2026,
-        month: 3,
-        status: AccountingPeriodStatus.abierto,
-      });
+      prisma.$executeRaw.mockResolvedValue(1);
+      prisma.$queryRaw.mockResolvedValue([{ status: AccountingPeriodStatus.abierto }]);
 
       const res = await service.assertPeriodOpen('2026-03-01');
       expect(res).toEqual({ year: 2026, month: 3 });
-      expect(prisma.accountingPeriod.upsert).toHaveBeenCalledTimes(1);
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
     });
 
     it('debe bloquear con ConflictException si la fecha es anterior al inicio contable configurado', async () => {
@@ -120,7 +111,7 @@ describe('AccountingPeriodService', () => {
       await expect(service.assertPeriodOpen('2026-04-30')).rejects.toThrow(
         ConflictException,
       );
-      expect(prisma.accountingPeriod.upsert).not.toHaveBeenCalled();
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
     });
 
     it('debe permitir el mismo día configurado como inicio contable', async () => {
@@ -128,13 +119,8 @@ describe('AccountingPeriodService', () => {
         accountingStartDate: new Date('2026-05-01T00:00:00.000Z'),
       });
       prisma.accountingEntry.findFirst.mockResolvedValue(null);
-      prisma.accountingPeriod.findUnique.mockResolvedValue(null);
-      prisma.accountingPeriod.upsert.mockResolvedValue({
-        id: 'per-5',
-        year: 2026,
-        month: 5,
-        status: AccountingPeriodStatus.abierto,
-      });
+      prisma.$executeRaw.mockResolvedValue(1);
+      prisma.$queryRaw.mockResolvedValue([{ status: AccountingPeriodStatus.abierto }]);
 
       const res = await service.assertPeriodOpen('2026-05-01');
       expect(res).toEqual({ year: 2026, month: 5 });

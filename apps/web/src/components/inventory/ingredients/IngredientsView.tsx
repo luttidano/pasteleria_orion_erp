@@ -1,18 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
-  Search,
   Plus,
   Edit2,
   Trash2,
   Minus,
   Plus as PlusIcon,
-  LayoutGrid,
-  List,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  ShoppingBag,
-  X,
   Tag,
 } from 'lucide-react';
 import type {
@@ -25,6 +17,8 @@ import type {
 import { ingredientService } from '../../../services/ingredientService';
 import { categoryService } from '../../../services/categoryService';
 import { IngredientModal } from './IngredientModal';
+import { IngredientMetricsCards } from './IngredientMetricsCards';
+import { IngredientFiltersBar } from './IngredientFiltersBar';
 import { StockAdjustmentModal, type StockAdjustmentTarget } from '../StockAdjustmentModal';
 import { getCategoryDefaultIcon } from '../../../utils/categoryIcons';
 import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
@@ -273,217 +267,30 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
       </div>
 
       {/* 2. Resumen visual en 3 estados claros (Semáforo de Despensa) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        {/* En Despensa (Todos los ingredientes) */}
-        <button
-          type="button"
-          onClick={() => setStatusFilter('todos')}
-          className={`p-4 sm:p-5 rounded-2xl border text-left transition-all cursor-pointer ${
-            statusFilter === 'todos'
-              ? 'bg-white dark:bg-[#1C1411] border-[#8C1F25] dark:border-[#B83238] shadow-sm ring-2 ring-[#8C1F25]/20'
-              : 'bg-white/90 dark:bg-[#16100E] border-stone-200 dark:border-[#35251F] hover:bg-white dark:hover:bg-[#1C1411]'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider">
-              En Despensa
-            </span>
-            <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div className="text-3xl font-extrabold text-stone-900 dark:text-stone-100 mt-2 font-sans">
-            {metrics.total}
-          </div>
-          <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
-            {metrics.ok} con cantidad suficiente
-          </p>
-        </button>
-
-        {/* Queda Poco (SOLO los que están bajos de stock) */}
-        <button
-          type="button"
-          onClick={() => setStatusFilter(statusFilter === 'bajo' ? 'todos' : 'bajo')}
-          className={`p-4 sm:p-5 rounded-2xl border text-left transition-all cursor-pointer ${
-            statusFilter === 'bajo'
-              ? 'bg-amber-50 dark:bg-[#2A1B0E] border-amber-500 shadow-sm ring-2 ring-amber-500/30'
-              : metrics.low > 0
-              ? 'bg-amber-50/70 dark:bg-[#201509] border-amber-200 dark:border-[#854D0E] hover:bg-amber-50'
-              : 'bg-white/90 dark:bg-[#16100E] border-stone-200 dark:border-[#35251F]'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider">
-              Queda Poco
-            </span>
-            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-          </div>
-          <div className="text-3xl font-extrabold text-amber-950 dark:text-amber-200 mt-2 font-sans">
-            {metrics.low}
-          </div>
-          <p className="text-xs text-amber-800 dark:text-amber-300/80 mt-1">
-            {metrics.low > 0 ? 'Conviene reponer pronto' : 'Todo con buen nivel'}
-          </p>
-        </button>
-
-        {/* Agotados (SOLO los que están agotados, stock <= 0) */}
-        <button
-          type="button"
-          onClick={() => setStatusFilter(statusFilter === 'agotado' ? 'todos' : 'agotado')}
-          className={`p-4 sm:p-5 rounded-2xl border text-left transition-all cursor-pointer ${
-            statusFilter === 'agotado'
-              ? 'bg-rose-50 dark:bg-[#2C1012] border-rose-500 shadow-sm ring-2 ring-rose-500/30'
-              : metrics.out > 0
-              ? 'bg-rose-50/70 dark:bg-[#200B0D] border-rose-200 dark:border-[#991B1B] hover:bg-rose-50'
-              : 'bg-white/90 dark:bg-[#16100E] border-stone-200 dark:border-[#35251F]'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-rose-900 dark:text-rose-300 uppercase tracking-wider">
-              Agotados
-            </span>
-            <XCircle className="w-5 h-5 text-rose-600 dark:text-rose-400" />
-          </div>
-          <div className="text-3xl font-extrabold text-rose-950 dark:text-rose-200 mt-2 font-sans">
-            {metrics.out}
-          </div>
-          <p className="text-xs text-rose-800 dark:text-rose-300/80 mt-1">
-            {metrics.out > 0 ? 'Sin existencias en despensa' : 'Ningún insumo en cero'}
-          </p>
-        </button>
-      </div>
-
-      {/* Indicador de filtro activo con botón para limpiar */}
-      {statusFilter !== 'todos' && (
-        <div className="flex items-center justify-between bg-stone-100 dark:bg-[#1E1512] border border-stone-200 dark:border-[#35251F] px-4 py-2.5 rounded-xl text-xs animate-fade-in">
-          <div className="flex items-center gap-2 text-stone-700 dark:text-stone-300">
-            <span className="font-semibold">Mostrando únicamente:</span>
-            {statusFilter === 'agotado' && (
-              <span className="px-2.5 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 font-bold border border-rose-300 dark:border-rose-800">
-                ❌ Insumos Agotados ({filteredProducts.length})
-              </span>
-            )}
-            {statusFilter === 'bajo' && (
-              <span className="px-2.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 font-bold border border-amber-300 dark:border-amber-800">
-                ⚠️ Insumos que Quedan Poco ({filteredProducts.length})
-              </span>
-            )}
-            {statusFilter === 'comprar' && (
-              <span className="px-2.5 py-0.5 rounded-md bg-stone-800 text-white font-bold">
-                🛒 Lista de Compras ({filteredProducts.length})
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => setStatusFilter('todos')}
-            className="flex items-center gap-1 text-[#8C1F25] dark:text-[#E8A598] hover:text-[#74191E] font-bold hover:underline cursor-pointer"
-          >
-            <X className="w-3.5 h-3.5" />
-            <span>Ver toda la despensa</span>
-          </button>
-        </div>
-      )}
+      <IngredientMetricsCards
+        metrics={metrics}
+        statusFilter={statusFilter}
+        filteredCount={filteredProducts.length}
+        onFilterChange={setStatusFilter}
+      />
 
       {/* 3. Buscador amplio y selector de categorías con emojis */}
-      <div className="bg-white dark:bg-[#16100E] p-4 sm:p-5 rounded-[22px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-3.5">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          {/* Buscador grande y limpio */}
-          <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
-              <Search className="w-4 h-4" />
-            </div>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar ingrediente (ej: Harina, Mantequilla, Azúcar)..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-300 dark:border-[#3E2922] bg-stone-50 dark:bg-[#201613] text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-[#8C1F25] focus:bg-white dark:focus:bg-[#281C18] transition-all"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
-              >
-                Borrar
-              </button>
-            )}
-          </div>
-
-          {/* Botón de Lista de Compras (filtro rápido o módulo completo) y Modo de Vista */}
-          <div className="flex items-center gap-2">
-            {isAdmin && 
-            (onNavigateToShoppingList ? (
-              <button
-                type="button"
-                onClick={onNavigateToShoppingList}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-all cursor-pointer active:scale-95"
-                title="Abrir la Lista de Compras completa"
-              >
-                <ShoppingBag className="w-3.5 h-3.5" />
-                <span>Ir a Lista de Compras ({metrics.low + metrics.out})</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setStatusFilter(statusFilter === 'comprar' ? 'todos' : 'comprar')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  statusFilter === 'comprar'
-                    ? 'bg-amber-600 text-white shadow-xs'
-                    : 'bg-stone-100 dark:bg-[#221713] text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#2E201A]'
-                }`}
-              >
-                <ShoppingBag className="w-3.5 h-3.5" />
-                <span>{statusFilter === 'comprar' ? 'Viendo lista de compras' : 'Ver lo que falta comprar'}</span>
-              </button>
-            ))}
-
-            {/* Alternar tarjetas o tabla */}
-            <div className="flex items-center bg-stone-100 dark:bg-[#221713] p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setViewMode('cards')}
-                className={`p-1.5 rounded-lg transition-all ${
-                  viewMode === 'cards' ? 'bg-white dark:bg-[#16100E] text-[#8C1F25] dark:text-[#E8A598] shadow-xs' : 'text-stone-500 dark:text-stone-400'
-                }`}
-                title="Vista de Tarjetas Visuales"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-lg transition-all ${
-                  viewMode === 'table' ? 'bg-white dark:bg-[#16100E] text-[#8C1F25] dark:text-[#E8A598] shadow-xs' : 'text-stone-500 dark:text-stone-400'
-                }`}
-                title="Vista de Lista"
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Categorías con Emojis visuales desde categoryService */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
-          {categoryFilters.map((cat) => {
-            const isSelected = selectedCategory === cat.value;
-            return (
-              <button
-                key={cat.key}
-                type="button"
-                onClick={() => setSelectedCategory(cat.value)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl whitespace-nowrap font-medium transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-[#8C1F25] text-white shadow-xs font-semibold'
-                    : 'bg-stone-100 dark:bg-[#221713] text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#2E201B]'
-                }`}
-              >
-                <span>{cat.icon}</span>
-                <span>{cat.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <IngredientFiltersBar
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        selectedCategory={selectedCategory}
+        onCategoryChange={setSelectedCategory}
+        categoryFilters={categoryFilters}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        isAdmin={isAdmin}
+        shoppingListBadgeCount={metrics.low + metrics.out}
+        onNavigateToShoppingList={onNavigateToShoppingList}
+        statusFilter={statusFilter}
+        onToggleBuyFilter={() =>
+          setStatusFilter(statusFilter === 'comprar' ? 'todos' : 'comprar')
+        }
+      />
 
 
       {/* 4. Lista o Cuadrícula de Ingredientes */}

@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { RecipeService } from './recipe.service';
+import { RecipeProductionService } from './recipe-production.service';
 import { CategoryService } from './category.service';
 import { PrismaService } from '../../database/prisma.service';
 import { StockMovementService } from './stock-movement.service';
@@ -48,6 +49,7 @@ describe('RecipeService (ACID produce y conversión estricta de unidades)', () =
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RecipeService,
+        RecipeProductionService,
         CategoryService,
         StockMovementService,
         AccountingOutboxService,

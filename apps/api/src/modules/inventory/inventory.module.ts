@@ -3,6 +3,7 @@ import { AccountingModule } from '../accounting/accounting.module';
 import { IngredientService } from './ingredient.service';
 import { IngredientController } from './ingredient.controller';
 import { RecipeService } from './recipe.service';
+import { RecipeProductionService } from './recipe-production.service';
 import { RecipeController } from './recipe.controller';
 import { CategoryService } from './category.service';
 import { CategoryController } from './category.controller';
@@ -32,6 +33,7 @@ import { StockMovementService } from './stock-movement.service';
   providers: [
     IngredientService,
     RecipeService,
+    RecipeProductionService,
     CategoryService,
     ProductService,
     SupplierService,
@@ -44,6 +46,7 @@ import { StockMovementService } from './stock-movement.service';
     InventoryStockService,
     InventoryValuationModule,
     StockMovementService,
+    RecipeProductionService,
   ],
 })
 export class InventoryModule {}

@@ -8,6 +8,7 @@ import { AccountingSettingsService } from './accounting-settings.service';
 import { AnnualClosingService } from './annual-closing.service';
 import { EntryController } from './entry.controller';
 import { EntryService } from './entry.service';
+import { EntryVoidService } from './entry-void.service';
 import { AccountingOutboxService } from './accounting-outbox.service';
 import { AccountingOutboxProcessorService } from './accounting-outbox-processor.service';
 import { LedgerController } from './ledger.controller';
@@ -34,6 +35,7 @@ import { FinancialReportService } from './financial-report.service';
     AccountingPeriodService,
     AnnualClosingService,
     EntryService,
+    EntryVoidService,
     AccountingOutboxProcessorService,
     LedgerService,
     BalanceService,
@@ -42,6 +44,7 @@ import { FinancialReportService } from './financial-report.service';
   exports: [
     AccountingPeriodService,
     EntryService,
+    EntryVoidService,
     AccountingOutboxService,
     AccountingOutboxProcessorService,
   ],

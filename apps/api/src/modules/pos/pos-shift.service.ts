@@ -434,6 +434,12 @@ export class PosShiftService {
     });
 
     if (existingOpen) {
+      await tx.$queryRaw`
+        SELECT id
+        FROM public.pos_shift
+        WHERE id = ${existingOpen.id}::uuid
+        FOR UPDATE
+      `;
       return existingOpen;
     }
 
@@ -460,6 +466,12 @@ export class PosShiftService {
           'No se pudo inicializar o recuperar el turno de caja activo.',
         );
       }
+      await tx.$queryRaw`
+        SELECT id
+        FROM public.pos_shift
+        WHERE id = ${raced.id}::uuid
+        FOR UPDATE
+      `;
       return raced;
     }
 

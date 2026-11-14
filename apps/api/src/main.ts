@@ -16,8 +16,40 @@ for (const envPath of [
     try {
       process.loadEnvFile(envPath);
       break;
-    } catch (_) {}
+    } catch {
+      // Ignorar si ya fue cargado o el formato no aplica en este entorno
+    }
   }
+}
+
+function buildAllowedCorsOrigins(): Set<string> {
+  const configuredRaw = [
+    process.env.CORS_ORIGINS,
+    process.env.FRONTEND_URL,
+  ]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join(',');
+
+  const origins = new Set(
+    configuredRaw
+      .split(',')
+      .map((origin) => origin.trim().replace(/\/$/, ''))
+      .filter(Boolean),
+  );
+
+  if (process.env.NODE_ENV !== 'production') {
+    for (const devOrigin of [
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'http://localhost:4173',
+      'http://127.0.0.1:4173',
+      'http://localhost:3000',
+    ]) {
+      origins.add(devOrigin);
+    }
+  }
+
+  return origins;
 }
 
 async function bootstrap() {
@@ -35,10 +67,28 @@ async function bootstrap() {
     }),
   );
 
-  // Permitir comunicación con el frontend (React en puerto 5173 u otros)
+  // Allowlist explícita de orígenes CORS con credenciales habilitadas
+  const allowedOrigins = buildAllowedCorsOrigins();
   app.enableCors({
-    origin: true,
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      const normalized = origin.trim().replace(/\/$/, '');
+      if (allowedOrigins.has(normalized)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Origin not allowed by CORS policy'), false);
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+    exposedHeaders: ['Idempotent-Replayed'],
   });
 
   // Desactivar ETag para evitar respuestas 304 en llamadas de API de datos dinámicos
@@ -68,4 +118,4 @@ async function bootstrap() {
   console.log(`Pastelería Orión ERP API running on http://localhost:${port}/api`);
 }
 
-bootstrap();
+void bootstrap();

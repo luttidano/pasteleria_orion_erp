@@ -225,6 +225,7 @@ CREATE TABLE IF NOT EXISTS public.pos_sale_item (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   sale_id uuid NOT NULL REFERENCES public.pos_sale(id) ON DELETE CASCADE,
   product_id uuid REFERENCES public.product(id) ON DELETE SET NULL,
+  packaging_id uuid REFERENCES public.packaging(id) ON DELETE SET NULL,
   product_name text NOT NULL,
   quantity integer NOT NULL CHECK (quantity > 0),
   unit_price numeric NOT NULL CHECK (unit_price >= 0::numeric),
@@ -243,6 +244,7 @@ CREATE TABLE IF NOT EXISTS public.accounting_entry (
   origin text NOT NULL DEFAULT 'manual'::text CHECK (origin = ANY (ARRAY['manual'::text, 'pos'::text, 'closing'::text, 'reversal'::text])),
   status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'voided'::text])),
   pos_sale_id uuid REFERENCES public.pos_sale(id) ON DELETE SET NULL,
+  pos_shift_id uuid REFERENCES public.pos_shift(id) ON DELETE SET NULL,
   voided_at timestamp with time zone,
   voided_by uuid REFERENCES public.profile(id) ON DELETE SET NULL,
   void_reason text,
@@ -284,6 +286,26 @@ CREATE TABLE IF NOT EXISTS public.accounting_settings (
 );
 
 -- =============================================================================
+-- 5B. IDEMPOTENCIA HTTP TRANSACCIONAL
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.idempotency_record (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  idempotency_key text NOT NULL CHECK (length(btrim(idempotency_key)) > 0 AND length(idempotency_key) <= 128),
+  actor_key text NOT NULL,
+  method text NOT NULL CHECK (method = ANY (ARRAY['POST'::text, 'PUT'::text, 'PATCH'::text, 'DELETE'::text])),
+  route text NOT NULL,
+  request_hash text NOT NULL,
+  status text NOT NULL DEFAULT 'processing'::text CHECK (status = ANY (ARRAY['processing'::text, 'completed'::text])),
+  status_code integer,
+  response_body jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone NOT NULL DEFAULT (now() + interval '24 hours'),
+  CONSTRAINT uq_idempotency_scope UNIQUE (actor_key, method, route, idempotency_key)
+);
+
+-- =============================================================================
 -- 6. ÍNDICES DE RENDIMIENTO
 -- =============================================================================
 
@@ -300,6 +322,7 @@ CREATE INDEX IF NOT EXISTS idx_general_supply_supplier ON public.general_supply(
 CREATE INDEX IF NOT EXISTS idx_general_supply_category ON public.general_supply(category);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_items_sale ON public.pos_sale_item(sale_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_items_product ON public.pos_sale_item(product_id);
+CREATE INDEX IF NOT EXISTS idx_pos_sale_item_packaging ON public.pos_sale_item(packaging_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_sold_at ON public.pos_sale(sold_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_shift_id ON public.pos_sale(shift_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_unshifted_completed ON public.pos_sale(sold_at DESC) WHERE shift_id IS NULL AND status = 'completada';
@@ -312,6 +335,9 @@ CREATE INDEX IF NOT EXISTS idx_pos_shift_closed_by ON public.pos_shift(closed_by
 CREATE INDEX IF NOT EXISTS idx_pos_shift_closing_entry ON public.pos_shift(closing_entry_id);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_date ON public.accounting_entry(entry_date DESC);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_pos_sale ON public.accounting_entry(pos_sale_id);
+CREATE INDEX IF NOT EXISTS idx_accounting_entry_pos_shift ON public.accounting_entry(pos_shift_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_accounting_entry_pos_sale ON public.accounting_entry(pos_sale_id) WHERE pos_sale_id IS NOT NULL AND status = 'active';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_accounting_entry_pos_shift ON public.accounting_entry(pos_shift_id) WHERE pos_shift_id IS NOT NULL AND status = 'active';
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_reversed ON public.accounting_entry(reversed_entry_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_accounting_entry_closing_year ON public.accounting_entry(closing_year) WHERE origin = 'closing' AND status = 'active' AND closing_year IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_accounting_period_year_month ON public.accounting_period(year DESC, month DESC);
@@ -319,27 +345,36 @@ CREATE INDEX IF NOT EXISTS idx_accounting_period_status ON public.accounting_per
 CREATE INDEX IF NOT EXISTS idx_accounting_period_closing_entry ON public.accounting_period(closing_entry_id);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_item_entry ON public.accounting_entry_item(entry_id);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_item_account ON public.accounting_entry_item(account_id);
+CREATE INDEX IF NOT EXISTS idx_idempotency_record_expires_at ON public.idempotency_record(expires_at);
 
 -- =============================================================================
 -- 7. TRIGGER AUTOMÁTICO PARA AUTH.USERS -> PUBLIC.PROFILE
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
 BEGIN
   INSERT INTO public.profile (id, name, email, role)
   VALUES (
     NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
+    COALESCE(
+      NULLIF(pg_catalog.btrim(NEW.raw_user_meta_data->>'name'), ''),
+      NULLIF(pg_catalog.split_part(COALESCE(NEW.email, ''), '@', 1), ''),
+      'Usuario'
+    ),
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'role', 'user')
+    'user'
   )
   ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     email = EXCLUDED.email;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -375,54 +410,65 @@ ON CONFLICT (id) DO NOTHING;
 
 
 -- =============================================================================
--- 9. PERMISOS Y POLÍTICAS DE ACCESO (ROW LEVEL SECURITY)
+-- 9. PERMISOS Y POLÍTICAS DE ACCESO (ROW LEVEL SECURITY - DEFAULT DENY CLIENTE)
 -- =============================================================================
 
+ALTER TABLE public.category ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.supplier ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.packaging ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accounting_account ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profile ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ingredient ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.supplier_ingredient ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recipe ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recipe_ingredient ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.product ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.packaging ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.general_supply ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pos_shift ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pos_sale ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pos_sale_item ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accounting_entry ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accounting_entry_item ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.accounting_period ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.accounting_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.pos_shift ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.idempotency_record ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "supplier_all_authenticated" ON public.supplier;
-CREATE POLICY "supplier_all_authenticated" ON public.supplier
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+REVOKE ALL ON TABLE public.category FROM anon, authenticated;
+REVOKE ALL ON TABLE public.supplier FROM anon, authenticated;
+REVOKE ALL ON TABLE public.accounting_account FROM anon, authenticated;
+REVOKE ALL ON TABLE public.profile FROM anon, authenticated;
+REVOKE ALL ON TABLE public.ingredient FROM anon, authenticated;
+REVOKE ALL ON TABLE public.supplier_ingredient FROM anon, authenticated;
+REVOKE ALL ON TABLE public.recipe FROM anon, authenticated;
+REVOKE ALL ON TABLE public.recipe_ingredient FROM anon, authenticated;
+REVOKE ALL ON TABLE public.product FROM anon, authenticated;
+REVOKE ALL ON TABLE public.packaging FROM anon, authenticated;
+REVOKE ALL ON TABLE public.general_supply FROM anon, authenticated;
+REVOKE ALL ON TABLE public.pos_shift FROM anon, authenticated;
+REVOKE ALL ON TABLE public.pos_sale FROM anon, authenticated;
+REVOKE ALL ON TABLE public.pos_sale_item FROM anon, authenticated;
+REVOKE ALL ON TABLE public.accounting_entry FROM anon, authenticated;
+REVOKE ALL ON TABLE public.accounting_entry_item FROM anon, authenticated;
+REVOKE ALL ON TABLE public.accounting_period FROM anon, authenticated;
+REVOKE ALL ON TABLE public.accounting_settings FROM anon, authenticated;
+REVOKE ALL ON TABLE public.idempotency_record FROM anon, authenticated;
 
-DROP POLICY IF EXISTS "packaging_all_authenticated" ON public.packaging;
-CREATE POLICY "packaging_all_authenticated" ON public.packaging
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "general_supply_all_authenticated" ON public.general_supply;
-CREATE POLICY "general_supply_all_authenticated" ON public.general_supply
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "supplier_ingredient_all_authenticated" ON public.supplier_ingredient;
-CREATE POLICY "supplier_ingredient_all_authenticated" ON public.supplier_ingredient
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-GRANT ALL ON TABLE public.supplier TO authenticated, service_role;
-GRANT ALL ON TABLE public.packaging TO authenticated, service_role;
-GRANT ALL ON TABLE public.general_supply TO authenticated, service_role;
-DROP POLICY IF EXISTS "accounting_period_all_authenticated" ON public.accounting_period;
-CREATE POLICY "accounting_period_all_authenticated" ON public.accounting_period
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-REVOKE ALL ON TABLE public.accounting_period FROM anon;
-GRANT ALL ON TABLE public.supplier_ingredient TO authenticated, service_role;
-GRANT ALL ON TABLE public.accounting_period TO authenticated, service_role;
-
-DROP POLICY IF EXISTS "accounting_settings_all_authenticated" ON public.accounting_settings;
-CREATE POLICY "accounting_settings_all_authenticated" ON public.accounting_settings
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-REVOKE ALL ON TABLE public.accounting_settings FROM anon;
-GRANT ALL ON TABLE public.accounting_settings TO authenticated, service_role;
-
-DROP POLICY IF EXISTS "pos_shift_all_authenticated" ON public.pos_shift;
-CREATE POLICY "pos_shift_all_authenticated" ON public.pos_shift
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-REVOKE ALL ON TABLE public.pos_shift FROM anon;
-GRANT ALL ON TABLE public.pos_shift TO authenticated, service_role;
+GRANT ALL ON TABLE public.category TO service_role;
+GRANT ALL ON TABLE public.supplier TO service_role;
+GRANT ALL ON TABLE public.accounting_account TO service_role;
+GRANT ALL ON TABLE public.profile TO service_role;
+GRANT ALL ON TABLE public.ingredient TO service_role;
+GRANT ALL ON TABLE public.supplier_ingredient TO service_role;
+GRANT ALL ON TABLE public.recipe TO service_role;
+GRANT ALL ON TABLE public.recipe_ingredient TO service_role;
+GRANT ALL ON TABLE public.product TO service_role;
+GRANT ALL ON TABLE public.packaging TO service_role;
+GRANT ALL ON TABLE public.general_supply TO service_role;
+GRANT ALL ON TABLE public.pos_shift TO service_role;
+GRANT ALL ON TABLE public.pos_sale TO service_role;
+GRANT ALL ON TABLE public.pos_sale_item TO service_role;
+GRANT ALL ON TABLE public.accounting_entry TO service_role;
+GRANT ALL ON TABLE public.accounting_entry_item TO service_role;
+GRANT ALL ON TABLE public.accounting_period TO service_role;
+GRANT ALL ON TABLE public.accounting_settings TO service_role;
+GRANT ALL ON TABLE public.idempotency_record TO service_role;

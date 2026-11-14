@@ -8,6 +8,7 @@ import {
   Delete,
   ParseUUIDPipe,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { IngredientService } from './ingredient.service';
 import { CreateIngredientDto } from './dto/create-ingredient.dto';
@@ -16,7 +17,9 @@ import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Role } from '../../common/enums';
+import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
 
 @Controller('ingredients')
 @UseGuards(AuthGuard, RolesGuard)
@@ -39,16 +42,19 @@ export class IngredientController {
   // Ajuste de stock (ej. registrar uso en cocina o compras): admin y pastelero
   @Post([':id/adjust-stock', ':id/stock'])
   @Roles(Role.admin, Role.baker)
+  @UseInterceptors(IdempotencyInterceptor)
   adjustStock(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() adjustStockDto: AdjustStockDto,
+    @CurrentUser('id') userId?: string,
   ) {
-    return this.ingredientService.adjustStock(id, adjustStockDto);
+    return this.ingredientService.adjustStock(id, adjustStockDto, userId);
   }
 
   // Creación de nuevos insumos: exclusivo de administrador
   @Post()
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   create(@Body() createIngredientDto: CreateIngredientDto) {
     return this.ingredientService.create(createIngredientDto);
   }
@@ -70,4 +76,3 @@ export class IngredientController {
     return this.ingredientService.remove(id);
   }
 }
-

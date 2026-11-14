@@ -26,6 +26,12 @@ export function getSupplyModality(supplier: Supplier): SupplyModality {
   return 'despacho';
 }
 
+export function isPhoneRegistered(phone?: string | null): boolean {
+  if (!phone) return false;
+  const clean = phone.trim();
+  return clean !== '' && clean !== 'Sin registrar' && clean !== 'No registrado';
+}
+
 export function formatPhoneForWhatsApp(phone: string): string {
   if (!phone || phone === 'Sin registrar') return '';
   const digits = phone.replace(/\D/g, '');

@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChefHat, X, AlertTriangle, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
 import type { Recipe, ProductionResult } from '../../../types';
+import { createIdempotencyKey } from '../../../lib/api';
 import { recipeService } from '../../../services/recipeService';
 
 interface ProduceRecipeModalProps {
@@ -19,7 +20,28 @@ export const ProduceRecipeModal: React.FC<ProduceRecipeModalProps> = ({
 }) => {
   if (!isOpen || !recipe) return null;
 
-  const products = recipe.products || [];
+  return (
+    <ProduceRecipeModalContent
+      key={recipe.id}
+      recipe={recipe}
+      onClose={onClose}
+      onSuccess={onSuccess}
+    />
+  );
+};
+
+interface ProduceRecipeModalContentProps {
+  recipe: Recipe;
+  onClose: () => void;
+  onSuccess: (result: ProductionResult) => void;
+}
+
+const ProduceRecipeModalContent: React.FC<ProduceRecipeModalContentProps> = ({
+  recipe,
+  onClose,
+  onSuccess,
+}) => {
+  const products = useMemo(() => recipe.products || [], [recipe.products]);
   const [selectedProductId, setSelectedProductId] = useState<string>(
     products.length > 0 ? products[0].id : '',
   );
@@ -27,6 +49,11 @@ export const ProduceRecipeModal: React.FC<ProduceRecipeModalProps> = ({
   const [customUnits, setCustomUnits] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    idempotencyKeyRef.current = null;
+  }, [recipe.id, selectedProductId, batches, customUnits]);
 
   const selectedProduct = useMemo(() => {
     return products.find((p) => p.id === selectedProductId) || products[0] || null;
@@ -73,15 +100,29 @@ export const ProduceRecipeModal: React.FC<ProduceRecipeModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const result = await recipeService.produce(recipe.id, {
-        quantity: numericBatches,
-        productId: selectedProduct?.id,
-        producedUnits: customUnits !== '' ? Number(customUnits) : undefined,
-      });
+      const idempotencyKey =
+        idempotencyKeyRef.current ?? createIdempotencyKey();
+      idempotencyKeyRef.current = idempotencyKey;
+
+      const result = await recipeService.produce(
+        recipe.id,
+        {
+          quantity: numericBatches,
+          productId: selectedProduct?.id,
+          producedUnits: customUnits !== '' ? Number(customUnits) : undefined,
+        },
+        idempotencyKey,
+      );
+      idempotencyKeyRef.current = null;
       onSuccess(result);
       onClose();
-    } catch (err: any) {
-      setError(err?.message || 'Error al procesar la orden de producción.');
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : (err as { message?: string } | null)?.message ||
+            'Error al procesar la orden de producción.';
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }

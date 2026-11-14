@@ -8,27 +8,30 @@ export class SupabaseService {
   private readonly clientInstance: SupabaseClient;
 
   constructor(private readonly configService: ConfigService) {
-    const supabaseUrl =
-      this.configService.get<string>('SUPABASE_URL') ||
-      this.configService.get<string>('VITE_SUPABASE_URL') ||
+    const supabaseUrl = (
+      this.configService?.get<string>('SUPABASE_URL') ||
+      this.configService?.get<string>('VITE_SUPABASE_URL') ||
       process.env.SUPABASE_URL ||
       process.env.VITE_SUPABASE_URL ||
-      '';
+      ''
+    ).trim();
 
-    const supabaseKey =
-      this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') ||
-      this.configService.get<string>('VITE_SUPABASE_ANON_KEY') ||
-      this.configService.get<string>('SUPABASE_ANON_KEY') ||
+    const serviceRoleKey = (
+      this.configService?.get<string>('SUPABASE_SERVICE_ROLE_KEY') ||
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.VITE_SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      '';
+      ''
+    ).trim();
 
-    if (!supabaseUrl || !supabaseKey) {
-      this.logger.error('Falta SUPABASE_URL o clave de servicio de Supabase en la configuración.');
+    if (!supabaseUrl || !supabaseUrl.startsWith('http') || !serviceRoleKey) {
+      this.logger.error(
+        'Configuración inválida de Supabase Admin: se requieren SUPABASE_URL (o VITE_SUPABASE_URL) y SUPABASE_SERVICE_ROLE_KEY.',
+      );
+      throw new Error(
+        'SupabaseService requiere SUPABASE_URL (o VITE_SUPABASE_URL) y SUPABASE_SERVICE_ROLE_KEY configurados.',
+      );
     }
 
-    this.clientInstance = createClient(supabaseUrl, supabaseKey, {
+    this.clientInstance = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,

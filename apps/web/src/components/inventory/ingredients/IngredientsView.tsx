@@ -15,11 +15,19 @@ import {
   X,
   Tag,
 } from 'lucide-react';
-import type { Category, Ingredient, ToastMessage, User } from '../../../types';
+import type {
+  AdjustStockPayload,
+  Category,
+  Ingredient,
+  ToastMessage,
+  User,
+} from '../../../types';
 import { ingredientService } from '../../../services/ingredientService';
 import { categoryService } from '../../../services/categoryService';
-import { IngredientModal, getCategoryDefaultIcon } from './IngredientModal';
-import { DeleteConfirmModal } from './DeleteIngredientModal';
+import { IngredientModal } from './IngredientModal';
+import { StockAdjustmentModal, type StockAdjustmentTarget } from '../StockAdjustmentModal';
+import { getCategoryDefaultIcon } from '../../../utils/categoryIcons';
+import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
 import { CategoryManagerModal } from '../categories/CategoryManagerModal';
 
 export type StatusFilterType = 'todos' | 'bajo' | 'agotado' | 'comprar';
@@ -102,19 +110,13 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
     }
   }, [externalFilter]);
 
-  // Si la despensa se monta con 0 insumos, disparar sincronización inmediata
-  useEffect(() => {
-    if (ingredients.length === 0) {
-      onRefresh();
-    }
-  }, []);
-
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [ingredientToEdit, setIngredientToEdit] = useState<Ingredient | null>(null);
   const [ingredientToDelete, setIngredientToDelete] = useState<Ingredient | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [adjustmentTarget, setAdjustmentTarget] = useState<StockAdjustmentTarget | null>(null);
 
   // Accurate bakery metrics
   const metrics = useMemo(() => {
@@ -155,23 +157,34 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
     });
   }, [ingredients, searchTerm, selectedCategory, statusFilter]);
 
-  // Quick stock adjustment
-  const handleStockDelta = async (ingredient: Ingredient, delta: number) => {
-    try {
-      await ingredientService.adjustStock(ingredient.id, delta);
-      await onRefresh();
-      addToast({
-        type: 'info',
-        title: 'Existencia actualizada',
-        message: `${ingredient.name}: ${Math.max(0, ingredient.stock + delta)} ${ingredient.unit}`,
-      });
-    } catch (err: unknown) {
-      addToast({
-        type: 'error',
-        title: 'Error al ajustar cantidad',
-        message: err instanceof Error ? err.message : 'No se pudo actualizar la cantidad en la base de datos.',
-      });
-    }
+  // Ajuste de stock con motivo contable (Modal)
+  const openAdjustmentModal = (ingredient: Ingredient, delta: number) => {
+    setAdjustmentTarget({
+      id: ingredient.id,
+      name: ingredient.name,
+      itemType: 'ingredient',
+      currentStock: ingredient.stock,
+      unit: ingredient.unit,
+      unitCost: ingredient.price,
+      initialDelta: delta,
+    });
+  };
+
+  const handleConfirmAdjustment = async (
+    id: string,
+    payload: AdjustStockPayload,
+  ) => {
+    const updated = await ingredientService.adjustStock(id, payload);
+    await onRefresh();
+    addToast({
+      type: updated.accountingWarning ? 'warning' : 'info',
+      title: updated.accountingWarning
+        ? 'Existencia actualizada (pendiente contable)'
+        : 'Existencia actualizada',
+      message: updated.accountingWarning
+        ? `${updated.name}: ${updated.stock} ${updated.unit}. ${updated.accountingWarning}`
+        : `${updated.name}: ${updated.stock} ${updated.unit}`,
+    });
   };
 
   // Add / Edit
@@ -649,10 +662,10 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                   <div className="flex items-center gap-1.5 bg-stone-100 dark:bg-[#201613] p-1 rounded-xl">
                     <button
                       type="button"
-                      onClick={() => handleStockDelta(item, -1)}
+                      onClick={() => openAdjustmentModal(item, -1)}
                       disabled={item.stock <= 0}
                       className="w-8 h-8 rounded-lg bg-white dark:bg-[#2C1E19] hover:bg-stone-50 dark:hover:bg-[#382620] text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-[#3A2822] flex items-center justify-center shadow-xs transition-colors disabled:opacity-40 cursor-pointer"
-                      title={`Restar 1 ${item.unit}`}
+                      title={`Descontar / Registrar merma (${item.unit})`}
                     >
                       <Minus className="w-3.5 h-3.5" />
                     </button>
@@ -661,9 +674,9 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleStockDelta(item, 1)}
+                      onClick={() => openAdjustmentModal(item, 1)}
                       className="w-8 h-8 rounded-lg bg-white dark:bg-[#2C1E19] hover:bg-stone-50 dark:hover:bg-[#382620] text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-[#3A2822] flex items-center justify-center shadow-xs transition-colors cursor-pointer"
-                      title={`Sumar 1 ${item.unit}`}
+                      title={`Ingresar compra / sobrante (${item.unit})`}
                     >
                       <PlusIcon className="w-3.5 h-3.5" />
                     </button>
@@ -735,7 +748,8 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                     <td className="py-4 px-4 text-center">
                       <div className="inline-flex items-center gap-2">
                         <button
-                          onClick={() => handleStockDelta(item, -1)}
+                          type="button"
+                          onClick={() => openAdjustmentModal(item, -1)}
                           disabled={item.stock <= 0}
                           className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-[#281C17] hover:bg-stone-200 dark:hover:bg-[#35251F] text-stone-800 dark:text-stone-200 flex items-center justify-center text-xs disabled:opacity-30 cursor-pointer"
                         >
@@ -745,7 +759,8 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
                           {item.stock} {item.unit}
                         </span>
                         <button
-                          onClick={() => handleStockDelta(item, 1)}
+                          type="button"
+                          onClick={() => openAdjustmentModal(item, 1)}
                           className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-[#281C17] hover:bg-stone-200 dark:hover:bg-[#35251F] text-stone-800 dark:text-stone-200 flex items-center justify-center text-xs cursor-pointer"
                         >
                           +
@@ -811,12 +826,35 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
         ingredientToEdit={ingredientToEdit}
       />
 
-      <DeleteConfirmModal
+      <ConfirmDeleteModal
         isOpen={Boolean(ingredientToDelete)}
-        ingredient={ingredientToDelete}
-        onClose={() => setIngredientToDelete(null)}
-        onConfirm={handleConfirmDelete}
+        title="¿Eliminar ingrediente de la despensa?"
+        description={
+          ingredientToDelete ? (
+            <>
+              Estás a punto de quitar{' '}
+              <strong className="text-[#1C120D] dark:text-[#FBF4EB] font-bold">
+                "{ingredientToDelete.name}"
+              </strong>
+              . Esta materia prima ya no figurará en la lista de insumos.
+            </>
+          ) : null
+        }
+        warningNote={
+          ingredientToDelete ? (
+            <>
+              Cantidad registrada:{' '}
+              <span className="font-bold">
+                {ingredientToDelete.stock} {ingredientToDelete.unit}
+              </span>
+              . Si solo se agotó temporalmente, te recomendamos dejar su cantidad en 0 en lugar de eliminarlo.
+            </>
+          ) : undefined
+        }
+        confirmLabel="Sí, quitar de la despensa"
         isDeleting={isDeleting}
+        onClose={() => !isDeleting && setIngredientToDelete(null)}
+        onConfirm={handleConfirmDelete}
       />
 
       {/* Modal de Gestión de Categorías */}
@@ -829,6 +867,12 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
           void onRefresh();
         }}
         addToast={addToast}
+      />
+
+      <StockAdjustmentModal
+        target={adjustmentTarget}
+        onClose={() => setAdjustmentTarget(null)}
+        onConfirm={handleConfirmAdjustment}
       />
     </div>
   );

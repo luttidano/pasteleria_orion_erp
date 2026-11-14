@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Package,
   Plus,
@@ -9,16 +9,22 @@ import {
   PlusCircle,
   MinusCircle,
 } from 'lucide-react';
-import type { Packaging, ToastMessage } from '../../../types';
+import type { AdjustStockPayload, Packaging, ToastMessage } from '../../../types';
 import { packagingService } from '../../../services/packagingService';
+import { formatMoney } from '../../../utils/formatters';
 import { PackagingModal } from './PackagingModal';
-import { DeletePackagingModal } from './DeletePackagingModal';
+import { StockAdjustmentModal, type StockAdjustmentTarget } from '../StockAdjustmentModal';
+import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
 
 interface PackagingViewProps {
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
+  onInventoryChange?: () => void;
 }
 
-export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
+export const PackagingView: React.FC<PackagingViewProps> = ({
+  addToast,
+  onInventoryChange,
+}) => {
   const [items, setItems] = useState<Packaging[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -28,22 +34,28 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Packaging | null>(null);
   const [deletingItem, setDeletingItem] = useState<Packaging | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [adjustmentTarget, setAdjustmentTarget] = useState<StockAdjustmentTarget | null>(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const data = await packagingService.getAll();
       setItems(data);
-    } catch {
-      addToast({ type: 'error', title: 'Error', message: 'No se pudo cargar el inventario de empaques.' });
+    } catch (err: unknown) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: err instanceof Error ? err.message : 'No se pudo cargar el inventario de empaques.',
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [addToast]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    void loadData();
+  }, [loadData]);
 
   const metrics = useMemo(() => {
     const total = items.length;
@@ -70,7 +82,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
         return (
           item.name.toLowerCase().includes(query) ||
           item.category.toLowerCase().includes(query) ||
-          (item.supplier?.name && item.supplier.name.toLowerCase().includes(query))
+          Boolean(item.supplier?.name && item.supplier.name.toLowerCase().includes(query))
         );
       }
       return true;
@@ -85,39 +97,58 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
       await packagingService.create(data);
       addToast({ type: 'success', title: 'Creado', message: 'Nuevo empaque registrado.' });
     }
-    loadData();
+    await loadData();
+    onInventoryChange?.();
   };
 
   const handleDelete = async () => {
-    if (!deletingItem) return;
+    if (!deletingItem || isDeleting) return;
+    setIsDeleting(true);
     try {
       await packagingService.delete(deletingItem.id);
       addToast({ type: 'success', title: 'Eliminado', message: 'Empaque eliminado.' });
       setDeletingItem(null);
-      loadData();
-    } catch {
-      addToast({ type: 'error', title: 'Error', message: 'No se pudo eliminar el empaque.' });
+      await loadData();
+      onInventoryChange?.();
+    } catch (err: unknown) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: err instanceof Error ? err.message : 'No se pudo eliminar el empaque.',
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const handleQuickAdjust = async (id: string, delta: number) => {
-    try {
-      await packagingService.adjustStock(id, delta);
-      setItems((prev) =>
-        prev.map((item) => {
-          if (item.id === id) {
-            const nextStock = Math.max(0, item.stock + delta);
-            let nextStatus: 'suficiente' | 'bajo' | 'agotado' = 'suficiente';
-            if (nextStock <= 0) nextStatus = 'agotado';
-            else if (nextStock <= item.minStock) nextStatus = 'bajo';
-            return { ...item, stock: nextStock, status: nextStatus };
-          }
-          return item;
-        })
-      );
-    } catch {
-      addToast({ type: 'error', title: 'Error', message: 'No se pudo actualizar el stock.' });
-    }
+  const openAdjustmentModal = (item: Packaging, delta: number) => {
+    setAdjustmentTarget({
+      id: item.id,
+      name: item.name,
+      itemType: 'packaging',
+      currentStock: item.stock,
+      unit: item.unit,
+      unitCost: item.costPrice,
+      initialDelta: delta,
+    });
+  };
+
+  const handleConfirmAdjustment = async (
+    id: string,
+    payload: AdjustStockPayload,
+  ) => {
+    const updated = await packagingService.adjustStock(id, payload);
+    setItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
+    onInventoryChange?.();
+    addToast({
+      type: updated.accountingWarning ? 'warning' : 'success',
+      title: updated.accountingWarning
+        ? 'Stock actualizado (pendiente contable)'
+        : 'Stock actualizado',
+      message: updated.accountingWarning
+        ? `${updated.name}: ${updated.stock} ${updated.unit}. ${updated.accountingWarning}`
+        : `${updated.name}: ${updated.stock} ${updated.unit}`,
+    });
   };
 
   return (
@@ -134,6 +165,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
           </p>
         </div>
         <button
+          type="button"
           onClick={() => {
             setEditingItem(null);
             setIsModalOpen(true);
@@ -170,6 +202,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
       <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <button
+            type="button"
             onClick={() => setSelectedType('all')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
               selectedType === 'all'
@@ -180,6 +213,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
             Todos ({metrics.total})
           </button>
           <button
+            type="button"
             onClick={() => setSelectedType('primario')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
               selectedType === 'primario'
@@ -190,6 +224,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
             🍰 Primarios ({metrics.primarios})
           </button>
           <button
+            type="button"
             onClick={() => setSelectedType('secundario')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
               selectedType === 'secundario'
@@ -200,6 +235,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
             🛍️ Secundarios ({metrics.secundarios})
           </button>
           <button
+            type="button"
             onClick={() => setSelectedType('low_stock')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
               selectedType === 'low_stock'
@@ -249,7 +285,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
                 <th className="py-3 px-4">Categoría</th>
                 <th className="py-3 px-4">Stock</th>
                 <th className="py-3 px-4">Ajuste Rápido</th>
-                <th className="py-3 px-4">Costo Ref.</th>
+                <th className="py-3 px-4">Costo / Venta POS</th>
                 <th className="py-3 px-4">Proveedor</th>
                 <th className="py-3 px-4 text-right">Acciones</th>
               </tr>
@@ -304,15 +340,18 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => handleQuickAdjust(item.id, -10)}
-                          title="-10 unidades"
-                          className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                          type="button"
+                          onClick={() => openAdjustmentModal(item, -10)}
+                          disabled={item.stock <= 0}
+                          title="Descontar / Registrar merma"
+                          className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer disabled:opacity-40"
                         >
                           <MinusCircle className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleQuickAdjust(item.id, 10)}
-                          title="+10 unidades"
+                          type="button"
+                          onClick={() => openAdjustmentModal(item, 10)}
+                          title="Ingresar compra / sobrante"
                           className="p-1 rounded-md text-stone-400 hover:text-emerald-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
                         >
                           <PlusCircle className="w-4 h-4" />
@@ -320,7 +359,12 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
                       </div>
                     </td>
                     <td className="py-3 px-4 font-mono text-xs text-stone-600 dark:text-stone-300">
-                      ${Number(item.costPrice || 0).toLocaleString('es-CL')}
+                      <div>{formatMoney(item.costPrice)}</div>
+                      {item.packageType === 'secundario' && (
+                        <div className="text-[10px] text-amber-600 dark:text-amber-400 font-sans font-semibold">
+                          POS: {formatMoney(item.salePrice ?? 0)}
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-xs text-stone-600 dark:text-stone-300">
                       {item.supplier ? (
@@ -334,6 +378,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          type="button"
                           onClick={() => {
                             setEditingItem(item);
                             setIsModalOpen(true);
@@ -343,6 +388,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => setDeletingItem(item)}
                           className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
                         >
@@ -366,13 +412,28 @@ export const PackagingView: React.FC<PackagingViewProps> = ({ addToast }) => {
         itemToEdit={editingItem}
       />
 
-      <DeletePackagingModal
-        isOpen={!!deletingItem}
-        onClose={() => setDeletingItem(null)}
+      <ConfirmDeleteModal
+        isOpen={Boolean(deletingItem)}
+        title="¿Eliminar empaque del inventario?"
+        description={
+          deletingItem ? (
+            <>
+              Estás a punto de eliminar el empaque{' '}
+              <strong className="text-[#1C120D] dark:text-[#FBF4EB]">"{deletingItem.name}"</strong>.
+            </>
+          ) : null
+        }
+        confirmLabel="Sí, eliminar empaque"
+        isDeleting={isDeleting}
+        onClose={() => !isDeleting && setDeletingItem(null)}
         onConfirm={handleDelete}
-        item={deletingItem}
+      />
+
+      <StockAdjustmentModal
+        target={adjustmentTarget}
+        onClose={() => setAdjustmentTarget(null)}
+        onConfirm={handleConfirmAdjustment}
       />
     </div>
   );
 };
-

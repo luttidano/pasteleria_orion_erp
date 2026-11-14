@@ -8,15 +8,20 @@ import {
   Delete,
   Query,
   UseGuards,
+  UseInterceptors,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { PackagingService } from './packaging.service';
 import { CreatePackagingDto } from './dto/create-packaging.dto';
 import { UpdatePackagingDto } from './dto/update-packaging.dto';
+import { AdjustStockDto } from './dto/adjust-stock.dto';
+import { PackagingQueryDto } from './dto/inventory-query.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Role } from '../../common/enums';
+import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
 
 @Controller('packaging')
 @UseGuards(AuthGuard, RolesGuard)
@@ -25,8 +30,8 @@ export class PackagingController {
 
   @Get()
   @Roles(Role.admin, Role.baker, Role.cashier)
-  findAll(@Query('type') type?: string) {
-    return this.packagingService.findAll(type);
+  findAll(@Query() query: PackagingQueryDto) {
+    return this.packagingService.findAll(query.type);
   }
 
   @Get(':id')
@@ -37,6 +42,7 @@ export class PackagingController {
 
   @Post()
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   create(@Body() createDto: CreatePackagingDto) {
     return this.packagingService.create(createDto);
   }
@@ -52,11 +58,13 @@ export class PackagingController {
 
   @Post(':id/adjust-stock')
   @Roles(Role.admin, Role.baker, Role.cashier)
+  @UseInterceptors(IdempotencyInterceptor)
   adjustStock(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body('delta') delta: number,
+    @Body() adjustStockDto: AdjustStockDto,
+    @CurrentUser('id') userId?: string,
   ) {
-    return this.packagingService.adjustStock(id, Number(delta) || 0);
+    return this.packagingService.adjustStock(id, adjustStockDto, userId);
   }
 
   @Delete(':id')

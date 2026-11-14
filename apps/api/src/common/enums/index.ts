@@ -30,6 +30,7 @@ export enum AccountingPeriodStatus {
 export enum AccountingEntryOrigin {
   manual = 'manual',
   pos = 'pos',
+  inventory = 'inventory',
   closing = 'closing',
   reversal = 'reversal',
 }

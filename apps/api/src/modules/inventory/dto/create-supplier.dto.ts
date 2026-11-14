@@ -46,10 +46,10 @@ export class CreateSupplierDto {
 
   // Modalidad operativa del proveedor
   @IsOptional()
-  @IsIn(['despacho', 'presencial'], {
-    message: 'La modalidad debe ser: despacho o presencial.',
+  @IsIn(['despacho', 'presencial', 'mixto'], {
+    message: 'La modalidad debe ser: despacho, presencial o mixto.',
   })
-  supplyModality?: 'despacho' | 'presencial';
+  supplyModality?: 'despacho' | 'presencial' | 'mixto';
 
   @IsOptional()
   @IsArray({ message: 'Los tipos de proveedor deben ser una lista '})

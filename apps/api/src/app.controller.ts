@@ -1,9 +1,11 @@
-import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
+import { Controller, Get, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { AppService } from './app.service';
 import { PrismaService } from './database/prisma.service';
 
 @Controller()
 export class AppController {
+  private readonly logger = new Logger(AppController.name);
+
   constructor(
     private readonly appService: AppService,
     private readonly prisma: PrismaService,
@@ -33,11 +35,14 @@ export class AppController {
       };
     } catch (err: unknown) {
       this.prisma.isAvailable = false;
-      const detail = err instanceof Error ? err.message : 'Database connection error';
+      this.logger.error(
+        'Database health check failed',
+        err instanceof Error ? err.stack : String(err),
+      );
       throw new ServiceUnavailableException({
         status: 'error',
         database: 'disconnected',
-        message: detail,
+        message: 'Base de datos temporalmente no disponible.',
         timestamp: new Date().toISOString(),
       });
     }

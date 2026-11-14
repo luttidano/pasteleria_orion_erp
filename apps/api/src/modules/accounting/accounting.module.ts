@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common';
+import { InventoryValuationModule } from '../inventory/inventory-valuation.module';
 import { AccountController } from './account.controller';
 import { AccountService } from './account.service';
 import { AccountingPeriodController } from './accounting-period.controller';
 import { AccountingPeriodService } from './accounting-period.service';
+import { AccountingSettingsService } from './accounting-settings.service';
+import { AnnualClosingService } from './annual-closing.service';
 import { EntryController } from './entry.controller';
 import { EntryService } from './entry.service';
+import { AccountingOutboxService } from './accounting-outbox.service';
+import { AccountingOutboxProcessorService } from './accounting-outbox-processor.service';
 import { LedgerController } from './ledger.controller';
 import { LedgerService } from './ledger.service';
 import { BalanceController } from './balance.controller';
@@ -13,6 +18,7 @@ import { FinancialReportController } from './financial-report.controller';
 import { FinancialReportService } from './financial-report.service';
 
 @Module({
+  imports: [InventoryValuationModule],
   controllers: [
     AccountController,
     AccountingPeriodController,
@@ -23,19 +29,21 @@ import { FinancialReportService } from './financial-report.service';
   ],
   providers: [
     AccountService,
+    AccountingOutboxService,
+    AccountingSettingsService,
     AccountingPeriodService,
+    AnnualClosingService,
     EntryService,
+    AccountingOutboxProcessorService,
     LedgerService,
     BalanceService,
     FinancialReportService,
   ],
   exports: [
-    AccountService,
     AccountingPeriodService,
     EntryService,
-    LedgerService,
-    BalanceService,
-    FinancialReportService,
+    AccountingOutboxService,
+    AccountingOutboxProcessorService,
   ],
 })
 export class AccountingModule {}

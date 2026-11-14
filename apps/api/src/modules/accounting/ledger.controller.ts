@@ -4,6 +4,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { LedgerService } from './ledger.service';
+import { DateRangeQueryDto } from './dto/report-query.dto';
 
 @Controller('accounting')
 @UseGuards(AuthGuard, RolesGuard)
@@ -14,9 +15,12 @@ export class LedgerController {
   @Roles(Role.admin)
   getAccountLedger(
     @Param('accountId', ParseUUIDPipe) accountId: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
+    @Query() query: DateRangeQueryDto,
   ) {
-    return this.ledgerService.getAccountLedger(accountId, startDate, endDate);
+    return this.ledgerService.getAccountLedger(
+      accountId,
+      query.startDate,
+      query.endDate,
+    );
   }
 }

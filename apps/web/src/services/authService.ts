@@ -1,10 +1,21 @@
 import type { User, UserRole } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import {
+  reportApiNetworkError,
+  reportApiServerError,
+  reportApiSuccess,
+} from '../lib/connectionStatus';
+import { clearPwaApiCaches } from '../lib/pwaCache';
 
 const STORAGE_KEY_USER = 'orion_current_user';
-const STORAGE_KEY_REGISTERED_USERS = 'orion_users_db';
+const LEGACY_STORAGE_KEY_USERS = 'orion_users_db';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '') + '/api';
+const AUTH_ME_TIMEOUT_MS = 6000;
+const ACTIVE_ROLES = new Set<UserRole>(['admin', 'baker', 'cashier']);
 
 let inMemoryAuthToken: string | null = null;
+let verifiedCurrentUser: User | null = null;
+let isLoginFlowActive = false;
 
 export interface LoginResult {
   success: boolean;
@@ -14,8 +25,191 @@ export interface LoginResult {
   message?: string;
 }
 
+interface AuthoritativeProfileResponse {
+  ok: boolean;
+  status: number;
+  user?: User;
+  error?: string;
+}
+
+function isValidActiveRole(role: unknown): role is UserRole {
+  return typeof role === 'string' && ACTIVE_ROLES.has(role as UserRole);
+}
+
+function decodeJwtExpMs(token: string): number | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3 || !parts[1]) {
+      return null;
+    }
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    const payload = JSON.parse(atob(padded)) as { exp?: unknown };
+    if (typeof payload.exp === 'number' && Number.isFinite(payload.exp)) {
+      return payload.exp * 1000;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function isTokenExpired(token: string | null | undefined, leewayMs = 0): boolean {
+  if (!token || token === 'undefined' || token === 'null') {
+    return true;
+  }
+  const expMs = decodeJwtExpMs(token);
+  if (expMs === null) {
+    return false;
+  }
+  return expMs - leewayMs <= Date.now();
+}
+
+function purgeLegacyLocalUsers(): void {
+  try {
+    localStorage.removeItem(LEGACY_STORAGE_KEY_USERS);
+    const legacySupabaseKeys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        legacySupabaseKeys.push(key);
+      }
+    }
+    for (const key of legacySupabaseKeys) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignorar error de acceso a localStorage
+  }
+}
+
+function persistVerifiedUser(user: User | null): void {
+  verifiedCurrentUser = user;
+  try {
+    if (user) {
+      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(STORAGE_KEY_USER);
+    }
+  } catch {
+    // Ignorar error de almacenamiento local
+  }
+}
+
+function clearLocalSessionState(): void {
+  inMemoryAuthToken = null;
+  persistVerifiedUser(null);
+  purgeLegacyLocalUsers();
+  void clearPwaApiCaches();
+  try {
+    localStorage.removeItem('pasteleria_orion_auth_token');
+  } catch {
+    // Ignorar error de acceso a localStorage
+  }
+}
+
 /**
- * Traduce y estandariza los mensajes de error de Supabase Auth al español
+ * Consulta GET /api/auth/me directamente con el bearer token recién emitido,
+ * evitando ciclos con `apiFetch -> getValidToken()`.
+ */
+async function fetchAuthoritativeProfile(
+  token: string,
+  fallbackCreatedAt?: string,
+): Promise<AuthoritativeProfileResponse> {
+  const url = `${API_BASE_URL}/auth/me`;
+  const maxRetries = 2;
+  let attempt = 0;
+
+  while (true) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), AUTH_ME_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        cache: 'no-store',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        let errorMessage = `Error ${response.status} al validar perfil`;
+        try {
+          const body = await response.json();
+          if (typeof body?.message === 'string' && body.message.trim()) {
+            errorMessage = body.message;
+          }
+        } catch {
+          // Ignorar parseo de cuerpo no JSON
+        }
+        if (response.status >= 500) {
+          reportApiServerError(response.status, errorMessage);
+        }
+        return {
+          ok: false,
+          status: response.status,
+          error: errorMessage,
+        };
+      }
+
+      const payload = (await response.json()) as {
+        id?: unknown;
+        name?: unknown;
+        email?: unknown;
+        role?: unknown;
+      };
+
+      if (
+        typeof payload?.id !== 'string' ||
+        typeof payload?.name !== 'string' ||
+        !isValidActiveRole(payload.role)
+      ) {
+        return {
+          ok: false,
+          status: 403,
+          error: 'Tu cuenta no posee un perfil operativo autorizado en el ERP.',
+        };
+      }
+
+      reportApiSuccess('GET', true);
+      const verifiedUser: User = {
+        id: payload.id,
+        name: payload.name,
+        email: typeof payload.email === 'string' ? payload.email : '',
+        role: payload.role,
+        createdAt: fallbackCreatedAt,
+      };
+
+      return {
+        ok: true,
+        status: 200,
+        user: verifiedUser,
+      };
+    } catch (networkErr) {
+      clearTimeout(timeoutId);
+      attempt++;
+      if (attempt <= maxRetries) {
+        await new Promise((r) => setTimeout(r, 500));
+        continue;
+      }
+      reportApiNetworkError(
+        networkErr instanceof Error ? networkErr.message : 'Fallo de red al contactar API.',
+      );
+      return {
+        ok: false,
+        status: 0,
+        error: 'No se pudo conectar con el servidor ERP para validar tu perfil.',
+      };
+    }
+  }
+}
+
+/**
+ * Traduce y estandariza los mensajes de error de Supabase Auth al español.
  */
 function translateSupabaseAuthError(message: string): string {
   const msg = message.toLowerCase();
@@ -29,7 +223,7 @@ function translateSupabaseAuthError(message: string): string {
     return 'Este correo electrónico ya está registrado. Por favor inicia sesión.';
   }
   if (msg.includes('password should be at least')) {
-    return 'La contraseña debe tener al menos 6 caracteres por seguridad.';
+    return 'La contraseña debe tener al menos 8 caracteres por seguridad.';
   }
   if (msg.includes('rate limit') || msg.includes('too many requests')) {
     return 'Demasiados intentos seguidos. Por favor espera un momento e intenta de nuevo.';
@@ -44,40 +238,207 @@ function translateSupabaseAuthError(message: string): string {
 }
 
 export const authService = {
-  /**
-   * Obtiene de forma síncrona el token de autenticación activo
-   */
-  getAccessToken(): string | null {
-    if (inMemoryAuthToken) return inMemoryAuthToken;
+  _authReadyPromise: null as Promise<User | null> | null,
+  _refreshPromise: null as Promise<string | null> | null,
 
-    // 1. Probar clave de persistencia dedicada
-    try {
-      const stored = localStorage.getItem('pasteleria_orion_auth_token');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.access_token) {
-          inMemoryAuthToken = parsed.access_token;
-          return inMemoryAuthToken;
-        }
-      }
-    } catch {
-      // Ignorar
+  /**
+   * Refresca la sesión activa mediante Supabase Auth usando un candado single-flight
+   * para evitar rotaciones concurrentes de refresh_token.
+   */
+  async refreshAccessToken(): Promise<string | null> {
+    if (this._refreshPromise) {
+      return this._refreshPromise;
     }
 
-    // 2. Probar claves automáticas de Supabase en localStorage (sb-*-auth-token)
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
-          const item = localStorage.getItem(key);
-          if (item) {
-            const parsed = JSON.parse(item);
-            if (parsed?.access_token) {
-              inMemoryAuthToken = parsed.access_token;
-              return inMemoryAuthToken;
-            }
-          }
+    inMemoryAuthToken = null;
+
+    if (!this.isUsingSupabase() || !supabase) {
+      return null;
+    }
+
+    this._refreshPromise = (async () => {
+      try {
+        const { data, error } = await supabase.auth.refreshSession();
+        const refreshedToken = data.session?.access_token;
+
+        if (error || !refreshedToken || isTokenExpired(refreshedToken, 15_000)) {
+          inMemoryAuthToken = null;
+          return null;
         }
+
+        inMemoryAuthToken = refreshedToken;
+        return refreshedToken;
+      } catch {
+        inMemoryAuthToken = null;
+        return null;
+      }
+    })().finally(() => {
+      this._refreshPromise = null;
+    });
+
+    return this._refreshPromise;
+  },
+
+  /**
+   * Garantiza que la sesión de Supabase esté hidratada, no expirada y validada
+   * contra el backend autoritativo (`GET /api/auth/me`).
+   */
+  async ensureAuthReady(): Promise<User | null> {
+    if (this._authReadyPromise) return this._authReadyPromise;
+
+    this._authReadyPromise = (async () => {
+      purgeLegacyLocalUsers();
+
+      if (!this.isUsingSupabase() || !supabase) {
+        clearLocalSessionState();
+        return null;
+      }
+
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error || !data.session) {
+          clearLocalSessionState();
+          return null;
+        }
+
+        const session = data.session;
+        const expiresAtMs = session.expires_at
+          ? session.expires_at * 1000
+          : decodeJwtExpMs(session.access_token) ?? 0;
+
+        let activeToken = session.access_token;
+
+        if (
+          !activeToken ||
+          (expiresAtMs && expiresAtMs - Date.now() < 60_000) ||
+          isTokenExpired(activeToken, 60_000)
+        ) {
+          const refreshedToken = await this.refreshAccessToken();
+          if (!refreshedToken) {
+            await supabase.auth.signOut().catch(() => {});
+            clearLocalSessionState();
+            return null;
+          }
+          activeToken = refreshedToken;
+        }
+
+        inMemoryAuthToken = activeToken;
+
+        const profileRes = await fetchAuthoritativeProfile(
+          activeToken,
+          session.user?.created_at,
+        );
+
+        if (!profileRes.ok || !profileRes.user) {
+          if (profileRes.status === 401 || profileRes.status === 403) {
+            await supabase.auth.signOut().catch(() => {});
+            clearLocalSessionState();
+          } else {
+            // Fall closed si no se pudo verificar con el servidor ERP
+            inMemoryAuthToken = null;
+            persistVerifiedUser(null);
+          }
+          return null;
+        }
+
+        persistVerifiedUser(profileRes.user);
+        return profileRes.user;
+      } catch (e) {
+        console.warn('[authService] Error verificando sesión en arranque:', e);
+        inMemoryAuthToken = null;
+        persistVerifiedUser(null);
+        return null;
+      }
+    })().finally(() => {
+      this._authReadyPromise = null;
+    });
+
+    return this._authReadyPromise;
+  },
+
+  /**
+   * Obtiene un token JWT vigente verificando expiración y refrescando sesión si es necesario.
+   */
+  async getValidToken(): Promise<string | null> {
+    if (inMemoryAuthToken && !isTokenExpired(inMemoryAuthToken, 30_000)) {
+      return inMemoryAuthToken;
+    }
+    inMemoryAuthToken = null;
+
+    if (this._authReadyPromise) {
+      await this._authReadyPromise;
+      if (inMemoryAuthToken && !isTokenExpired(inMemoryAuthToken, 15_000)) {
+        return inMemoryAuthToken;
+      }
+    }
+
+    if (!this.isUsingSupabase() || !supabase) {
+      return null;
+    }
+
+    if (this._refreshPromise) {
+      return this._refreshPromise;
+    }
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        return null;
+      }
+
+      const sessionToken = data.session.access_token;
+      const expiresAtMs = data.session.expires_at
+        ? data.session.expires_at * 1000
+        : null;
+
+      if (
+        sessionToken &&
+        !isTokenExpired(sessionToken, 60_000) &&
+        (expiresAtMs === null || expiresAtMs - Date.now() >= 60_000)
+      ) {
+        inMemoryAuthToken = sessionToken;
+        return inMemoryAuthToken;
+      }
+    } catch {
+      // Continuar con refresh centralizado ante fallo al leer sesión
+    }
+
+    return this.refreshAccessToken();
+  },
+
+  /**
+   * Indica si Supabase Auth está activo y configurado en el entorno.
+   */
+  isUsingSupabase(): boolean {
+    return isSupabaseConfigured() && supabase !== null;
+  },
+
+  /**
+   * Obtiene el usuario autenticado verificado por backend si existe sesión activa válida.
+   */
+  getCurrentUser(): User | null {
+    if (verifiedCurrentUser && isValidActiveRole(verifiedCurrentUser.role)) {
+      return verifiedCurrentUser;
+    }
+
+    try {
+      const data = localStorage.getItem(STORAGE_KEY_USER);
+      if (!data) return null;
+      const parsed = JSON.parse(data) as Partial<User>;
+      if (
+        typeof parsed?.id === 'string' &&
+        typeof parsed?.name === 'string' &&
+        isValidActiveRole(parsed.role)
+      ) {
+        verifiedCurrentUser = {
+          id: parsed.id,
+          name: parsed.name,
+          email: typeof parsed.email === 'string' ? parsed.email : '',
+          role: parsed.role,
+          avatarUrl: parsed.avatarUrl,
+          createdAt: parsed.createdAt,
+        };
+        return verifiedCurrentUser;
       }
     } catch {
       // Ignorar
@@ -86,237 +447,90 @@ export const authService = {
     return null;
   },
 
-  _authReadyPromise: null as Promise<User | null> | null,
-
   /**
-   * Garantiza que la sesión de Supabase esté hidratada y el token listo antes de realizar peticiones
-   */
-  async ensureAuthReady(): Promise<User | null> {
-    if (this._authReadyPromise) return this._authReadyPromise;
-
-    this._authReadyPromise = (async () => {
-      if (this.isUsingSupabase() && supabase) {
-        try {
-          const { data, error } = await supabase.auth.getSession();
-          if (!error && data.session) {
-            const expiresAt = data.session.expires_at ? data.session.expires_at * 1000 : 0;
-            const now = Date.now();
-
-            // Si el token ya expiró o expirará en menos de 60 segundos, auto-refrescar
-            if (expiresAt && expiresAt - now < 60_000) {
-              const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
-              if (!refreshErr && refreshData.session?.access_token) {
-                inMemoryAuthToken = refreshData.session.access_token;
-              } else if (data.session.access_token) {
-                inMemoryAuthToken = data.session.access_token;
-              }
-            } else if (data.session.access_token) {
-              inMemoryAuthToken = data.session.access_token;
-            }
-          }
-        } catch (e) {
-          console.warn('[authService] Error al verificar sesión en arranque:', e);
-        }
-      }
-
-      if (!inMemoryAuthToken) {
-        this.getAccessToken();
-      }
-
-      return this.getCurrentUser();
-    })();
-
-    return this._authReadyPromise;
-  },
-
-  /**
-   * Obtiene el token garantizando hidratación de sesión de Supabase si aún no está en memoria
-   */
-  async getValidToken(): Promise<string | null> {
-    if (inMemoryAuthToken) return inMemoryAuthToken;
-
-    // 1. Esperar a que la hidratación de arranque termine si está en curso
-    await this.ensureAuthReady();
-    if (inMemoryAuthToken) return inMemoryAuthToken;
-
-    // 2. Si aún no está en memoria pero Supabase está configurado, reintentar sesión o refresh
-    if (this.isUsingSupabase() && supabase) {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (data.session?.access_token) {
-          inMemoryAuthToken = data.session.access_token;
-          return inMemoryAuthToken;
-        }
-
-        const { data: refData } = await supabase.auth.refreshSession();
-        if (refData.session?.access_token) {
-          inMemoryAuthToken = refData.session.access_token;
-          return inMemoryAuthToken;
-        }
-      } catch {
-        // Ignorar
-      }
-    }
-
-    return this.getAccessToken();
-  },
-
-  /**
-   * Actualiza el token en memoria
-   */
-  setAccessToken(token: string | null): void {
-    inMemoryAuthToken = token;
-  },
-
-  /**
-   * Indica si Supabase está activo y conectado en el entorno
-   */
-  isUsingSupabase(): boolean {
-    return isSupabaseConfigured() && supabase !== null;
-  },
-
-  /**
-   * Obtiene la sesión actual persistida de forma síncrona para render instantáneo
-   */
-  getCurrentUser(): User | null {
-    try {
-      const data = localStorage.getItem(STORAGE_KEY_USER);
-      return data ? JSON.parse(data) : null;
-    } catch {
-      return null;
-    }
-  },
-
-  /**
-   * Iniciar sesión (Supabase Auth)
+   * Iniciar sesión (Supabase Auth + verificación autoritativa obligatoria en GET /api/auth/me).
    */
   async login(identifier: string, password: string): Promise<LoginResult> {
     const cleanId = identifier.trim().toLowerCase();
     const cleanPass = password.trim();
 
+    purgeLegacyLocalUsers();
+
     if (!cleanId || !cleanPass) {
-      return { success: false, error: 'Por favor ingresa tu correo electrónico y contraseña.' };
+      return {
+        success: false,
+        error: 'Por favor ingresa tu correo electrónico y contraseña.',
+      };
     }
 
-    // 1. Si Supabase está configurado, autenticar con Supabase Auth
-    if (this.isUsingSupabase() && supabase) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanId,
-          password: cleanPass,
-        });
+    if (!this.isUsingSupabase() || !supabase) {
+      return {
+        success: false,
+        error:
+          'El servicio de autenticación central no está configurado. Verifica las variables de entorno.',
+      };
+    }
 
-        if (error) {
-          return {
-            success: false,
-            error: translateSupabaseAuthError(error.message),
-          };
-        }
+    isLoginFlowActive = true;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanId,
+        password: cleanPass,
+      });
 
-        if (!data.user) {
-          return { success: false, error: 'No se encontró la sesión del usuario.' };
-        }
-
-        // Asegurar persistencia inmediata del token para peticiones síncronas/inmediatas
-        if (data.session) {
-          inMemoryAuthToken = data.session.access_token;
-          this._authReadyPromise = null;
-          try {
-            localStorage.setItem('pasteleria_orion_auth_token', JSON.stringify(data.session));
-          } catch {
-            // Ignorar
-          }
-        }
-
-        // Obtener rol y nombre del usuario desde tabla `profiles` o `user_metadata`
-        let userRole: UserRole = 'baker';
-        let userName =
-          data.user.user_metadata?.name ||
-          data.user.email?.split('@')[0] ||
-          'Usuario';
-
-        // Intentar consultar tabla `profiles` si existe en Supabase
-        try {
-          const { data: profile } = await supabase
-            .from('profile')
-            .select('name, role')
-            .eq('id', data.user.id)
-            .maybeSingle();
-
-          if (profile) {
-            if (profile.role) userRole = profile.role as UserRole;
-            if (profile.name) userName = profile.name;
-          } else if (data.user.user_metadata?.role) {
-            userRole = data.user.user_metadata.role as UserRole;
-          }
-        } catch {
-          // Si la tabla profiles no existe aún, usar metadata
-          if (data.user.user_metadata?.role) {
-            userRole = data.user.user_metadata.role as UserRole;
-          }
-        }
-
-        // Si el correo es el del administrador oficial, garantizar rol admin
-        if (
-          data.user.email === 'admin@pasteleriaorion.com' ||
-          data.user.email?.toLowerCase().startsWith('admin@')
-        ) {
-          userRole = 'admin';
-        }
-
-        const sessionUser: User = {
-          id: data.user.id,
-          name: userName,
-          email: data.user.email || cleanId,
-          role: userRole,
-          createdAt: data.user.created_at || new Date().toISOString(),
-        };
-
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(sessionUser));
-        return { success: true, user: sessionUser };
-      } catch (err: unknown) {
-        console.error('Error durante el inicio de sesión en Supabase:', err);
+      if (error) {
         return {
           success: false,
-          error: 'Error de comunicación con Supabase. Revisa tu conexión a internet.',
+          error: translateSupabaseAuthError(error.message),
         };
       }
-    }
 
-    // 3. Fallback a base de datos local en localStorage (cuando no hay Supabase en .env)
-    const users: Array<User & { passwordHash: string }> = this.getRegisteredUsers();
-    const foundUser = users.find(
-      (u) => u.email.toLowerCase() === cleanId || u.name.toLowerCase() === cleanId
-    );
-
-    if (foundUser) {
-      if (foundUser.passwordHash === cleanPass) {
-        const sessionUser: User = {
-          id: foundUser.id,
-          name: foundUser.name,
-          email: foundUser.email,
-          role: foundUser.role,
-          createdAt: foundUser.createdAt,
-        };
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(sessionUser));
-        return { success: true, user: sessionUser };
-      } else {
-        return { success: false, error: 'Contraseña incorrecta.' };
+      if (!data.user || !data.session?.access_token) {
+        return { success: false, error: 'No se encontró una sesión válida para el usuario.' };
       }
-    }
 
-    // Si el servicio no está configurado en este equipo (falta archivo .env)
-    return {
-      success: false,
-      error:
-        'El sistema se encuentra en modo local sin conexión al servidor central. Configura el archivo de entorno (.env) o reinicia el servidor.',
-    };
+      inMemoryAuthToken = data.session.access_token;
+      this._authReadyPromise = null;
+
+      const profileRes = await fetchAuthoritativeProfile(
+        data.session.access_token,
+        data.user.created_at || new Date().toISOString(),
+      );
+
+      if (!profileRes.ok || !profileRes.user) {
+        await this.logout();
+        if (profileRes.status === 401 || profileRes.status === 403) {
+          return {
+            success: false,
+            error:
+              profileRes.error ||
+              'Tu cuenta no tiene un perfil activo o rol autorizado en el ERP.',
+          };
+        }
+        return {
+          success: false,
+          error:
+            profileRes.error ||
+            'No se pudo validar tu perfil en el servidor ERP. Verifica que la API esté activa.',
+        };
+      }
+
+      persistVerifiedUser(profileRes.user);
+      return { success: true, user: profileRes.user };
+    } catch (err: unknown) {
+      console.error('Error durante el inicio de sesión:', err);
+      await this.logout();
+      return {
+        success: false,
+        error: 'Error de comunicación durante la autenticación. Intenta nuevamente.',
+      };
+    } finally {
+      isLoginFlowActive = false;
+    }
   },
 
-
-
   /**
-   * Recuperar contraseña (envío de email vía Supabase Auth)
+   * Recuperar contraseña (envío de email vía Supabase Auth).
    */
   async resetPassword(email: string): Promise<{ success: boolean; message: string }> {
     const cleanEmail = email.trim().toLowerCase();
@@ -356,7 +570,7 @@ export const authService = {
   },
 
   /**
-   * Cierra la sesión activa en Supabase y limpia el estado local
+   * Cierra la sesión activa en Supabase y limpia el estado local.
    */
   async logout(): Promise<void> {
     try {
@@ -366,14 +580,13 @@ export const authService = {
     } catch (err) {
       console.error('Error al cerrar sesión en Supabase:', err);
     } finally {
-      inMemoryAuthToken = null;
-      localStorage.removeItem(STORAGE_KEY_USER);
-      localStorage.removeItem('pasteleria_orion_auth_token');
+      clearLocalSessionState();
     }
   },
 
   /**
-   * Escucha cambios en el estado de autenticación de Supabase (token refresh, logout externo)
+   * Escucha cambios en el estado de autenticación de Supabase y mantiene sincronizado
+   * el perfil verificado con el backend.
    */
   subscribeToAuthChanges(callback: (user: User | null) => void): { unsubscribe: () => void } {
     if (this.isUsingSupabase() && supabase) {
@@ -381,22 +594,48 @@ export const authService = {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_OUT' || !session?.user) {
-          inMemoryAuthToken = null;
+          clearLocalSessionState();
           this._authReadyPromise = null;
-          localStorage.removeItem(STORAGE_KEY_USER);
           callback(null);
-        } else if (
-          event === 'SIGNED_IN' ||
+          return;
+        }
+
+        if (session.access_token && !isTokenExpired(session.access_token)) {
+          inMemoryAuthToken = session.access_token;
+        }
+
+        if (event === 'INITIAL_SESSION') {
+          // La hidratación inicial es coordinada por ensureAuthReady() con GET /api/auth/me
+          return;
+        }
+
+        if (event === 'SIGNED_IN' && isLoginFlowActive) {
+          // Evita consulta duplicada durante el flujo login() activo
+          return;
+        }
+
+        if (
           event === 'TOKEN_REFRESHED' ||
-          event === 'INITIAL_SESSION'
+          event === 'USER_UPDATED' ||
+          event === 'SIGNED_IN'
         ) {
-          if (session?.access_token) {
-            inMemoryAuthToken = session.access_token;
+          if (!session.access_token) {
+            clearLocalSessionState();
+            callback(null);
+            return;
           }
-          // Actualizar datos de usuario
-          const currentUser = this.getCurrentUser();
-          if (currentUser) {
-            callback(currentUser);
+
+          const profileRes = await fetchAuthoritativeProfile(
+            session.access_token,
+            session.user.created_at,
+          );
+
+          if (profileRes.ok && profileRes.user) {
+            persistVerifiedUser(profileRes.user);
+            callback(profileRes.user);
+          } else if (profileRes.status === 401 || profileRes.status === 403) {
+            await this.logout();
+            callback(null);
           }
         }
       });
@@ -409,17 +648,5 @@ export const authService = {
     return {
       unsubscribe: () => {},
     };
-  },
-
-  /**
-   * Obtiene la base de datos simulada de usuarios registrados en localStorage
-   */
-  getRegisteredUsers(): Array<User & { passwordHash: string }> {
-    try {
-      const data = localStorage.getItem(STORAGE_KEY_REGISTERED_USERS);
-      return data ? JSON.parse(data) : [];
-    } catch {
-      return [];
-    }
   },
 };

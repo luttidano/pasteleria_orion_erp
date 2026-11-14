@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import type { User, UserRole } from '../types';
 import { UnauthorizedView } from '../components/common/UnauthorizedView';
+import { LoadingScreen } from '../components/common/LoadingScreen';
 
 interface RoleGuardProps {
   user: User | null;
@@ -27,19 +28,7 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({
   const location = useLocation();
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#FAF5ED] dark:bg-[#0F0B09] flex flex-col items-center justify-center p-4">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-[#8C1F25]/20 border-t-[#8C1F25] rounded-full animate-spin"></div>
-          <div className="font-serif text-2xl font-bold text-[#8C1F25] dark:text-[#E25C64]">
-            Pastelería Orión
-          </div>
-          <p className="text-xs text-[#7B685C] dark:text-[#B39F93] font-medium tracking-wide">
-            Validando permisos y privilegios de rol...
-          </p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen message="Validando permisos y privilegios de rol..." />;
   }
 
   // Si no hay usuario activo, redirigir a login

@@ -22,6 +22,7 @@ model Profile {
   updatedAccountingSettings AccountingSettings[] @relation("AccountingSettingsUpdatedBy")
   openedShifts              PosShift[]           @relation("ShiftOpenedBy")
   closedShifts              PosShift[]           @relation("ShiftClosedBy")
+  stockMovements            StockMovement[]      @relation("StockMovementCreatedBy")
 
   @@map("profile")
 }
@@ -70,12 +71,14 @@ model Recipe {
   yieldServings Int                @default(1) @map("yield_servings")
   categoryId    String?            @map("category_id") @db.Uuid
   imageUrl      String?            @map("image_url")
+  isActive      Boolean            @default(true) @map("is_active")
   createdAt     DateTime           @default(now()) @map("created_at")
   updatedAt     DateTime           @updatedAt @map("updated_at")
   categoryRef   Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   ingredients   RecipeIngredient[]
   products      Product[]
 
+  @@index([isActive], map: "idx_recipe_is_active")
   @@map("recipe")
 }
 
@@ -106,6 +109,7 @@ model Supplier {
   address           String?
   notes             String?
   supplierTypes     String[] @default(["materia_prima"]) @map("supplier_types")
+  supplyModality    String   @default("despacho") @map("supply_modality")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @default(now()) @map("updated_at")
 
@@ -145,13 +149,15 @@ model Product {
   categoryId   String?       @map("category_id") @db.Uuid
   imageUrl     String?       @map("image_url")
   icon         String?       @default("🧁")
+  isActive     Boolean       @default(true) @map("is_active")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @default(now()) @updatedAt @map("updated_at")
-  recipe       Recipe?       @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  recipe       Recipe?       @relation(fields: [recipeId], references: [id], onDelete: Restrict)
   supplier     Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   categoryRef  Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   posSaleItems PosSaleItem[]
 
+  @@index([isActive], map: "idx_product_is_active")
   @@map("product")
 }
 
@@ -164,16 +170,20 @@ model Packaging {
   minStock    Decimal  @default(0) @map("min_stock") @db.Decimal(12, 3)
   unit        String   @default("un")
   costPrice   Decimal? @default(0) @map("cost_price") @db.Decimal(12, 2)
+  salePrice   Decimal  @default(0) @map("sale_price") @db.Decimal(12, 2)
   supplierId  String?  @map("supplier_id") @db.Uuid
   icon        String?  @default("📦")
   description String?
+  isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @map("updated_at")
 
-  supplier    Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplier     Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  posSaleItems PosSaleItem[]
 
   @@index([supplierId], map: "idx_packaging_supplier")
   @@index([packageType], map: "idx_packaging_package_type")
+  @@index([isActive], map: "idx_packaging_is_active")
   @@map("packaging")
 }
 
@@ -229,18 +239,22 @@ model PosSale {
 }
 
 model PosSaleItem {
-  id          String   @id @default(uuid()) @db.Uuid
-  saleId      String   @map("sale_id") @db.Uuid
-  productId   String?  @map("product_id") @db.Uuid
-  productName String   @map("product_name")
+  id          String     @id @default(uuid()) @db.Uuid
+  saleId      String     @map("sale_id") @db.Uuid
+  productId   String?    @map("product_id") @db.Uuid
+  packagingId String?    @map("packaging_id") @db.Uuid
+  productName String     @map("product_name")
   quantity    Int
-  unitPrice   Decimal  @map("unit_price") @db.Decimal(12, 2)
-  lineTotal   Decimal  @map("line_total") @db.Decimal(12, 2)
-  sale        PosSale  @relation(fields: [saleId], references: [id], onDelete: Cascade, map: "pos_sale_items_sale_id_fkey")
-  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "pos_sale_items_product_id_fkey")
+  unitPrice   Decimal    @map("unit_price") @db.Decimal(12, 2)
+  unitCost    Decimal    @default(0) @map("unit_cost") @db.Decimal(12, 2)
+  lineTotal   Decimal    @map("line_total") @db.Decimal(12, 2)
+  sale        PosSale    @relation(fields: [saleId], references: [id], onDelete: Cascade, map: "pos_sale_items_sale_id_fkey")
+  product     Product?   @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "pos_sale_items_product_id_fkey")
+  packaging   Packaging? @relation(fields: [packagingId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "pos_sale_items_packaging_id_fkey")
 
   @@index([saleId], map: "idx_pos_sale_item_sale_id")
   @@index([productId], map: "idx_pos_sale_item_product_id")
+  @@index([packagingId], map: "idx_pos_sale_item_packaging")
 
   @@map("pos_sale_item")
 }
@@ -266,6 +280,8 @@ model AccountingEntry {
   origin          String                @default("manual")
   status          String                @default("active")
   posSaleId       String?               @map("pos_sale_id") @db.Uuid
+  posShiftId      String?               @map("pos_shift_id") @db.Uuid
+  outboxId        String?               @map("outbox_id") @db.Uuid
   voidedAt        DateTime?             @map("voided_at") @db.Timestamptz(6)
   voidedById      String?               @map("voided_by") @db.Uuid
   voidReason      String?               @map("void_reason")
@@ -274,6 +290,8 @@ model AccountingEntry {
   createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
 
   posSale         PosSale?              @relation(fields: [posSaleId], references: [id])
+  posShift        PosShift?             @relation("ShiftDifferenceEntry", fields: [posShiftId], references: [id], onDelete: SetNull)
+  outbox          AccountingOutbox?     @relation(fields: [outboxId], references: [id], onDelete: SetNull)
   voidedBy        Profile?              @relation("EntryVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
   reversedEntry   AccountingEntry?      @relation("EntryReversal", fields: [reversedEntryId], references: [id], onDelete: SetNull)
   reversalEntries AccountingEntry[]     @relation("EntryReversal")
@@ -281,6 +299,9 @@ model AccountingEntry {
   posShifts       PosShift[]            @relation("ShiftClosingEntry")
   items           AccountingEntryItem[]
 
+  @@index([posSaleId], map: "idx_accounting_entry_pos_sale")
+  @@index([posShiftId], map: "idx_accounting_entry_pos_shift")
+  @@index([outboxId], map: "idx_accounting_entry_outbox")
   @@index([reversedEntryId], map: "idx_accounting_entry_reversed")
   @@map("accounting_entry")
 }
@@ -359,10 +380,11 @@ model PosShift {
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  openedBy     Profile?         @relation("ShiftOpenedBy", fields: [openedById], references: [id], onDelete: SetNull)
-  closedBy     Profile?         @relation("ShiftClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
-  closingEntry AccountingEntry? @relation("ShiftClosingEntry", fields: [closingEntryId], references: [id], onDelete: SetNull)
-  sales        PosSale[]
+  openedBy          Profile?          @relation("ShiftOpenedBy", fields: [openedById], references: [id], onDelete: SetNull)
+  closedBy          Profile?          @relation("ShiftClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closingEntry      AccountingEntry?  @relation("ShiftClosingEntry", fields: [closingEntryId], references: [id], onDelete: SetNull)
+  sales             PosSale[]
+  differenceEntries AccountingEntry[] @relation("ShiftDifferenceEntry")
 
   @@index([status], map: "idx_pos_shift_status")
   @@index([openedAt], map: "idx_pos_shift_opened_at")
@@ -371,5 +393,70 @@ model PosShift {
   @@index([closedById], map: "idx_pos_shift_closed_by")
   @@index([closingEntryId], map: "idx_pos_shift_closing_entry")
   @@map("pos_shift")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  idempotencyKey String   @map("idempotency_key")
+  actorKey       String   @map("actor_key")
+  method         String
+  route          String
+  requestHash    String   @map("request_hash")
+  status         String   @default("processing")
+  statusCode     Int?     @map("status_code")
+  responseBody   Json?    @map("response_body")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  expiresAt      DateTime @default(dbgenerated("(now() + '24:00:00'::interval)")) @map("expires_at") @db.Timestamptz(6)
+
+  @@unique([actorKey, method, route, idempotencyKey], map: "uq_idempotency_scope")
+  @@index([expiresAt], map: "idx_idempotency_record_expires_at")
+  @@map("idempotency_record")
+}
+
+model AccountingOutbox {
+  id            String    @id @default(uuid()) @db.Uuid
+  aggregateType String    @map("aggregate_type")
+  aggregateId   String    @map("aggregate_id") @db.Uuid
+  businessDate  DateTime  @map("business_date") @db.Timestamptz(6)
+  referenceCode String    @map("reference_code")
+  payload       Json
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  processedAt   DateTime? @map("processed_at") @db.Timestamptz(6)
+
+  entries       AccountingEntry[]
+
+  @@unique([aggregateType, aggregateId], map: "uq_accounting_outbox_aggregate")
+  @@index([status, businessDate], map: "idx_accounting_outbox_pending_date")
+  @@map("accounting_outbox")
+}
+
+model StockMovement {
+  id            String   @id @default(uuid()) @db.Uuid
+  itemType      String   @map("item_type")
+  itemId        String   @map("item_id") @db.Uuid
+  itemName      String   @map("item_name")
+  movementType  String   @map("movement_type")
+  quantityDelta Decimal  @map("quantity_delta") @db.Decimal(12, 3)
+  unit          String
+  stockBefore   Decimal  @map("stock_before") @db.Decimal(12, 3)
+  stockAfter    Decimal  @map("stock_after") @db.Decimal(12, 3)
+  unitCost      Decimal  @default(0) @map("unit_cost") @db.Decimal(12, 2)
+  totalCost     Decimal  @default(0) @map("total_cost") @db.Decimal(12, 2)
+  referenceType String?  @map("reference_type")
+  referenceId   String?  @map("reference_id") @db.Uuid
+  reason        String?
+  createdById   String?  @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  createdBy     Profile? @relation("StockMovementCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([itemType, itemId, createdAt], map: "idx_stock_movement_item_date")
+  @@index([movementType, createdAt], map: "idx_stock_movement_type_date")
+  @@index([referenceType, referenceId], map: "idx_stock_movement_reference")
+  @@map("stock_movement")
 }
 

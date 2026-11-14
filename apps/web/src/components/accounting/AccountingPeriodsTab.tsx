@@ -23,26 +23,11 @@ import type {
   ToastMessage,
 } from '../../types';
 import { accountingPeriodService } from '../../services/accountingPeriodService';
+import { formatChileShortDate, formatMoney } from '../../utils/formatters';
 
 interface AccountingPeriodsTabProps {
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
 }
-
-const formatMoney = (val: number): string =>
-  Math.round(val).toLocaleString('es-CL');
-
-const formatDateTime = (iso?: string | null): string => {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString('es-CL', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return iso.slice(0, 10);
-  }
-};
 
 export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addToast }) => {
   const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
@@ -467,14 +452,14 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
 
                   {!isBeforeStart && isClosed && period.closedAt && (
                     <p className="text-[10px] text-stone-500 dark:text-stone-400 border-t border-rose-200/50 dark:border-rose-900/30 pt-1.5">
-                      Cerrado el {formatDateTime(period.closedAt)}
+                      Cerrado el {formatChileShortDate(period.closedAt, period.closedAt.slice(0, 10))}
                       {period.closedBy?.name ? ` por ${period.closedBy.name}` : ''}
                     </p>
                   )}
 
                   {!isBeforeStart && !isClosed && period.reopenedAt && (
                     <p className="text-[10px] text-stone-500 dark:text-stone-400 border-t border-stone-200/60 dark:border-[#2C1F1A] pt-1.5">
-                      Reabierto el {formatDateTime(period.reopenedAt)}
+                      Reabierto el {formatChileShortDate(period.reopenedAt, period.reopenedAt.slice(0, 10))}
                       {period.reopenedBy?.name ? ` por ${period.reopenedBy.name}` : ''}
                     </p>
                   )}
@@ -607,7 +592,7 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
                   Ingresos a Saldar
                 </span>
                 <span className="text-lg font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                  ${formatMoney(preview.totalIngresos)}
+                  {formatMoney(preview.totalIngresos)}
                 </span>
               </div>
               <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#1C1411] border border-stone-200/80 dark:border-[#35251F]">
@@ -615,7 +600,7 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
                   Costos a Saldar
                 </span>
                 <span className="text-lg font-mono font-bold text-rose-700 dark:text-rose-400">
-                  ${formatMoney(preview.totalCostos)}
+                  {formatMoney(preview.totalCostos)}
                 </span>
               </div>
               <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#1C1411] border border-stone-200/80 dark:border-[#35251F]">
@@ -623,7 +608,7 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
                   Gastos a Saldar
                 </span>
                 <span className="text-lg font-mono font-bold text-rose-700 dark:text-rose-400">
-                  ${formatMoney(preview.totalGastos)}
+                  {formatMoney(preview.totalGastos)}
                 </span>
               </div>
               <div className="p-3.5 rounded-2xl bg-[#FAF5ED] dark:bg-[#231814] border border-[#EADBCE] dark:border-[#42312A]">
@@ -638,7 +623,7 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
                   }`}
                 >
                   {preview.resultadoEjercicio >= 0 ? 'Utilidad ' : 'Pérdida '}
-                  ${formatMoney(Math.abs(preview.resultadoEjercicio))}
+                  {formatMoney(Math.abs(preview.resultadoEjercicio))}
                 </span>
               </div>
             </div>
@@ -675,13 +660,13 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
                         <td className="py-2.5 px-4 text-right font-mono text-stone-500">
                           {line.accountType === 'patrimonio'
                             ? 'Contrapartida'
-                            : `$${formatMoney(line.currentBalance)}`}
+                            : formatMoney(line.currentBalance)}
                         </td>
                         <td className="py-2.5 px-4 text-right font-mono font-bold text-stone-900 dark:text-white">
-                          {line.debit > 0 ? `$${formatMoney(line.debit)}` : '-'}
+                          {line.debit > 0 ? formatMoney(line.debit) : '-'}
                         </td>
                         <td className="py-2.5 px-4 text-right font-mono font-bold text-stone-900 dark:text-white">
-                          {line.credit > 0 ? `$${formatMoney(line.credit)}` : '-'}
+                          {line.credit > 0 ? formatMoney(line.credit) : '-'}
                         </td>
                       </tr>
                     ))}
@@ -692,10 +677,10 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
                         Totales Asiento de Cierre:
                       </td>
                       <td className="py-2.5 px-4 text-right text-emerald-700 dark:text-emerald-400">
-                        ${formatMoney(preview.lines.reduce((s, l) => s + l.debit, 0))}
+                        {formatMoney(preview.lines.reduce((s, l) => s + l.debit, 0))}
                       </td>
                       <td className="py-2.5 px-4 text-right text-emerald-700 dark:text-emerald-400">
-                        ${formatMoney(preview.lines.reduce((s, l) => s + l.credit, 0))}
+                        {formatMoney(preview.lines.reduce((s, l) => s + l.credit, 0))}
                       </td>
                     </tr>
                   </tfoot>
@@ -813,7 +798,7 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
                 <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
                   <li>Todas las cuentas de ingresos, costos y gastos quedarán saldadas en $0.</li>
                   <li>
-                    El resultado neto (<b>${formatMoney(preview.resultadoEjercicio)}</b>) se traspasará a{' '}
+                    El resultado neto (<b>{formatMoney(preview.resultadoEjercicio)}</b>) se traspasará a{' '}
                     <b>{preview.equityAccount?.code} {preview.equityAccount?.name}</b>.
                   </li>
                   {preview.openMonthsCount > 0 && (

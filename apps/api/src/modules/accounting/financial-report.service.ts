@@ -1,133 +1,75 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import type {
+  BalanceSheetReport,
+  FinancialSummaryReport,
+  IncomeStatementReport,
+  ReportAccountLine,
+} from '@repo/types';
 import { PrismaService } from '../../database/prisma.service';
+import { InventoryValuationService } from '../inventory/inventory-valuation.service';
+import {
+  getZonedDateString,
+  parseStrictUtcBounds,
+  STORE_TIMEZONE,
+} from '../../common/utils/chile-time.util';
+import { roundMoney, roundPercentage } from '../../common/utils/money.util';
+import {
+  AssetBalanceBucket,
+  classifyAssetBucket,
+  classifyLiabilityBucket,
+  LiabilityBalanceBucket,
+} from './balance-sheet-classifier';
 
-export interface ReportAccountLine {
-  id: string;
-  code: string;
-  name: string;
-  amount: number;
-}
-
-export interface IncomeStatementReport {
-  period: {
-    startDate: string | null;
-    endDate: string | null;
-  };
-  ingresosOperacionales: {
-    total: number;
-    accounts: ReportAccountLine[];
-  };
-  costosMateriasPrimas: {
-    total: number;
-    accounts: ReportAccountLine[];
-  };
-  margenBruto: number;
-  margenBrutoPercentage: number;
-  gastosOperacionales: {
-    total: number;
-    accounts: ReportAccountLine[];
-  };
-  utilidadNeta: number;
-  margenNetoPercentage: number;
-}
-
-export interface BalanceSheetReport {
-  asOfDate: string;
-  activos: {
-    total: number;
-    disponible: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-    inventarios: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-    otrosActivos: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-  };
-  pasivos: {
-    total: number;
-    obligaciones: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-    impuestos: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-    otrosPasivos: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-  };
-  patrimonio: {
-    total: number;
-    capital: {
-      total: number;
-      accounts: ReportAccountLine[];
-    };
-    resultadoEjercicio: number;
-  };
-  totalPasivoMasPatrimonio: number;
-  isBalanced: boolean;
-  difference: number;
-  inventoryValuation: {
-    totalWarehouseValue: number;
-    rawMaterialsValue: number;
-    packagingValue: number;
-    finishedProductsValue: number;
-    topRawMaterials: Array<{
-      id: string;
-      name: string;
-      stock: number;
-      unit: string;
-      unitCost: number;
-      totalValue: number;
-    }>;
-    topPackaging: Array <{
-      id: string;
-      name: string;
-      stock: number;
-      unit: string;
-      unitCost: number;
-      totalValue: number;
-    }>;
-    topProducts: Array<{
-      id: string;
-      name: string;
-      stock: number;
-      unit: string;
-      unitCost: number;
-      totalValue: number;
-    }>;
-  };
-}
+export type {
+  BalanceSheetReport,
+  FinancialSummaryReport,
+  IncomeStatementReport,
+  ReportAccountLine,
+};
 
 @Injectable()
 export class FinancialReportService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly inventoryValuationService: InventoryValuationService,
+  ) {}
 
   /**
    * Estado de Resultados (P&L / Pérdidas y Ganancias)
    * Ingresos Operacionales - Costos de Materias Primas = Margen Bruto
    * Margen Bruto - Gastos Operacionales (Sueldos, Luz, Arriendo) = Utilidad Neta
    */
-  async getIncomeStatement(startDate?: string, endDate?: string): Promise<IncomeStatementReport> {
+  async getIncomeStatement(
+    startDate?: string,
+    endDate?: string,
+  ): Promise<IncomeStatementReport> {
     try {
-      const dateFilter: Record<string, Date> = {};
-      if (startDate) {
-        dateFilter.gte = new Date(startDate);
-      }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        dateFilter.lte = end;
+      const normalizedStart = startDate?.trim() || undefined;
+      const normalizedEnd = endDate?.trim() || undefined;
+
+      const startBounds = normalizedStart
+        ? parseStrictUtcBounds(normalizedStart, 'startDate')
+        : null;
+      const endBounds = normalizedEnd
+        ? parseStrictUtcBounds(normalizedEnd, 'endDate')
+        : null;
+
+      if (startBounds && endBounds && startBounds.isoDate > endBounds.isoDate) {
+        throw new BadRequestException(
+          'La fecha inicial (startDate) no puede ser posterior a la fecha final (endDate).',
+        );
       }
 
-      const hasDateFilter = Boolean(startDate || endDate);
+      const dateFilter: { gte?: Date; lte?: Date } = {};
+      if (startBounds) dateFilter.gte = startBounds.start;
+      if (endBounds) dateFilter.lte = endBounds.end;
+
+      const hasDateFilter = Boolean(startBounds || endBounds);
 
       const entryFilter = {
         origin: { not: 'closing' },
@@ -160,12 +102,17 @@ export class FinancialReportService {
       let totalGastos = 0;
 
       for (const acc of accounts) {
-        const totalDebit = acc.entryItems.reduce((sum, it) => sum + Number(it.debit), 0);
-        const totalCredit = acc.entryItems.reduce((sum, it) => sum + Number(it.credit), 0);
+        const totalDebit = acc.entryItems.reduce(
+          (sum, it) => sum + Number(it.debit),
+          0,
+        );
+        const totalCredit = acc.entryItems.reduce(
+          (sum, it) => sum + Number(it.credit),
+          0,
+        );
 
         if (acc.accountType === 'ingreso') {
-          // Saldo acreedor normal
-          const netAmount = Math.round((totalCredit - totalDebit) * 100) / 100;
+          const netAmount = roundMoney(totalCredit - totalDebit);
           incomeAccounts.push({
             id: acc.id,
             code: acc.code,
@@ -174,8 +121,7 @@ export class FinancialReportService {
           });
           totalIngresos += netAmount;
         } else if (acc.accountType === 'costo') {
-          // Saldo deudor normal
-          const netAmount = Math.round((totalDebit - totalCredit) * 100) / 100;
+          const netAmount = roundMoney(totalDebit - totalCredit);
           costAccounts.push({
             id: acc.id,
             code: acc.code,
@@ -184,8 +130,7 @@ export class FinancialReportService {
           });
           totalCostos += netAmount;
         } else if (acc.accountType === 'gasto') {
-          // Saldo deudor normal
-          const netAmount = Math.round((totalDebit - totalCredit) * 100) / 100;
+          const netAmount = roundMoney(totalDebit - totalCredit);
           expenseAccounts.push({
             id: acc.id,
             code: acc.code,
@@ -196,22 +141,24 @@ export class FinancialReportService {
         }
       }
 
-      totalIngresos = Math.round(totalIngresos * 100) / 100;
-      totalCostos = Math.round(totalCostos * 100) / 100;
-      totalGastos = Math.round(totalGastos * 100) / 100;
+      totalIngresos = roundMoney(totalIngresos);
+      totalCostos = roundMoney(totalCostos);
+      totalGastos = roundMoney(totalGastos);
 
-      const margenBruto = Math.round((totalIngresos - totalCostos) * 100) / 100;
+      const margenBruto = roundMoney(totalIngresos - totalCostos);
       const margenBrutoPercentage =
-        totalIngresos > 0 ? Math.round((margenBruto / totalIngresos) * 1000) / 10 : 0;
+        totalIngresos > 0 ? roundPercentage((margenBruto / totalIngresos) * 100) : 0;
 
-      const utilidadNeta = Math.round((margenBruto - totalGastos) * 100) / 100;
+      const utilidadNeta = roundMoney(margenBruto - totalGastos);
       const margenNetoPercentage =
-        totalIngresos > 0 ? Math.round((utilidadNeta / totalIngresos) * 1000) / 10 : 0;
+        totalIngresos > 0
+          ? roundPercentage((utilidadNeta / totalIngresos) * 100)
+          : 0;
 
       return {
         period: {
-          startDate: startDate || null,
-          endDate: endDate || null,
+          startDate: startBounds?.isoDate ?? null,
+          endDate: endBounds?.isoDate ?? null,
         },
         ingresosOperacionales: {
           total: totalIngresos,
@@ -231,96 +178,101 @@ export class FinancialReportService {
         margenNetoPercentage,
       };
     } catch (error) {
-      console.error('[FinancialReportService] Error generando Estado de Resultados:', error);
-      throw new InternalServerErrorException('No se pudo generar el Estado de Resultados.');
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      console.error(
+        '[FinancialReportService] Error generando Estado de Resultados:',
+        error,
+      );
+      throw new InternalServerErrorException(
+        'No se pudo generar el Estado de Resultados.',
+      );
     }
   }
 
   /**
    * Balance General / Estado de Situación Financiera
    * Activo = Pasivo + Patrimonio
-   * Incluye valorización en tiempo real del stock de materias primas y productos terminados.
+   * Incluye valorización en tiempo real del stock consultado vía InventoryValuationService.
    */
   async getBalanceSheet(asOfDate?: string): Promise<BalanceSheetReport> {
     try {
-      const cutoffDate = asOfDate ? new Date(asOfDate) : new Date();
-      cutoffDate.setHours(23, 59, 59, 999);
+      const targetIso =
+        asOfDate?.trim() || getZonedDateString(new Date(), STORE_TIMEZONE);
+      const cutoffDate = parseStrictUtcBounds(targetIso, 'asOfDate').end;
 
-      const allAccounts = await this.prisma.accountingAccount.findMany({
-        where: { isActive: true },
-        include: {
-          entryItems: {
-            where: {
-              entry: {
-                entryDate: { lte: cutoffDate },
+      const [allAccounts, inventoryValuation] = await Promise.all([
+        this.prisma.accountingAccount.findMany({
+          where: { isActive: true },
+          include: {
+            entryItems: {
+              where: {
+                entry: {
+                  entryDate: { lte: cutoffDate },
+                },
               },
             },
           },
-        },
-        orderBy: { code: 'asc' },
-      });
+          orderBy: { code: 'asc' },
+        }),
+        this.inventoryValuationService.getValuationSummary(),
+      ]);
 
-      // 1. Clasificación de cuentas de Activo
-      const disponibleAccounts: ReportAccountLine[] = [];
-      const inventariosAccounts: ReportAccountLine[] = [];
-      const otrosActivosAccounts: ReportAccountLine[] = [];
-      let totalActivos = 0;
-
-      // 2. Clasificación de cuentas de Pasivo
-      const obligacionesAccounts: ReportAccountLine[] = [];
-      const impuestosAccounts: ReportAccountLine[] = [];
-      const otrosPasivosAccounts: ReportAccountLine[] = [];
-      let totalPasivos = 0;
-
-      // 3. Clasificación de cuentas de Patrimonio
+      const assetBuckets: Record<AssetBalanceBucket, ReportAccountLine[]> = {
+        disponible: [],
+        inventarios: [],
+        otrosActivos: [],
+      };
+      const liabilityBuckets: Record<
+        LiabilityBalanceBucket,
+        ReportAccountLine[]
+      > = {
+        obligaciones: [],
+        impuestos: [],
+        otrosPasivos: [],
+      };
       const capitalAccounts: ReportAccountLine[] = [];
-      let totalCapital = 0;
 
-      // 4. Acumulación de cuentas de resultado para determinar Utilidad Neta del Ejercicio
+      let totalActivos = 0;
+      let totalPasivos = 0;
+      let totalCapital = 0;
       let totalIngresosHist = 0;
       let totalCostosHist = 0;
       let totalGastosHist = 0;
 
       for (const acc of allAccounts) {
-        const totalDebit = acc.entryItems.reduce((sum, it) => sum + Number(it.debit), 0);
-        const totalCredit = acc.entryItems.reduce((sum, it) => sum + Number(it.credit), 0);
+        const totalDebit = acc.entryItems.reduce(
+          (sum, it) => sum + Number(it.debit),
+          0,
+        );
+        const totalCredit = acc.entryItems.reduce(
+          (sum, it) => sum + Number(it.credit),
+          0,
+        );
 
         if (acc.accountType === 'activo') {
-          const balance = Math.round((totalDebit - totalCredit) * 100) / 100;
-          const line: ReportAccountLine = {
-            id: acc.id,
-            code: acc.code,
-            name: acc.name,
-            amount: balance,
-          };
+          const balance = roundMoney(totalDebit - totalCredit);
           totalActivos += balance;
-
-          if (['1101', '1102', '1103', '1104'].includes(acc.code) || /caja|banco|transbank|transferencia/i.test(acc.name)) {
-            disponibleAccounts.push(line);
-          } else if (['1105', '1106'].includes(acc.code) || /inventario|materia|terminado/i.test(acc.name)) {
-            inventariosAccounts.push(line);
-          } else {
-            otrosActivosAccounts.push(line);
-          }
-        } else if (acc.accountType === 'pasivo') {
-          const balance = Math.round((totalCredit - totalDebit) * 100) / 100;
-          const line: ReportAccountLine = {
+          const bucket = classifyAssetBucket(acc.code, acc.name);
+          assetBuckets[bucket].push({
             id: acc.id,
             code: acc.code,
             name: acc.name,
             amount: balance,
-          };
+          });
+        } else if (acc.accountType === 'pasivo') {
+          const balance = roundMoney(totalCredit - totalDebit);
           totalPasivos += balance;
-
-          if (acc.code === '2101' || /proveedor|por pagar/i.test(acc.name)) {
-            obligacionesAccounts.push(line);
-          } else if (acc.code === '2102' || /iva|impuesto|retenc/i.test(acc.name)) {
-            impuestosAccounts.push(line);
-          } else {
-            otrosPasivosAccounts.push(line);
-          }
+          const bucket = classifyLiabilityBucket(acc.code, acc.name);
+          liabilityBuckets[bucket].push({
+            id: acc.id,
+            code: acc.code,
+            name: acc.name,
+            amount: balance,
+          });
         } else if (acc.accountType === 'patrimonio') {
-          const balance = Math.round((totalCredit - totalDebit) * 100) / 100;
+          const balance = roundMoney(totalCredit - totalDebit);
           capitalAccounts.push({
             id: acc.id,
             code: acc.code,
@@ -337,122 +289,41 @@ export class FinancialReportService {
         }
       }
 
-      // Utilidad Neta Histórica que nutre el Patrimonio (Resultado del Ejercicio)
-      const resultadoEjercicio = Math.round((totalIngresosHist - totalCostosHist - totalGastosHist) * 100) / 100;
-      const totalPatrimonio = Math.round((totalCapital + resultadoEjercicio) * 100) / 100;
+      const resultadoEjercicio = roundMoney(
+        totalIngresosHist - totalCostosHist - totalGastosHist,
+      );
+      const totalPatrimonio = roundMoney(totalCapital + resultadoEjercicio);
 
-      totalActivos = Math.round(totalActivos * 100) / 100;
-      totalPasivos = Math.round(totalPasivos * 100) / 100;
-      const totalPasivoMasPatrimonio = Math.round((totalPasivos + totalPatrimonio) * 100) / 100;
+      totalActivos = roundMoney(totalActivos);
+      totalPasivos = roundMoney(totalPasivos);
+      const totalPasivoMasPatrimonio = roundMoney(totalPasivos + totalPatrimonio);
 
-      const difference = Math.round((totalActivos - totalPasivoMasPatrimonio) * 100) / 100;
+      const difference = roundMoney(totalActivos - totalPasivoMasPatrimonio);
       const isBalanced = Math.abs(difference) < 0.01;
 
-      // 5. Valorización física de inventario en bodega (harina/materias primas y productos listos para venta)
-      const [ingredients, packagingList, products] = await Promise.all([
-        this.prisma.ingredient.findMany({
-          select: { id: true, name: true, stock: true, unit: true, price: true },
-          orderBy: { stock: 'desc' },
-        }),
-        this.prisma.packaging.findMany({
-          select: { id: true, name: true, stock: true, unit:true, costPrice: true },
-          orderBy: { stock: 'desc' },
-        }), 
-        this.prisma.product.findMany({
-          select: { id: true, name: true, stock: true, unit: true, costPrice: true, salePrice: true },
-          orderBy: { stock: 'desc' },
-        }),
-      ]);
-
-      let rawMaterialsValue = 0;
-      const topRawMaterials = ingredients.map((ing) => {
-        const stockNum = Number(ing.stock ?? 0);
-        const unitCost = Number(ing.price ?? 0);
-        const totalValue = Math.round(stockNum * unitCost * 100) / 100;
-        rawMaterialsValue += totalValue;
-        return {
-          id: ing.id,
-          name: ing.name,
-          stock: stockNum,
-          unit: ing.unit || 'kg',
-          unitCost,
-          totalValue,
-        };
-      }).sort((a, b) => b.totalValue - a.totalValue).slice(0, 8);
-
-      let packagingValue = 0;
-      const topPackaging = packagingList.map((pack) => {
-        const stockNum = Number(pack.stock ?? 0);
-        const unitCost = Number(pack.costPrice ?? 0);
-        const totalValue = Math.round(stockNum * unitCost * 100) / 100;
-        packagingValue += totalValue;
-        return {
-          id: pack.id,
-          name: pack.name,
-          stock: stockNum,
-          unit: pack.unit || 'un',
-          unitCost,
-          totalValue,
-        };
-      }).sort((a, b) => b.totalValue - a.totalValue).slice(0, 8);
-
-      let finishedProductsValue = 0;
-      const topProducts = products.map((prod) => {
-        const stockNum = Number(prod.stock ?? 0);
-        const unitCost = Number(prod.costPrice ?? prod.salePrice ?? 0);
-        const totalValue = Math.round(stockNum * unitCost * 100) / 100;
-        finishedProductsValue += totalValue;
-        return {
-          id: prod.id,
-          name: prod.name,
-          stock: stockNum,
-          unit: prod.unit || 'un',
-          unitCost,
-          totalValue,
-        };
-      }).sort((a, b) => b.totalValue - a.totalValue).slice(0, 8);
-
-      rawMaterialsValue = Math.round(rawMaterialsValue * 100) / 100;
-      packagingValue = Math.round(packagingValue * 100) / 100;
-      finishedProductsValue = Math.round(finishedProductsValue * 100) / 100;
-      const totalWarehouseValue = Math.round((rawMaterialsValue + packagingValue + finishedProductsValue ) * 100) / 100;
+      const buildGroup = (accounts: ReportAccountLine[]) => ({
+        total: roundMoney(accounts.reduce((sum, line) => sum + line.amount, 0)),
+        accounts,
+      });
 
       return {
         asOfDate: cutoffDate.toISOString().slice(0, 10),
         activos: {
           total: totalActivos,
-          disponible: {
-            total: Math.round(disponibleAccounts.reduce((s, a) => s + a.amount, 0) * 100) / 100,
-            accounts: disponibleAccounts,
-          },
-          inventarios: {
-            total: Math.round(inventariosAccounts.reduce((s, a) => s + a.amount, 0) * 100) / 100,
-            accounts: inventariosAccounts,
-          },
-          otrosActivos: {
-            total: Math.round(otrosActivosAccounts.reduce((s, a) => s + a.amount, 0) * 100) / 100,
-            accounts: otrosActivosAccounts,
-          },
+          disponible: buildGroup(assetBuckets.disponible),
+          inventarios: buildGroup(assetBuckets.inventarios),
+          otrosActivos: buildGroup(assetBuckets.otrosActivos),
         },
         pasivos: {
           total: totalPasivos,
-          obligaciones: {
-            total: Math.round(obligacionesAccounts.reduce((s, a) => s + a.amount, 0) * 100) / 100,
-            accounts: obligacionesAccounts,
-          },
-          impuestos: {
-            total: Math.round(impuestosAccounts.reduce((s, a) => s + a.amount, 0) * 100) / 100,
-            accounts: impuestosAccounts,
-          },
-          otrosPasivos: {
-            total: Math.round(otrosPasivosAccounts.reduce((s, a) => s + a.amount, 0) * 100) / 100,
-            accounts: otrosPasivosAccounts,
-          },
+          obligaciones: buildGroup(liabilityBuckets.obligaciones),
+          impuestos: buildGroup(liabilityBuckets.impuestos),
+          otrosPasivos: buildGroup(liabilityBuckets.otrosPasivos),
         },
         patrimonio: {
           total: totalPatrimonio,
           capital: {
-            total: Math.round(totalCapital * 100) / 100,
+            total: roundMoney(totalCapital),
             accounts: capitalAccounts,
           },
           resultadoEjercicio,
@@ -460,27 +331,29 @@ export class FinancialReportService {
         totalPasivoMasPatrimonio,
         isBalanced,
         difference,
-        inventoryValuation: {
-          totalWarehouseValue,
-          rawMaterialsValue,
-          packagingValue,
-          
-          finishedProductsValue,
-          topRawMaterials,
-          topPackaging,
-          topProducts,
-        },
+        inventoryValuation,
       };
     } catch (error) {
-      console.error('[FinancialReportService] Error generando Balance General:', error);
-      throw new InternalServerErrorException('No se pudo generar el Balance General.');
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      console.error(
+        '[FinancialReportService] Error generando Balance General:',
+        error,
+      );
+      throw new InternalServerErrorException(
+        'No se pudo generar el Balance General.',
+      );
     }
   }
 
   /**
    * Resumen Ejecutivo Financiero Combinado
    */
-  async getFinancialSummary(startDate?: string, endDate?: string) {
+  async getFinancialSummary(
+    startDate?: string,
+    endDate?: string,
+  ): Promise<FinancialSummaryReport> {
     const [incomeStatement, balanceSheet] = await Promise.all([
       this.getIncomeStatement(startDate, endDate),
       this.getBalanceSheet(endDate),
@@ -499,7 +372,8 @@ export class FinancialReportService {
         totalActivos: balanceSheet.activos.total,
         totalPasivos: balanceSheet.pasivos.total,
         totalPatrimonio: balanceSheet.patrimonio.total,
-        totalInventarioValorizado: balanceSheet.inventoryValuation.totalWarehouseValue,
+        totalInventarioValorizado:
+          balanceSheet.inventoryValuation.totalWarehouseValue,
         deudaProveedores: balanceSheet.pasivos.obligaciones.total,
         isBalanceCuadrado: balanceSheet.isBalanced,
       },
@@ -508,4 +382,3 @@ export class FinancialReportService {
     };
   }
 }
-

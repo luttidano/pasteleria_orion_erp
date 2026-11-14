@@ -1,4 +1,3 @@
-import { supabase } from './supabase';
 import { authService } from '../services/authService';
 import {
   reportApiNetworkError,
@@ -7,6 +6,45 @@ import {
 } from './connectionStatus';
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '') + '/api';
+const REQUEST_TIMEOUT_MS = 6000;
+const SAFE_IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const KEYED_MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+
+export function createIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const controller = new AbortController();
+  const externalSignal = options.signal;
+
+  if (externalSignal?.aborted) {
+    controller.abort(externalSignal.reason);
+  }
+
+  const onExternalAbort = () => controller.abort(externalSignal?.reason);
+  externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
+
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      cache: 'no-store',
+      ...options,
+      signal: controller.signal,
+      headers,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
+  }
+}
 
 /**
  * Helper para realizar peticiones HTTP a la API de NestJS autenticadas con el token de Supabase
@@ -34,32 +72,34 @@ export async function apiFetch<T>(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`,
-    ...(options.headers as Record<string, string> || {}),
+    ...((options.headers as Record<string, string>) || {}),
   };
 
+  const method = (options.method || 'GET').toUpperCase();
+  const hasIdempotencyHeader = Object.keys(headers).some(
+    (key) => key.toLowerCase() === 'idempotency-key',
+  );
+  if (!hasIdempotencyHeader && KEYED_MUTATION_METHODS.has(method)) {
+    headers['Idempotency-Key'] = createIdempotencyKey();
+  }
+
+  const maxRetries = SAFE_IDEMPOTENT_METHODS.has(method) ? 2 : 0;
+
   let response: Response;
-  const maxRetries = 2;
   let attempt = 0;
 
   while (true) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-      try {
-        response = await fetch(url, {
-          cache: 'no-store',
-          ...options,
-          signal: options.signal || controller.signal,
-          headers,
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
+      response = await fetchWithTimeout(url, options, headers);
       break;
     } catch (networkErr) {
+      if (options.signal?.aborted) {
+        throw networkErr;
+      }
+
       attempt++;
       if (attempt <= maxRetries) {
-        // Si el backend aún está iniciando tras un reinicio, reintentar en 600ms
+        // Reintentar solo métodos seguros/idempotentes si el backend aún está iniciando
         await new Promise((r) => setTimeout(r, 600));
         continue;
       }
@@ -70,35 +110,38 @@ export async function apiFetch<T>(
     }
   }
 
-  if (!response.ok) {
-    // Si la sesión expiró o fue revocada (HTTP 401), intentar auto-refrescar
-    if (response.status === 401 && supabase) {
+  // Si la sesión expiró o fue revocada (HTTP 401), delegar refresh centralizado una vez
+  if (response.status === 401) {
+    const refreshedToken = await authService.refreshAccessToken();
+
+    if (refreshedToken) {
+      headers['Authorization'] = `Bearer ${refreshedToken}`;
       try {
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        if (!refreshError && refreshData.session?.access_token) {
-          const newToken = refreshData.session.access_token;
-          authService.setAccessToken(newToken);
-          localStorage.setItem('pasteleria_orion_auth_token', JSON.stringify(refreshData.session));
-          headers['Authorization'] = `Bearer ${newToken}`;
-          const retryRes = await fetch(url, { ...options, headers });
-          if (retryRes.ok) {
-            reportApiSuccess();
-            if (retryRes.status === 204) return null as T;
-            return retryRes.json();
-          }
-          if (retryRes.status >= 500) {
-            reportApiServerError(retryRes.status, `Error del servidor (HTTP ${retryRes.status})`);
-          }
+        response = await fetchWithTimeout(url, options, headers);
+      } catch (networkErr) {
+        if (!options.signal?.aborted) {
+          reportApiNetworkError(
+            networkErr instanceof Error ? networkErr.message : 'Fallo de red al contactar API.',
+          );
         }
-      } catch {
-        // Ignorar fallo en el refresh silencioso
+        throw networkErr;
       }
     }
 
+    if (response.status === 401) {
+      await authService.logout();
+    }
+  }
+
+  if (!response.ok) {
     let errorMessage = `API Error: ${response.status} ${response.statusText}`;
     try {
       const errorBody = await response.json();
-      errorMessage = errorBody.message || errorMessage;
+      if (Array.isArray(errorBody?.message)) {
+        errorMessage = errorBody.message.join(', ');
+      } else if (typeof errorBody?.message === 'string' && errorBody.message.trim()) {
+        errorMessage = errorBody.message;
+      }
     } catch {
       // Ignorar si la respuesta de error no es JSON
     }
@@ -108,7 +151,7 @@ export async function apiFetch<T>(
     throw new Error(errorMessage);
   }
 
-  reportApiSuccess();
+  reportApiSuccess(method);
 
   // Si la respuesta es 204 No Content
   if (response.status === 204) {

@@ -1,5 +1,10 @@
 import { apiFetch } from '../lib/api';
-import type { Packaging } from '../types';
+import type { AdjustStockPayload, Packaging } from '../types';
+
+export type PackagingAdjustmentResult = Packaging & {
+  accountingStatus?: 'posted' | 'pending';
+  accountingWarning?: string | null;
+};
 
 export const packagingService = {
   /**
@@ -40,10 +45,14 @@ export const packagingService = {
   /**
    * Ajuste de stock rápido (+ / -)
    */
-  async adjustStock(id: string, delta: number): Promise<Packaging> {
-    return apiFetch<Packaging>(`/packaging/${id}/adjust-stock`, {
+  async adjustStock(
+    id: string,
+    input: number | AdjustStockPayload,
+  ): Promise<PackagingAdjustmentResult> {
+    const body = typeof input === 'number' ? { delta: input } : input;
+    return apiFetch<PackagingAdjustmentResult>(`/packaging/${id}/adjust-stock`, {
       method: 'POST',
-      body: JSON.stringify({ delta }),
+      body: JSON.stringify(body),
     });
   },
 

@@ -33,7 +33,12 @@ export class CreatePackagingDto {
   costPrice?: number;
 
   @IsOptional()
-  @IsUUID('4', { message: 'El ID del proveedor debe ser un UUID válido.' })
+  @IsNumber({}, { message: 'El precio de venta debe ser numérico.' })
+  @Min(0, { message: 'El precio de venta no puede ser negativo.' })
+  salePrice?: number;
+
+  @IsOptional()
+  @IsUUID(undefined, { message: 'El ID del proveedor debe ser un UUID válido.' })
   supplierId?: string;
 
   @IsOptional()

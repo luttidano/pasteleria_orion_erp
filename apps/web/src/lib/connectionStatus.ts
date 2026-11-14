@@ -41,7 +41,28 @@ export function subscribeConnectionStatus(listener: Listener): () => void {
   };
 }
 
-export function reportApiSuccess(): void {
+export function reportApiSuccess(
+  method = 'GET',
+  verifiedNetwork = false,
+): void {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return;
+  }
+
+  const normalizedMethod = method.toUpperCase();
+  const isSafeCachedCandidate =
+    !verifiedNetwork && (normalizedMethod === 'GET' || normalizedMethod === 'HEAD');
+
+  if (
+    isSafeCachedCandidate &&
+    (currentSnapshot.health === 'offline' || currentSnapshot.health === 'degraded')
+  ) {
+    // Una lectura GET exitosa en estado offline/degradado puede venir de Workbox Cache;
+    // revalidar /api/health (NetworkOnly) antes de volver a marcar "En línea".
+    void checkServerHealth();
+    return;
+  }
+
   if (currentSnapshot.health !== 'online') {
     notify({
       health: 'online',

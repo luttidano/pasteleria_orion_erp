@@ -9,14 +9,17 @@ import {
   Query,
   ParseUUIDPipe,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { CategoryQueryDto } from './dto/inventory-query.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { Role, CategoryType } from '../../common/enums';
+import { Role } from '../../common/enums';
+import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
 
 @Controller('categories')
 @UseGuards(AuthGuard, RolesGuard)
@@ -26,8 +29,8 @@ export class CategoryController {
   // Consulta: admin, pastelero y cajero pueden listar categorías
   @Get()
   @Roles(Role.admin, Role.baker, Role.cashier)
-  findAll(@Query('type') type?: CategoryType) {
-    return this.categoryService.findAll(type);
+  findAll(@Query() query: CategoryQueryDto) {
+    return this.categoryService.findAll(query.type);
   }
 
   @Get(':id')
@@ -39,6 +42,7 @@ export class CategoryController {
   // Operaciones de gestión: exclusivo administrador
   @Post()
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   create(@Body() createCategoryDto: CreateCategoryDto) {
     return this.categoryService.create(createCategoryDto);
   }

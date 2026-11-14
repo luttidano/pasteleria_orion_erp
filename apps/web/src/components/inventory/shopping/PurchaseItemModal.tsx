@@ -1,14 +1,46 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, CheckCircle2, ShoppingCart, AlertTriangle, AlertCircle, Plus, Minus } from 'lucide-react';
-import type { ShoppingItem } from '../../../types';
+import {
+  X,
+  CheckCircle2,
+  ShoppingCart,
+  AlertTriangle,
+  AlertCircle,
+  Plus,
+  Minus,
+  Receipt,
+} from 'lucide-react';
+import type {
+  InventoryPurchasePaymentMethod,
+  ShoppingItem,
+} from '../../../types';
+
+export interface ConfirmPurchaseDetails {
+  totalCost: number;
+  hasInvoice: boolean;
+  paymentMethod: InventoryPurchasePaymentMethod;
+}
 
 interface PurchaseItemModalProps {
   isOpen: boolean;
   item: ShoppingItem | null;
   onClose: () => void;
-  onConfirmPurchase: (item: ShoppingItem, quantityBought: number) => Promise<void>;
+  onConfirmPurchase: (
+    item: ShoppingItem,
+    quantityBought: number,
+    details: ConfirmPurchaseDetails,
+  ) => Promise<void>;
 }
+
+const PAYMENT_METHOD_OPTIONS: Array<{
+  value: InventoryPurchasePaymentMethod;
+  label: string;
+}> = [
+  { value: 'efectivo', label: 'Efectivo (Caja 1101)' },
+  { value: 'banco', label: 'Tarjeta / POS Mercado Pago (1102)' },
+  { value: 'transferencia', label: 'Transferencia / Mercado Pago (1102)' },
+  { value: 'credito_proveedor', label: 'Crédito / Por Pagar Proveedor (2101)' },
+];
 
 export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   isOpen,
@@ -16,21 +48,58 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   onClose,
   onConfirmPurchase,
 }) => {
-  const [quantityBought, setQuantityBought] = useState<number | ''>('');
+  if (!isOpen || !item) return null;
+  return (
+    <PurchaseItemModalContent
+      key={item.id}
+      item={item}
+      onClose={onClose}
+      onConfirmPurchase={onConfirmPurchase}
+    />
+  );
+};
+
+interface PurchaseItemModalContentProps {
+  item: ShoppingItem;
+  onClose: () => void;
+  onConfirmPurchase: (
+    item: ShoppingItem,
+    quantityBought: number,
+    details: ConfirmPurchaseDetails,
+  ) => Promise<void>;
+}
+
+const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
+  item,
+  onClose,
+  onConfirmPurchase,
+}) => {
+  const deficit = Math.max(0, item.minStock - item.stock);
+  const initialQty = deficit > 0 ? deficit : 1;
+  const unitCost = item.price || 0;
+
+  const [quantityBought, setQuantityBought] = useState<number | ''>(initialQty);
+  const [totalCost, setTotalCost] = useState<number | ''>(
+    unitCost > 0 ? Math.round(unitCost * initialQty * 1.19) : '',
+  );
+  const [hasCostManualEdit, setHasCostManualEdit] = useState(false);
+  const [hasInvoice, setHasInvoice] = useState(true);
+  const [paymentMethod, setPaymentMethod] =
+    useState<InventoryPurchasePaymentMethod>('efectivo');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Cantidad faltante sugerida para cubrir el mínimo
-  const deficit = item ? Math.max(0, item.minStock - item.stock) : 0;
-
-  useEffect(() => {
-    if (item) {
-      setQuantityBought(deficit > 0 ? deficit : 1);
-      setError(null);
+  const recalcSuggestedCost = (
+    nextQty: number | '',
+    nextHasInvoice: boolean,
+    manualEdited: boolean,
+  ) => {
+    if (manualEdited) return;
+    const qty = typeof nextQty === 'number' ? nextQty : 0;
+    if (qty > 0 && unitCost > 0) {
+      setTotalCost(Math.round(unitCost * qty * (nextHasInvoice ? 1.19 : 1)));
     }
-  }, [item, deficit]);
-
-  if (!isOpen || !item) return null;
+  };
 
   const currentStock = item.stock;
   const minStock = item.minStock;
@@ -38,14 +107,21 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   const unit = item.unit || 'un';
 
   const numericBought = typeof quantityBought === 'number' ? quantityBought : 0;
+  const numericTotalCost = typeof totalCost === 'number' ? totalCost : 0;
   const resultingStock = Math.max(0, currentStock + numericBought);
   const willBeSufficient = resultingStock > minStock;
   const willRemainLow = resultingStock <= minStock;
   const remainingDeficit = Math.max(0, minStock - resultingStock);
 
-  // Cálculo de costo estimado referencial
-  const unitPrice = item.price || 0;
-  const estimatedCost = unitPrice > 0 && numericBought > 0 ? unitPrice * numericBought : 0;
+  const netAmount =
+    numericTotalCost > 0
+      ? hasInvoice
+        ? Math.round(numericTotalCost / 1.19)
+        : Math.round(numericTotalCost)
+      : 0;
+  const vatAmount = hasInvoice
+    ? Math.max(0, Math.round(numericTotalCost) - netAmount)
+    : 0;
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('es-CL', {
@@ -59,6 +135,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
     const current = typeof quantityBought === 'number' ? quantityBought : 0;
     const nextVal = Math.max(0.1, Number((current + delta).toFixed(2)));
     setQuantityBought(nextVal);
+    recalcSuggestedCost(nextVal, hasInvoice, hasCostManualEdit);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,25 +144,36 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
       setError('Por favor indica cuánto compraste (debe ser mayor a 0).');
       return;
     }
+    if (totalCost === '' || Number(totalCost) <= 0) {
+      setError(
+        'Para la contabilidad completa debes indicar el monto total pagado (> $0).',
+      );
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
     try {
-      await onConfirmPurchase(item, Number(quantityBought));
+      await onConfirmPurchase(item, Number(quantityBought), {
+        totalCost: Number(totalCost),
+        hasInvoice,
+        paymentMethod,
+      });
       onClose();
-    } catch {
-      setError('Ocurrió un error al actualizar el inventario. Inténtalo nuevamente.');
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Ocurrió un error al actualizar el inventario y contabilidad. Inténtalo nuevamente.',
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Renderizado en document.body para que cubra la pantalla completa y nunca quede atrapado dentro de una tarjeta
   return createPortal(
     <div className="fixed inset-0 z-[100] bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
       <div className="relative bg-[#FAF5ED] dark:bg-[#16100E] rounded-[28px] max-w-lg w-full shadow-2xl border-2 border-[#DFCAA9] dark:border-[#35251F] max-h-[92vh] flex flex-col overflow-hidden animate-modal-pop my-auto">
-        
-        {/* Cabecera fija en la parte superior del modal */}
         <div className="relative px-6 py-4 border-b border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7] dark:bg-[#1F1512] shrink-0">
           <div className="flex items-center gap-3 pr-8">
             <div className="w-12 h-12 rounded-2xl bg-white dark:bg-[#2A1B16] border border-[#DFCAA9]/70 dark:border-[#422B22] flex items-center justify-center text-2xl shadow-xs shrink-0">
@@ -96,15 +184,17 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-[#DFCAA9]/70 dark:border-stone-700">
                   {item.category}
                 </span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                  item.kind === 'ingredient'
-                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                    : item.kind === 'resale'
-                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
-                    : item.kind === 'packaging'
-                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
-                    : 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300'
-                }`}>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                    item.kind === 'ingredient'
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                      : item.kind === 'resale'
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
+                      : item.kind === 'packaging'
+                      ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
+                      : 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300'
+                  }`}
+                >
                   {item.kind === 'ingredient'
                     ? '🌾 Insumo'
                     : item.kind === 'resale'
@@ -139,8 +229,11 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
           </button>
         </div>
 
-        {/* Cuerpo del formulario scrolleable con padding adecuado */}
-        <form onSubmit={handleSubmit} id="purchase-form" className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          id="purchase-form"
+          className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4"
+        >
           {error && (
             <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/70 text-rose-800 dark:text-rose-200 text-xs flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
@@ -148,53 +241,22 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
             </div>
           )}
 
-          {/* 1. Descripción de lo que se debe comprar */}
-          <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1512] border border-[#EADBCE] dark:border-[#35251F] shadow-xs">
-            <h4 className="text-[11px] font-bold text-[#8C1F25] dark:text-[#D4A373] uppercase tracking-wider mb-1">
-              📋{' '}
-              {item.kind === 'ingredient'
-                ? 'Descripción del Insumo'
-                : item.kind === 'resale'
-                ? 'Detalle del Producto de Reventa'
-                : item.kind === 'packaging'
-                ? 'Detalle del Empaque'
-                : 'Detalle del Insumo General'}
-            </h4>
-            <p className="text-xs sm:text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
-              {item.description ||
-                (item.kind === 'resale'
-                  ? 'Producto comercial para reventa en mostrador/caja.'
-                  : item.kind === 'packaging'
-                  ? 'Material de empaque y despacho de la pastelería.'
-                  : item.kind === 'general_supply'
-                  ? 'Insumo general operativo (protección, higiene o utensilios).'
-                  : 'Materia prima indispensable para la producción y repostería artesanal.')}
-            </p>
-            {item.price && item.price > 0 && (
-              <div className="mt-2 pt-2 border-t border-stone-100 dark:border-[#2C1D18] flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
-                <span>Costo unitario aprox:</span>
-                <span className="font-bold text-stone-800 dark:text-stone-200 font-mono">
-                  {formatCurrency(item.price)} por {unit}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* 2. Cuánto se debe comprar y diagnóstico de stock */}
           <div className="grid grid-cols-3 gap-2 text-center">
-            {/* Stock Actual */}
             <div className="p-2.5 rounded-xl bg-white dark:bg-[#1C1411] border border-[#EADBCE] dark:border-[#35251F]">
               <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 block">
                 Actual
               </span>
-              <span className={`text-base font-black font-sans block mt-0.5 ${
-                isOutOfStock ? 'text-rose-600 dark:text-rose-400' : 'text-amber-700 dark:text-amber-400'
-              }`}>
+              <span
+                className={`text-base font-black font-sans block mt-0.5 ${
+                  isOutOfStock
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : 'text-amber-700 dark:text-amber-400'
+                }`}
+              >
                 {currentStock} <span className="text-[10px] font-bold uppercase">{unit}</span>
               </span>
             </div>
 
-            {/* Mínimo de Seguridad */}
             <div className="p-2.5 rounded-xl bg-white dark:bg-[#1C1411] border border-[#EADBCE] dark:border-[#35251F]">
               <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 block">
                 Mínimo
@@ -204,7 +266,6 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
               </span>
             </div>
 
-            {/* Cuánto falta comprar */}
             <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-[#2C1B10] border border-amber-300 dark:border-amber-900/80 ring-1 ring-amber-400/40">
               <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300 block">
                 Falta comprar
@@ -215,7 +276,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
             </div>
           </div>
 
-          {/* 3. Input interactivo: Cuánto se compró realmente */}
+          {/* Cantidad comprada */}
           <div className="p-3.5 sm:p-4 rounded-2xl bg-[#FAF5ED] dark:bg-[#211612] border-2 border-[#8C1F25]/30 dark:border-[#8C1F25]/50 space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-[#2A1B16] dark:text-[#F5ECE5] flex items-center gap-1.5">
@@ -224,14 +285,17 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
               </label>
               <button
                 type="button"
-                onClick={() => setQuantityBought(deficit > 0 ? deficit : 1)}
+                onClick={() => {
+                  const suggested = deficit > 0 ? deficit : 1;
+                  setQuantityBought(suggested);
+                  recalcSuggestedCost(suggested, hasInvoice, hasCostManualEdit);
+                }}
                 className="text-[11px] font-bold text-[#8C1F25] dark:text-[#E8A598] hover:underline cursor-pointer"
               >
                 Poner sugerido ({deficit} {unit})
               </button>
             </div>
 
-            {/* Selector de cantidad con botones rápidos */}
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -245,10 +309,14 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
               <div className="relative flex-1">
                 <input
                   type="number"
-                  min="0.1"
+                  min="0.01"
                   step="any"
                   value={quantityBought}
-                  onChange={(e) => setQuantityBought(e.target.value === '' ? '' : Number(e.target.value))}
+                  onChange={(e) => {
+                    const nextVal = e.target.value === '' ? '' : Number(e.target.value);
+                    setQuantityBought(nextVal);
+                    recalcSuggestedCost(nextVal, hasInvoice, hasCostManualEdit);
+                  }}
                   placeholder="Ej: 5"
                   className="w-full text-center py-2 px-3 text-xl font-black font-sans rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] bg-white dark:bg-[#19100D] text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8C1F25]"
                   autoFocus
@@ -267,54 +335,112 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                 <Plus className="w-4 h-4" />
               </button>
             </div>
+          </div>
 
-            {/* Presets rápidos */}
-            <div className="flex items-center gap-1.5 flex-wrap pt-0.5 text-xs">
-              <span className="text-[10px] text-stone-500 dark:text-stone-400 font-medium mr-1">Rápido:</span>
-              <button
-                type="button"
-                onClick={() => handleAdjustDelta(0.5)}
-                className="px-2 py-0.5 rounded-lg bg-white dark:bg-[#2B1D18] border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 text-[11px] font-semibold cursor-pointer"
-              >
-                +0.5
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAdjustDelta(1)}
-                className="px-2 py-0.5 rounded-lg bg-white dark:bg-[#2B1D18] border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 text-[11px] font-semibold cursor-pointer"
-              >
-                +1
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAdjustDelta(5)}
-                className="px-2 py-0.5 rounded-lg bg-white dark:bg-[#2B1D18] border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 text-[11px] font-semibold cursor-pointer"
-              >
-                +5
-              </button>
-              {deficit > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setQuantityBought(deficit)}
-                  className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-[11px] font-bold cursor-pointer"
-                >
-                  Exacto: {deficit} {unit}
-                </button>
-              )}
+          {/* Datos contables y tributarios de la compra */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-[#1E1512] border border-[#EADBCE] dark:border-[#35251F] space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-[#8C1F25] dark:text-[#D4A373]">
+              <Receipt className="w-3.5 h-3.5" />
+              <span>Respaldo Contable y Tributario</span>
             </div>
 
-            {/* Costo estimado si aplica */}
-            {estimatedCost > 0 && (
-              <div className="flex items-center justify-between text-xs pt-1 border-t border-stone-200/80 dark:border-stone-800 text-stone-600 dark:text-stone-400">
-                <span>Inversión estimada:</span>
-                <span className="font-extrabold text-stone-900 dark:text-stone-100 font-mono">
-                  {formatCurrency(estimatedCost)}
-                </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-600 dark:text-stone-300 mb-1">
+                  Monto total pagado (CLP) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="any"
+                  required
+                  value={totalCost}
+                  onChange={(e) => {
+                    setHasCostManualEdit(true);
+                    setTotalCost(e.target.value === '' ? '' : Number(e.target.value));
+                  }}
+                  placeholder="Ej: 15000"
+                  className="w-full py-2 px-3 text-sm font-bold font-mono rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] bg-[#FAF5ED]/50 dark:bg-[#140E0C] text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8C1F25]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-600 dark:text-stone-300 mb-1">
+                  Medio de pago *
+                </label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) =>
+                    setPaymentMethod(e.target.value as InventoryPurchasePaymentMethod)
+                  }
+                  className="w-full py-2 px-2.5 text-xs font-semibold rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] bg-[#FAF5ED]/50 dark:bg-[#140E0C] text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8C1F25]"
+                >
+                  {PAYMENT_METHOD_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setHasInvoice(true);
+                  recalcSuggestedCost(quantityBought, true, hasCostManualEdit);
+                }}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                  hasInvoice
+                    ? 'bg-[#8C1F25] text-white border-[#8C1F25]'
+                    : 'bg-stone-50 dark:bg-[#140E0C] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-stone-800'
+                }`}
+              >
+                Con Factura (19% IVA Crédito)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setHasInvoice(false);
+                  recalcSuggestedCost(quantityBought, false, hasCostManualEdit);
+                }}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                  !hasInvoice
+                    ? 'bg-[#8C1F25] text-white border-[#8C1F25]'
+                    : 'bg-stone-50 dark:bg-[#140E0C] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-stone-800'
+                }`}
+              >
+                Boleta / Exento (Sin Crédito)
+              </button>
+            </div>
+
+            {numericTotalCost > 0 && (
+              <div className="pt-2 border-t border-stone-100 dark:border-[#2C1D18] text-[11px] space-y-1 text-stone-600 dark:text-stone-300">
+                <div className="flex justify-between">
+                  <span>
+                    {item.kind === 'general_supply'
+                      ? 'Gasto operativo (6101):'
+                      : item.kind === 'resale'
+                      ? 'Inventario prod. terminados (1106):'
+                      : 'Inventario materias primas / empaques (1105):'}
+                  </span>
+                  <span className="font-mono font-bold text-stone-900 dark:text-white">
+                    {formatCurrency(netAmount)}
+                  </span>
+                </div>
+                {hasInvoice && (
+                  <div className="flex justify-between">
+                    <span>IVA Crédito Fiscal (1108):</span>
+                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                      {formatCurrency(vatAmount)}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* 4. Explicación dinámica de la actualización */}
           <div className="p-3 rounded-xl transition-all border text-xs leading-relaxed">
             {willBeSufficient ? (
               <div className="flex items-start gap-2 text-emerald-900 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 p-2.5 rounded-lg">
@@ -332,7 +458,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                 <div>
                   <strong className="font-bold">Compra parcial permitida</strong>
                   <p className="mt-0.5 text-amber-800 dark:text-amber-300 text-[11px]">
-                    El nuevo stock será <strong>{resultingStock} {unit}</strong>. Como el mínimo es {minStock} {unit}, se actualizará y permanecerá en la lista con el faltante restante ({remainingDeficit} {unit}).
+                    El nuevo stock será <strong>{resultingStock} {unit}</strong>. Faltante restante: {remainingDeficit} {unit}.
                   </p>
                 </div>
               </div>
@@ -340,7 +466,6 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
           </div>
         </form>
 
-        {/* Footer fijo e inamovible en la parte inferior */}
         <div className="shrink-0 px-6 py-3.5 border-t border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7]/60 dark:bg-[#1A120F] flex items-center justify-between gap-3">
           <button
             type="button"
@@ -353,7 +478,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
           <button
             type="submit"
             form="purchase-form"
-            disabled={isSubmitting || numericBought <= 0}
+            disabled={isSubmitting || numericBought <= 0 || numericTotalCost <= 0}
             className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] active:scale-[0.98] text-white font-bold text-sm shadow-btn transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
             {isSubmitting ? (
@@ -361,11 +486,11 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
             ) : (
               <CheckCircle2 className="w-4 h-4" />
             )}
-            <span>✓ Listo / Marcar Comprado</span>
+            <span>✓ Registrar Compra</span>
           </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 };

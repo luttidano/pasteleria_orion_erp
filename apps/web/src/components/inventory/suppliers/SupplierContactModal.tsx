@@ -21,6 +21,7 @@ import {
   getCallUrl,
   getGoogleMapsUrl,
   getSupplyModality,
+  isPhoneRegistered,
 } from '../../../services/supplierService';
 
 interface SupplierContactModalProps {
@@ -40,12 +41,6 @@ export const SupplierContactModal: React.FC<SupplierContactModalProps> = ({
   const [customNote] = useState('');
 
   if (!isOpen || !supplier) return null;
-
-  const isPhoneRegistered = (phone?: string) => {
-    if (!phone) return false;
-    const clean = phone.trim();
-    return clean !== '' && clean !== 'Sin registrar' && clean !== 'No registrado';
-  };
 
   const hasPhone = isPhoneRegistered(supplier.phone);
   const isPresencial = getSupplyModality(supplier) === 'presencial';

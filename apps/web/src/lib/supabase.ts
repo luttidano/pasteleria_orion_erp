@@ -5,7 +5,7 @@ const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
 const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
 /**
- * Determina si las credenciales de Supabase están configuradas y no son placeholders
+ * Determina si las credenciales de Supabase Auth están configuradas y no son placeholders.
  */
 export const isSupabaseConfigured = (): boolean => {
   return (
@@ -19,9 +19,10 @@ export const isSupabaseConfigured = (): boolean => {
 };
 
 /**
- * Cliente de Supabase listo para producción.
- * Si las credenciales no están presentes aún en el entorno local,
- * se mantendrá en null permitiendo el fallback fluido al modo demo local.
+ * Cliente de Supabase Auth para el navegador.
+ * IMPORTANTE: debe utilizarse EXCLUSIVAMENTE para flujos de autenticación (login, logout,
+ * recuperación de contraseña y gestión de sesión JWT). Toda operación de datos del ERP debe
+ * pasar obligatoriamente por la API NestJS vía `apiFetch`.
  */
 export const supabase: SupabaseClient | null = isSupabaseConfigured()
   ? createClient(supabaseUrl, supabaseAnonKey, {
@@ -33,19 +34,3 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured()
       },
     })
   : null;
-
-/**
- * Crea un cliente efímero de Supabase sin persistencia de sesión en localStorage.
- * Imprescindible para que un administrador pueda crear nuevos usuarios mediante signUp
- * sin que se sobreescriba su propia sesión activa en el navegador.
- */
-export const createEphemeralClient = (): SupabaseClient | null => {
-  if (!isSupabaseConfigured()) return null;
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-};

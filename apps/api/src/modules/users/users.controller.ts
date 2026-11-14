@@ -15,9 +15,11 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  type AuthenticatedUser,
+} from '../../common/decorators/current-user.decorator';
 import { Role } from '../../common/enums';
-import type { Profile } from '@prisma/client';
 
 @Controller('users')
 @UseGuards(AuthGuard, RolesGuard)
@@ -49,7 +51,7 @@ export class UsersController {
   @Roles(Role.admin)
   remove(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() currentUser: Profile,
+    @CurrentUser() currentUser: AuthenticatedUser,
   ) {
     return this.usersService.remove(id, currentUser?.id || '');
   }

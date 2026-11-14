@@ -15,8 +15,9 @@ import {
 } from 'lucide-react';
 import type { User, UserProfile, ToastMessage, UserRole, CreateUserData, UpdateUserData } from '../../../types';
 import { userService } from '../../../services/userService';
+import { formatChileShortDate } from '../../../utils/formatters';
 import { UserModal } from './UserModal';
-import { DeleteUserConfirmModal } from './DeleteUserConfirmModal';
+import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
 
 interface UsersManagementTabProps {
   currentUser: User;
@@ -36,6 +37,7 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<UserProfile | null>(null);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -117,7 +119,8 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({
   };
 
   const handleConfirmDelete = async () => {
-    if (!userToDelete) return;
+    if (!userToDelete || isDeletingUser) return;
+    setIsDeletingUser(true);
     try {
       await userService.deleteUser(userToDelete.id);
       setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
@@ -126,6 +129,7 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({
         title: 'Acceso Revocado',
         message: `El usuario ${userToDelete.name} ha sido desvinculado del sistema.`,
       });
+      setUserToDelete(null);
     } catch (err) {
       console.error('[UsersManagement] Error al eliminar usuario:', err);
       addToast({
@@ -133,22 +137,12 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({
         title: 'Error al revocar acceso',
         message: err instanceof Error ? err.message : 'No se pudo eliminar el usuario.',
       });
+    } finally {
+      setIsDeletingUser(false);
     }
   };
 
-  const formatDate = (isoString?: string) => {
-    if (!isoString) return 'Reciente';
-    try {
-      const date = new Date(isoString);
-      return new Intl.DateTimeFormat('es-CL', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      }).format(date);
-    } catch {
-      return 'Reciente';
-    }
-  };
+  const formatDate = (isoString?: string) => formatChileShortDate(isoString, 'Reciente');
 
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
@@ -422,10 +416,20 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({
         onSave={handleSaveUser}
       />
 
-      <DeleteUserConfirmModal
-        isOpen={!!userToDelete}
-        userToDelete={userToDelete}
-        onClose={() => setUserToDelete(null)}
+      <ConfirmDeleteModal
+        isOpen={Boolean(userToDelete)}
+        title={userToDelete ? `¿Eliminar acceso de ${userToDelete.name}?` : '¿Eliminar acceso?'}
+        description={
+          userToDelete ? (
+            <>
+              Esta acción desvinculará a{' '}
+              <strong className="text-[#1C120D] dark:text-[#FBF4EB]">{userToDelete.email}</strong> del sistema ERP. El colaborador ya no podrá iniciar sesión en la pastelería.
+            </>
+          ) : null
+        }
+        confirmLabel="Sí, Eliminar Acceso"
+        isDeleting={isDeletingUser}
+        onClose={() => !isDeletingUser && setUserToDelete(null)}
         onConfirm={handleConfirmDelete}
       />
     </div>

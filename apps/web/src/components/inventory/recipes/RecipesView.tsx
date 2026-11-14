@@ -17,7 +17,7 @@ import { recipeService } from '../../../services/recipeService';
 import { categoryService } from '../../../services/categoryService';
 import { CategoryManagerModal } from '../categories/CategoryManagerModal';
 import { ProduceRecipeModal } from './ProduceRecipeModal';
-import { DeleteRecipeModal } from './DeleteRecipeModal';
+import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
 import type { ProductionResult } from '../../../types';
 
 interface RecipesViewProps {
@@ -44,6 +44,13 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
       title: '¡Producción completada!',
       message: result.message,
     });
+    if (result.accountingWarning) {
+      addToast({
+        type: 'warning',
+        title: 'Asiento de producción pendiente',
+        message: result.accountingWarning,
+      });
+    }
     loadRecipes();
     onRefresh?.();
   };
@@ -66,18 +73,21 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
       setLoading(true);
       const [recipeData, catData] = await Promise.all([
         recipeService.getAll(),
-        categoryService.getAll('recipe').catch(() => []),
+        categoryService.getAll('recipe').catch((err: unknown) => {
+          console.error('[RecipesView] Error cargando categorías de recetas:', err);
+          return [] as Category[];
+        }),
       ]);
       setRecipes(recipeData);
       setCategories(catData);
       if (catData.length > 0 && !formName) {
         setFormCategory(catData[0].name);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       addToast({
         type: 'error',
         title: 'Error al cargar recetas',
-        message: err.message,
+        message: err instanceof Error ? err.message : 'No se pudieron cargar las recetas.',
       });
     } finally {
       setLoading(false);
@@ -148,13 +158,17 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
       setFormDescription('');
       setSelectedIngredients([]);
       loadRecipes();
-    } catch (err: any) {
-      addToast({ type: 'error', title: 'Error', message: err.message });
+    } catch (err: unknown) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: err instanceof Error ? err.message : 'No se pudo guardar la receta.',
+      });
     }
   };
 
   const handleConfirmDeleteRecipe = async () => {
-    if (!recipeToDelete) return;
+    if (!recipeToDelete || isDeletingRecipe) return;
     setIsDeletingRecipe(true);
     try {
       await recipeService.delete(recipeToDelete.id);
@@ -164,12 +178,12 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
         message: `Se eliminó "${recipeToDelete.name}".`,
       });
       setRecipeToDelete(null);
-      loadRecipes();
-    } catch (err: any) {
+      await loadRecipes();
+    } catch (err: unknown) {
       addToast({
         type: 'error',
         title: 'Error al eliminar',
-        message: err?.message || 'No se pudo eliminar la receta.',
+        message: err instanceof Error ? err.message : 'No se pudo eliminar la receta.',
       });
     } finally {
       setIsDeletingRecipe(false);
@@ -495,9 +509,12 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
                       <select
                         value={item.ingredientId}
                         onChange={(e) => {
-                          const copy = [...selectedIngredients];
-                          copy[idx].ingredientId = e.target.value;
-                          setSelectedIngredients(copy);
+                          const value = e.target.value;
+                          setSelectedIngredients((prev) =>
+                            prev.map((row, rowIdx) =>
+                              rowIdx === idx ? { ...row, ingredientId: value } : row,
+                            ),
+                          );
                         }}
                         className="flex-1 p-1.5 text-xs rounded-lg border border-stone-200 dark:border-[#35251F] bg-stone-50 dark:bg-[#201612]"
                       >
@@ -514,9 +531,12 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
                         step="any"
                         value={item.quantity}
                         onChange={(e) => {
-                          const copy = [...selectedIngredients];
-                          copy[idx].quantity = Number(e.target.value);
-                          setSelectedIngredients(copy);
+                          const value = Number(e.target.value);
+                          setSelectedIngredients((prev) =>
+                            prev.map((row, rowIdx) =>
+                              rowIdx === idx ? { ...row, quantity: value } : row,
+                            ),
+                          );
                         }}
                         placeholder="Cant."
                         className="w-20 p-1.5 text-xs rounded-lg border border-stone-200 dark:border-[#35251F] bg-stone-50 dark:bg-[#201612]"
@@ -525,9 +545,12 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
                       <select
                         value={item.unit}
                         onChange={(e) => {
-                          const copy = [...selectedIngredients];
-                          copy[idx].unit = e.target.value;
-                          setSelectedIngredients(copy);
+                          const value = e.target.value;
+                          setSelectedIngredients((prev) =>
+                            prev.map((row, rowIdx) =>
+                              rowIdx === idx ? { ...row, unit: value } : row,
+                            ),
+                          );
                         }}
                         className="w-16 p-1.5 text-xs rounded-lg border border-stone-200 dark:border-[#35251F] bg-stone-50 dark:bg-[#201612]"
                       >
@@ -583,12 +606,21 @@ export const RecipesView: React.FC<RecipesViewProps> = ({ user, ingredients, add
       />
 
       {/* Modal de confirmación para eliminar receta */}
-      <DeleteRecipeModal
-        isOpen={!!recipeToDelete}
-        recipe={recipeToDelete}
-        onClose={() => setRecipeToDelete(null)}
-        onConfirm={handleConfirmDeleteRecipe}
+      <ConfirmDeleteModal
+        isOpen={Boolean(recipeToDelete)}
+        title="¿Eliminar receta?"
+        description={
+          recipeToDelete ? (
+            <>
+              Estás a punto de eliminar la receta{' '}
+              <strong className="text-[#1C120D] dark:text-[#FBF4EB]">"{recipeToDelete.name}"</strong>.
+            </>
+          ) : null
+        }
+        confirmLabel="Sí, eliminar receta"
         isDeleting={isDeletingRecipe}
+        onClose={() => !isDeletingRecipe && setRecipeToDelete(null)}
+        onConfirm={handleConfirmDeleteRecipe}
       />
     </div>
   );

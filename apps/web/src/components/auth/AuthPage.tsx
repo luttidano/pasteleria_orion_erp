@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Mail,
   Lock,
@@ -9,9 +9,17 @@ import {
   Sun,
   Moon,
   CheckCircle2,
+  Download,
+  WifiOff,
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { useTheme } from '../../context/ThemeContext';
+import { usePwaInstall } from '../../lib/usePwaInstall';
+import {
+  getConnectionStatus,
+  subscribeConnectionStatus,
+  type ConnectionHealth,
+} from '../../lib/connectionStatus';
 import type { User } from '../../types';
 
 interface AuthPageProps {
@@ -20,12 +28,22 @@ interface AuthPageProps {
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const { theme, toggleTheme } = useTheme();
+  const { canInstall, promptInstall } = usePwaInstall();
+  const [connectionHealth, setConnectionHealth] = useState<ConnectionHealth>(
+    () => getConnectionStatus().health,
+  );
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    return subscribeConnectionStatus((snapshot) => {
+      setConnectionHealth(snapshot.health);
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,18 +234,43 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         </div>
       </div>
 
-      {/* Indicador de Estado de Conexión */}
-      <div className="mt-4 flex items-center justify-center animate-fade-in">
-        {authService.isUsingSupabase() ? (
+      {/* Indicador de Estado de Conexión + Instalación PWA */}
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2 animate-fade-in">
+        {connectionHealth === 'offline' ? (
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800/70 text-amber-900 dark:text-amber-200 text-xs font-medium shadow-2xs">
+            <WifiOff className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>Sin conexión de red — Conéctate para iniciar sesión</span>
+          </div>
+        ) : connectionHealth === 'degraded' ? (
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800/70 text-rose-800 dark:text-rose-200 text-xs font-medium shadow-2xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
+            <span>Servidor ERP en verificación / degradado</span>
+          </div>
+        ) : authService.isUsingSupabase() ? (
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#EFE3CF]/80 dark:bg-[#201612] border border-[#DFCBB0] dark:border-[#38261F] text-[#6E594D] dark:text-[#C5B3A6] text-xs font-medium shadow-2xs">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#8C6D46] dark:bg-[#D4A373] animate-pulse" />
-            <span>Conectado al Servidor</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>
+              {connectionHealth === 'checking'
+                ? 'Comprobando conexión con el Servidor...'
+                : 'Conectado al Servidor'}
+            </span>
           </div>
         ) : (
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#EFE3CF]/80 dark:bg-[#201612] border border-[#DFCBB0] dark:border-[#38261F] text-[#7B685C] dark:text-[#B39F93] text-xs font-medium shadow-2xs">
             <span className="w-1.5 h-1.5 rounded-full bg-[#B28754]" />
-            <span>Modo Local</span>
+            <span>Configuración de autenticación pendiente</span>
           </div>
+        )}
+
+        {canInstall && (
+          <button
+            type="button"
+            onClick={() => void promptInstall()}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#DFCAA9] dark:border-[#42312A] bg-white/90 dark:bg-[#221713] hover:bg-white dark:hover:bg-[#2C1E19] text-[#8C1F25] dark:text-[#E8BD8A] text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Instalar App</span>
+          </button>
         )}
       </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Plus,
   Search,
@@ -12,19 +12,34 @@ import {
   LayoutGrid,
   List,
 } from 'lucide-react';
-import type { User, ToastMessage, Recipe, Supplier, CatalogProduct, ProductKind } from '../../../types';
+import type {
+  AdjustStockPayload,
+  CatalogProduct,
+  ProductKind,
+  Recipe,
+  Supplier,
+  ToastMessage,
+  User,
+} from '../../../types';
 import { productService } from '../../../services/productService';
 import { recipeService } from '../../../services/recipeService';
 import { supplierService } from '../../../services/supplierService';
+import { formatMoney } from '../../../utils/formatters';
 import { ProductModal } from './ProductModal';
-import { DeleteProductModal } from './DeleteProductModal';
+import { StockAdjustmentModal, type StockAdjustmentTarget } from '../StockAdjustmentModal';
+import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
 
 interface ProductsViewProps {
   user: User;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
+  onInventoryChange?: () => void;
 }
 
-export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) => {
+export const ProductsView: React.FC<ProductsViewProps> = ({
+  user,
+  addToast,
+  onInventoryChange,
+}) => {
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -41,6 +56,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
   // Confirm Delete Modal State
   const [productToDelete, setProductToDelete] = useState<CatalogProduct | null>(null);
   const [isDeletingProduct, setIsDeletingProduct] = useState(false);
+  const [adjustmentTarget, setAdjustmentTarget] = useState<StockAdjustmentTarget | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,17 +64,23 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
 
   const isAdmin = user.role === 'admin';
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [prodsData, recipesData, supsData] = await Promise.all([
+      const [prodsData, recipesRes, supsRes] = await Promise.all([
         productService.getAll(),
-        recipeService.getAll().catch(() => []),
-        supplierService.getAll().catch(() => []),
+        recipeService.getAll().catch((err: unknown) => {
+          console.error('[ProductsView] Error cargando recetas auxiliares:', err);
+          return [] as Recipe[];
+        }),
+        supplierService.getAll().catch((err: unknown) => {
+          console.error('[ProductsView] Error cargando proveedores auxiliares:', err);
+          return [] as Supplier[];
+        }),
       ]);
       setProducts(prodsData);
-      setRecipes(recipesData);
-      setSuppliers(supsData);
+      setRecipes(recipesRes);
+      setSuppliers(supsRes);
     } catch (err: unknown) {
       addToast({
         type: 'error',
@@ -68,11 +90,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
     } finally {
       setLoading(false);
     }
-  };
+  }, [addToast]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    void loadData();
+  }, [loadData]);
 
   // Guardar (Crear o Editar)
   const handleSaveProduct = async (data: Partial<CatalogProduct>) => {
@@ -93,6 +115,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
         });
       }
       await loadData();
+      onInventoryChange?.();
     } catch (err: unknown) {
       addToast({
         type: 'error',
@@ -105,7 +128,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
 
   // Eliminar
   const handleConfirmDeleteProduct = async () => {
-    if (!productToDelete) return;
+    if (!productToDelete || isDeletingProduct) return;
     setIsDeletingProduct(true);
     try {
       await productService.delete(productToDelete.id);
@@ -116,6 +139,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
       });
       setProductToDelete(null);
       await loadData();
+      onInventoryChange?.();
     } catch (err: unknown) {
       addToast({
         type: 'error',
@@ -127,8 +151,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
     }
   };
 
-  // Ajuste rápido de stock (+ / -)
-  const handleStockDelta = async (product: CatalogProduct, delta: number) => {
+  // Ajuste de stock con motivo contable (Modal)
+  const openAdjustmentModal = (product: CatalogProduct, delta: number) => {
     if (delta > 0 && product.productType === 'manufactured') {
       addToast({
         type: 'info',
@@ -137,16 +161,33 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
       });
       return;
     }
-    try {
-      await productService.adjustStock(product.id, delta, product.stock);
-      await loadData();
-    } catch (err: unknown) {
-      addToast({
-        type: 'error',
-        title: 'Error de inventario',
-        message: err instanceof Error ? err.message : 'No se pudo ajustar el stock.',
-      });
-    }
+    setAdjustmentTarget({
+      id: product.id,
+      name: product.name,
+      itemType: 'product',
+      currentStock: product.stock,
+      unit: product.unit,
+      unitCost: product.costPrice,
+      initialDelta: delta,
+    });
+  };
+
+  const handleConfirmAdjustment = async (
+    id: string,
+    payload: AdjustStockPayload,
+  ) => {
+    const updated = await productService.adjustStock(id, payload);
+    setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    onInventoryChange?.();
+    addToast({
+      type: updated.accountingWarning ? 'warning' : 'success',
+      title: updated.accountingWarning
+        ? 'Stock actualizado (pendiente contable)'
+        : 'Stock actualizado',
+      message: updated.accountingWarning
+        ? `${updated.name}: ${updated.stock} ${updated.unit}. ${updated.accountingWarning}`
+        : `${updated.name}: ${updated.stock} ${updated.unit}`,
+    });
   };
 
   // Filtrado de productos
@@ -426,14 +467,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
                     <div>
                       <span className="text-[10px] text-stone-500 dark:text-stone-400 block">Precio Venta</span>
                       <span className="text-base font-extrabold text-emerald-700 dark:text-emerald-400">
-                        ${p.salePrice.toLocaleString('es-CL')}
+                        {formatMoney(p.salePrice)}
                       </span>
                     </div>
                     {p.costPrice ? (
                       <div className="text-right">
                         <span className="text-[10px] text-stone-500 dark:text-stone-400 block">Costo / Margen</span>
                         <span className="text-xs font-semibold text-stone-700 dark:text-stone-300">
-                          ${p.costPrice.toLocaleString('es-CL')} {margin !== null && `(${margin}%)`}
+                          {formatMoney(p.costPrice)} {margin !== null && `(${margin}%)`}
                         </span>
                       </div>
                     ) : null}
@@ -444,7 +485,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
                 <div className="mt-4 pt-3 border-t border-stone-100 dark:border-[#221814] flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => handleStockDelta(p, -1)}
+                      type="button"
+                      onClick={() => openAdjustmentModal(p, -1)}
                       disabled={p.stock <= 0}
                       className="w-7 h-7 rounded-lg border border-stone-300 dark:border-stone-700 font-bold text-xs hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-40 cursor-pointer"
                     >
@@ -454,7 +496,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
                       {p.stock} <span className="text-[10px] text-stone-500 font-normal">{p.unit}</span>
                     </span>
                     <button
-                      onClick={() => handleStockDelta(p, 1)}
+                      type="button"
+                      onClick={() => openAdjustmentModal(p, 1)}
                       className={`w-7 h-7 rounded-lg border font-bold text-xs cursor-pointer ${
                         p.productType === 'manufactured'
                           ? 'border-dashed border-stone-300 dark:border-stone-700 text-stone-400 hover:text-amber-700 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30'
@@ -463,7 +506,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
                       title={
                         p.productType === 'manufactured'
                           ? 'Para aumentar stock, hornea tandas en Gestión de Recetas'
-                          : 'Añadir 1 unidad'
+                          : 'Registrar compra o sobrante'
                       }
                     >
                       +
@@ -536,10 +579,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
                     {p.stock} {p.unit}
                   </td>
                   <td className="py-3 px-3 font-bold text-emerald-700 dark:text-emerald-400">
-                    ${p.salePrice.toLocaleString('es-CL')}
+                    {formatMoney(p.salePrice)}
                   </td>
                   <td className="py-3 px-3 text-stone-600 dark:text-stone-400">
-                    {p.costPrice ? `$${p.costPrice.toLocaleString('es-CL')}` : '-'}
+                    {p.costPrice ? formatMoney(p.costPrice) : '-'}
                   </td>
                   <td className="py-3 px-3 text-stone-600 dark:text-stone-400">
                     {p.recipeName || p.supplierName || '-'}
@@ -583,12 +626,28 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ user, addToast }) =>
       />
 
       {/* Modal de confirmación para eliminar producto */}
-      <DeleteProductModal
-        isOpen={!!productToDelete}
-        product={productToDelete}
-        onClose={() => setProductToDelete(null)}
-        onConfirm={handleConfirmDeleteProduct}
+      <ConfirmDeleteModal
+        isOpen={Boolean(productToDelete)}
+        title="¿Eliminar producto del catálogo?"
+        description={
+          productToDelete ? (
+            <>
+              Estás a punto de eliminar{' '}
+              <strong className="text-[#1C120D] dark:text-[#FBF4EB]">"{productToDelete.name}"</strong>{' '}
+              del catálogo comercial.
+            </>
+          ) : null
+        }
+        confirmLabel="Sí, eliminar producto"
         isDeleting={isDeletingProduct}
+        onClose={() => !isDeletingProduct && setProductToDelete(null)}
+        onConfirm={handleConfirmDeleteProduct}
+      />
+
+      <StockAdjustmentModal
+        target={adjustmentTarget}
+        onClose={() => setAdjustmentTarget(null)}
+        onConfirm={handleConfirmAdjustment}
       />
     </div>
   );

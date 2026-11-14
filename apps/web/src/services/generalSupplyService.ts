@@ -1,17 +1,16 @@
 import { apiFetch } from '../lib/api';
-import type { GeneralSupply } from '../types';
+import type {
+  AdjustStockPayload,
+  GeneralSupply,
+  SaveGeneralSupplyPayload,
+} from '../types';
 
-export interface SaveGeneralSupplyPayload {
-  name: string;
-  category: string;
-  stock: number;
-  minStock: number;
-  unit?: string;
-  costPrice?: number;
-  supplierId?: string | null;
-  icon?: string;
-  description?: string | null;
-}
+export type { SaveGeneralSupplyPayload };
+
+export type GeneralSupplyAdjustmentResult = GeneralSupply & {
+  accountingStatus?: 'posted' | 'pending';
+  accountingWarning?: string | null;
+};
 
 export const generalSupplyService = {
   /**
@@ -60,16 +59,20 @@ export const generalSupplyService = {
    */
   async adjustStock(
     id: string,
-    delta: number,
+    input: number | AdjustStockPayload,
     reason?: string,
-  ): Promise<GeneralSupply> {
-    return apiFetch<GeneralSupply>(`/general-supplies/${id}/adjust-stock`, {
-      method: 'POST',
-      body: JSON.stringify({
-        delta,
-        ...(reason ? { reason } : {}),
-      }),
-    });
+  ): Promise<GeneralSupplyAdjustmentResult> {
+    const body =
+      typeof input === 'number'
+        ? { delta: input, ...(reason ? { reason } : {}) }
+        : input;
+    return apiFetch<GeneralSupplyAdjustmentResult>(
+      `/general-supplies/${id}/adjust-stock`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      },
+    );
   },
 
   /**

@@ -90,8 +90,8 @@ export const UserModal: React.FC<UserModalProps> = ({
         setErrorMsg('Debes asignar una contraseña inicial para la nueva cuenta.');
         return;
       }
-      if (cleanPass.length < 6) {
-        setErrorMsg('La contraseña debe tener al menos 6 caracteres.');
+      if (cleanPass.length < 8) {
+        setErrorMsg('La contraseña debe tener al menos 8 caracteres.');
         return;
       }
     }
@@ -250,7 +250,8 @@ export const UserModal: React.FC<UserModalProps> = ({
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres"
+                  minLength={8}
                   required
                   className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#1E1512] text-xs sm:text-sm text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-[#8C1F25] dark:focus:border-[#E25C64] transition-colors"
                 />

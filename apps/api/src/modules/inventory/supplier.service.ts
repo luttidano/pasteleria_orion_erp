@@ -3,13 +3,30 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
+import { rethrowPrismaError } from '../../common/utils/prisma-error.util';
 
 @Injectable()
 export class SupplierService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async ensureExists(
+    supplierId: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<void> {
+    const supplier = await db.supplier.findUnique({
+      where: { id: supplierId },
+      select: { id: true },
+    });
+    if (!supplier) {
+      throw new BadRequestException(
+        `El proveedor con ID "${supplierId}" no existe.`,
+      );
+    }
+  }
 
   /**
    * Determina la modalidad de abastecimiento según los datos del proveedor
@@ -47,7 +64,10 @@ export class SupplierService {
         supplierTypes && supplierTypes.length > 0
           ? supplierTypes
           : ['materia_prima'],
-      supplyModality: this.detectSupplyModality(item),
+      supplyModality:
+        item.supplyModality ||
+        item.supply_modality ||
+        this.detectSupplyModality(item),
       deliverySchedule: item.deliverySchedule,
       category: item.category,
       approximatePrices: item.approximatePrices,
@@ -120,67 +140,84 @@ export class SupplierService {
     const icon = dto.icon || (isPresencial ? '🏬' : '🚚');
     const supplierTypes = dto.supplierTypes || ['materia_prima'];
 
-    const created = await this.prisma.supplier.create({
-      data: {
-        name: dto.name.trim(),
-        phone,
-        deliverySchedule,
-        category,
-        approximatePrices,
-        contactPerson: dto.contactPerson?.trim() || null,
-        icon,
-        email: dto.email?.trim() || null,
-        address: dto.address?.trim() || null,
-        notes: dto.notes?.trim() || null,
-        supplierTypes,
-      },
-      include: {
-        supplierIngredients: true,
-        resaleProducts: true,
-      },
-    });
+    try {
+      const created = await this.prisma.supplier.create({
+        data: {
+          name: dto.name.trim(),
+          phone,
+          deliverySchedule,
+          category,
+          approximatePrices,
+          contactPerson: dto.contactPerson?.trim() || null,
+          icon,
+          email: dto.email?.trim() || null,
+          address: dto.address?.trim() || null,
+          notes: dto.notes?.trim() || null,
+          supplierTypes,
+          supplyModality:
+            dto.supplyModality || (isPresencial ? 'presencial' : 'despacho'),
+        },
+        include: {
+          supplierIngredients: true,
+          resaleProducts: true,
+        },
+      });
 
-    return this.mapSupplier(created);
+      return this.mapSupplier(created);
+    } catch (error) {
+      rethrowPrismaError(error, {
+        unique: 'Ya existe un proveedor con esos datos.',
+      });
+    }
   }
 
   async update(id: string, dto: UpdateSupplierDto) {
     await this.findOne(id);
 
-    const updated = await this.prisma.supplier.update({
-      where: { id },
-      data: {
-        ...(dto.name !== undefined && { name: dto.name.trim() }),
-        ...(dto.phone !== undefined && {
-          phone: dto.phone.trim() || 'Sin registrar',
-        }),
-        ...(dto.deliverySchedule !== undefined && {
-          deliverySchedule: dto.deliverySchedule.trim(),
-        }),
-        ...(dto.category !== undefined && { category: dto.category.trim() }),
-        ...(dto.approximatePrices !== undefined && {
-          approximatePrices: dto.approximatePrices.trim(),
-        }),
-        ...(dto.contactPerson !== undefined && {
-          contactPerson: dto.contactPerson?.trim() || null,
-        }),
-        ...(dto.icon !== undefined && { icon: dto.icon }),
-        ...(dto.email !== undefined && { email: dto.email?.trim() || null }),
-        ...(dto.address !== undefined && {
-          address: dto.address?.trim() || null,
-        }),
-        ...(dto.notes !== undefined && { notes: dto.notes?.trim() || null }),
-        ...(dto.supplierTypes !== undefined && {
-          supplierTypes: dto.supplierTypes,
-        }),
-        updatedAt: new Date(),
-      },
-      include: {
-        supplierIngredients: true,
-        resaleProducts: true,
-      },
-    });
+    try {
+      const updated = await this.prisma.supplier.update({
+        where: { id },
+        data: {
+          ...(dto.name !== undefined && { name: dto.name.trim() }),
+          ...(dto.phone !== undefined && {
+            phone: dto.phone.trim() || 'Sin registrar',
+          }),
+          ...(dto.deliverySchedule !== undefined && {
+            deliverySchedule: dto.deliverySchedule.trim(),
+          }),
+          ...(dto.category !== undefined && { category: dto.category.trim() }),
+          ...(dto.approximatePrices !== undefined && {
+            approximatePrices: dto.approximatePrices.trim(),
+          }),
+          ...(dto.contactPerson !== undefined && {
+            contactPerson: dto.contactPerson?.trim() || null,
+          }),
+          ...(dto.icon !== undefined && { icon: dto.icon }),
+          ...(dto.email !== undefined && { email: dto.email?.trim() || null }),
+          ...(dto.address !== undefined && {
+            address: dto.address?.trim() || null,
+          }),
+          ...(dto.notes !== undefined && { notes: dto.notes?.trim() || null }),
+          ...(dto.supplierTypes !== undefined && {
+            supplierTypes: dto.supplierTypes,
+          }),
+          ...(dto.supplyModality !== undefined && {
+            supplyModality: dto.supplyModality,
+          }),
+          updatedAt: new Date(),
+        },
+        include: {
+          supplierIngredients: true,
+          resaleProducts: true,
+        },
+      });
 
-    return this.mapSupplier(updated);
+      return this.mapSupplier(updated);
+    } catch (error) {
+      rethrowPrismaError(error, {
+        notFound: `Proveedor con ID "${id}" no encontrado.`,
+      });
+    }
   }
 
   async remove(id: string) {
@@ -201,10 +238,19 @@ export class SupplierService {
       );
     }
 
-    await this.prisma.supplier.delete({
-      where: { id },
-    });
+    try {
+      await this.prisma.supplier.delete({
+        where: { id },
+      });
 
-    return { success: true, id };
+      return { success: true, id };
+    } catch (error) {
+      rethrowPrismaError(error, {
+        notFound: `Proveedor con ID "${id}" no encontrado.`,
+        foreignKeyStatus: 'conflict',
+        foreignKey:
+          'No se puede eliminar el proveedor porque tiene ítems vinculados.',
+      });
+    }
   }
 }

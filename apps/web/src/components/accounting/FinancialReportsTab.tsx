@@ -9,18 +9,23 @@ import {
   Printer,
   CheckCircle2,
   AlertTriangle,
-  Boxes,
-  ShieldCheck,
-  CreditCard,
   FileSpreadsheet,
 } from 'lucide-react';
-import type { ToastMessage } from '../../types';
+import type {
+  BalanceSheetData,
+  IncomeStatementData,
+  ReportAccountLine,
+  ToastMessage,
+} from '../../types';
+import { financialReportService } from '../../services/financialReportService';
 import {
-  financialReportService,
-  type ReportAccountLine,
-  type IncomeStatementData,
-  type BalanceSheetData,
-} from '../../services/financialReportService';
+  formatMoney,
+  getChileMonthRange,
+  getChileQuarterRange,
+  getChileYearRange,
+} from '../../utils/formatters';
+import { IncomeStatementSection } from './IncomeStatementSection';
+import { BalanceSheetSection } from './BalanceSheetSection';
 
 export type { ReportAccountLine, IncomeStatementData, BalanceSheetData };
 
@@ -28,31 +33,17 @@ interface FinancialReportsTabProps {
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
 }
 
-const formatMoney = (val: number): string =>
-  Math.round(val).toLocaleString('es-CL');
-
 function getPresetRange(type: 'month' | 'quarter' | 'year' | 'all') {
-  const now = new Date();
   if (type === 'all') {
     return { start: '', end: '' };
   }
   if (type === 'month') {
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const start = new Date(year, month, 1).toISOString().slice(0, 10);
-    const end = new Date(year, month + 1, 0).toISOString().slice(0, 10);
-    return { start, end };
+    return getChileMonthRange(0);
   }
   if (type === 'quarter') {
-    const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
-    const start = new Date(now.getFullYear(), quarterMonth, 1).toISOString().slice(0, 10);
-    const end = new Date(now.getFullYear(), quarterMonth + 3, 0).toISOString().slice(0, 10);
-    return { start, end };
+    return getChileQuarterRange();
   }
-  // year
-  const start = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
-  const end = new Date(now.getFullYear(), 11, 31).toISOString().slice(0, 10);
-  return { start, end };
+  return getChileYearRange();
 }
 
 export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToast }) => {
@@ -79,7 +70,10 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
       addToast({
         type: 'error',
         title: 'Error al consultar estados financieros',
-        message: err instanceof Error ? err.message : 'No se pudieron calcular los reportes contables.',
+        message:
+          err instanceof Error
+            ? err.message
+            : 'No se pudieron calcular los reportes contables.',
       });
     } finally {
       setIsLoading(false);
@@ -115,7 +109,8 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
               </h3>
             </div>
             <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-              Estado de Resultados (P&L), Balance General y Valorización de Inventario conforme a principios contables y PCGA/IFRS.
+              Estado de Resultados (P&L), Balance General y Valorización de Inventario conforme a
+              principios contables y PCGA/IFRS.
             </p>
           </div>
 
@@ -131,7 +126,7 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
             </button>
             <button
               type="button"
-              onClick={fetchReports}
+              onClick={() => void fetchReports()}
               disabled={isLoading}
               className="px-3.5 py-2 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
             >
@@ -164,7 +159,6 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
             </div>
           </div>
 
-          {/* Botones Rápidos (Presets) */}
           <div className="flex items-center gap-1.5 text-[11px]">
             <button
               type="button"
@@ -248,11 +242,13 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
               {/* Margen Bruto */}
               <div className="p-4 rounded-2xl bg-white dark:bg-[#16100E] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-1">
                 <div className="flex items-center justify-between text-stone-400 text-xs">
-                  <span className="font-semibold uppercase tracking-wider text-[10px]">Margen Bruto</span>
+                  <span className="font-semibold uppercase tracking-wider text-[10px]">
+                    Margen Bruto
+                  </span>
                   <TrendingUp className="w-4 h-4 text-emerald-600" />
                 </div>
                 <div className="text-2xl font-bold font-mono text-stone-900 dark:text-white">
-                  ${formatMoney(incomeStatement.margenBruto)}
+                  {formatMoney(incomeStatement.margenBruto)}
                 </div>
                 <div className="text-[11px] text-stone-500 flex items-center justify-between pt-1 border-t border-stone-100 dark:border-stone-800">
                   <span>Rentabilidad s/ Ventas:</span>
@@ -265,7 +261,9 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
               {/* Utilidad Neta */}
               <div className="p-4 rounded-2xl bg-white dark:bg-[#16100E] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-1">
                 <div className="flex items-center justify-between text-stone-400 text-xs">
-                  <span className="font-semibold uppercase tracking-wider text-[10px]">Utilidad Neta</span>
+                  <span className="font-semibold uppercase tracking-wider text-[10px]">
+                    Utilidad Neta
+                  </span>
                   {incomeStatement.utilidadNeta >= 0 ? (
                     <TrendingUp className="w-4 h-4 text-emerald-600" />
                   ) : (
@@ -279,7 +277,7 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
                       : 'text-rose-600 dark:text-rose-400'
                   }`}
                 >
-                  ${formatMoney(incomeStatement.utilidadNeta)}
+                  {formatMoney(incomeStatement.utilidadNeta)}
                 </div>
                 <div className="text-[11px] text-stone-500 flex items-center justify-between pt-1 border-t border-stone-100 dark:border-stone-800">
                   <span>Margen Neto:</span>
@@ -296,16 +294,18 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
               {/* Activos Totales */}
               <div className="p-4 rounded-2xl bg-white dark:bg-[#16100E] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-1">
                 <div className="flex items-center justify-between text-stone-400 text-xs">
-                  <span className="font-semibold uppercase tracking-wider text-[10px]">Activo Total</span>
+                  <span className="font-semibold uppercase tracking-wider text-[10px]">
+                    Activo Total
+                  </span>
                   <Building2 className="w-4 h-4 text-[#8C1F25]" />
                 </div>
                 <div className="text-2xl font-bold font-mono text-stone-900 dark:text-white">
-                  ${formatMoney(balanceSheet.activos.total)}
+                  {formatMoney(balanceSheet.activos.total)}
                 </div>
                 <div className="text-[11px] text-stone-500 flex items-center justify-between pt-1 border-t border-stone-100 dark:border-stone-800">
                   <span>Disponible en Caja/Banco:</span>
                   <span className="font-bold text-stone-700 dark:text-stone-300 font-mono">
-                    ${formatMoney(balanceSheet.activos.disponible.total)}
+                    {formatMoney(balanceSheet.activos.disponible.total)}
                   </span>
                 </div>
               </div>
@@ -313,7 +313,9 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
               {/* Cuadre Contable */}
               <div className="p-4 rounded-2xl bg-white dark:bg-[#16100E] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-1">
                 <div className="flex items-center justify-between text-stone-400 text-xs">
-                  <span className="font-semibold uppercase tracking-wider text-[10px]">Ecuación Contable</span>
+                  <span className="font-semibold uppercase tracking-wider text-[10px]">
+                    Ecuación Contable
+                  </span>
                   <Scale className="w-4 h-4 text-[#8C1F25]" />
                 </div>
                 <div className="pt-0.5">
@@ -325,556 +327,28 @@ export const FinancialReportsTab: React.FC<FinancialReportsTabProps> = ({ addToa
                   ) : (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 font-bold text-xs">
                       <AlertTriangle className="w-3.5 h-3.5" />
-                      Descuadre: ${formatMoney(Math.abs(balanceSheet.difference))}
+                      Descuadre: {formatMoney(Math.abs(balanceSheet.difference))}
                     </span>
                   )}
                 </div>
                 <p className="text-[10px] text-stone-500 pt-1 border-t border-stone-100 dark:border-stone-800 font-mono">
-                  Activo (${formatMoney(balanceSheet.activos.total)}) = Pasivo (${formatMoney(balanceSheet.pasivos.total)}) + Patr. (${formatMoney(balanceSheet.patrimonio.total)})
+                  Activo ({formatMoney(balanceSheet.activos.total)}) = Pasivo (
+                  {formatMoney(balanceSheet.pasivos.total)}) + Patr. (
+                  {formatMoney(balanceSheet.patrimonio.total)})
                 </p>
               </div>
             </div>
           )}
 
-          {/* 3. SECCIÓN: ESTADO DE RESULTADOS (P&L) */}
           {(activeTab === 'overview' || activeTab === 'pnl') && incomeStatement && (
-            <div className="bg-white dark:bg-[#16100E] p-6 rounded-[26px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#EADBCE] dark:border-[#35251F] pb-4">
-                <div>
-                  <h4 className="text-lg font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif">
-                    Estado de Resultados (P&L / Pérdidas y Ganancias)
-                  </h4>
-                  <p className="text-xs text-stone-500 dark:text-stone-400">
-                    Estructura contable formal: Ingresos − Costos = Margen Bruto − Gastos = Utilidad Neta
-                  </p>
-                </div>
-                <div className="text-xs text-stone-500 font-mono">
-                  Período: {incomeStatement.period.startDate || 'Inicio'} al {incomeStatement.period.endDate || 'Hoy'}
-                </div>
-              </div>
-
-              {/* Cascada Financiera */}
-              <div className="space-y-4">
-                {/* 1. Ingresos Operacionales */}
-                <div className="rounded-2xl border border-stone-200/80 dark:border-[#2C1F1A] overflow-hidden">
-                  <div className="bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 flex items-center justify-center font-bold text-xs">
-                        +
-                      </span>
-                      <span className="font-bold text-sm text-stone-900 dark:text-stone-100">
-                        1. Ingresos Operacionales
-                      </span>
-                    </div>
-                    <span className="font-mono font-bold text-base text-emerald-700 dark:text-emerald-400">
-                      ${formatMoney(incomeStatement.ingresosOperacionales.total)}
-                    </span>
-                  </div>
-
-                  <div className="divide-y divide-stone-100 dark:divide-[#281C17] bg-white dark:bg-[#16100E]">
-                    {incomeStatement.ingresosOperacionales.accounts.length === 0 ? (
-                      <div className="px-4 py-3 text-xs text-stone-400 italic">
-                        No se registran movimientos de ingresos en el período.
-                      </div>
-                    ) : (
-                      incomeStatement.ingresosOperacionales.accounts.map((acc) => (
-                        <div key={acc.id} className="px-4 py-2.5 flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-stone-400 text-[11px]">{acc.code}</span>
-                            <span className="font-medium text-stone-800 dark:text-stone-200">{acc.name}</span>
-                          </div>
-                          <span className="font-mono font-semibold text-stone-900 dark:text-stone-100">
-                            ${formatMoney(acc.amount)}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* 2. Costos de Materias Primas */}
-                <div className="rounded-2xl border border-stone-200/80 dark:border-[#2C1F1A] overflow-hidden">
-                  <div className="bg-amber-50/60 dark:bg-amber-950/20 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 flex items-center justify-center font-bold text-xs">
-                        −
-                      </span>
-                      <span className="font-bold text-sm text-stone-900 dark:text-stone-100">
-                        2. Costos de Materias Primas e Insumos
-                      </span>
-                    </div>
-                    <span className="font-mono font-bold text-base text-amber-700 dark:text-amber-400">
-                      ${formatMoney(incomeStatement.costosMateriasPrimas.total)}
-                    </span>
-                  </div>
-
-                  <div className="divide-y divide-stone-100 dark:divide-[#281C17] bg-white dark:bg-[#16100E]">
-                    {incomeStatement.costosMateriasPrimas.accounts.length === 0 ? (
-                      <div className="px-4 py-3 text-xs text-stone-400 italic">
-                        No se registran costos de materias primas directos en el período.
-                      </div>
-                    ) : (
-                      incomeStatement.costosMateriasPrimas.accounts.map((acc) => (
-                        <div key={acc.id} className="px-4 py-2.5 flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-stone-400 text-[11px]">{acc.code}</span>
-                            <span className="font-medium text-stone-800 dark:text-stone-200">{acc.name}</span>
-                          </div>
-                          <span className="font-mono font-semibold text-stone-900 dark:text-stone-100">
-                            ${formatMoney(acc.amount)}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Subtotal: MARGEN BRUTO */}
-                <div className="p-4 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border-2 border-[#EADBCE] dark:border-[#35251F] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <span className="text-xs uppercase font-bold text-stone-500 tracking-wider">
-                      (=) Margen Bruto Operacional
-                    </span>
-                    <p className="text-xs text-stone-500">
-                      Ingresos Operacionales − Costos de Materias Primas
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-2xl font-black font-mono text-[#8C1F25] dark:text-[#E8A598]">
-                      ${formatMoney(incomeStatement.margenBruto)}
-                    </span>
-                    <span className="block text-[11px] font-bold text-stone-500 font-mono">
-                      {incomeStatement.margenBrutoPercentage}% de las ventas
-                    </span>
-                  </div>
-                </div>
-
-                {/* 3. Gastos Operacionales */}
-                <div className="rounded-2xl border border-stone-200/80 dark:border-[#2C1F1A] overflow-hidden">
-                  <div className="bg-rose-50/60 dark:bg-rose-950/20 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-700 flex items-center justify-center font-bold text-xs">
-                        −
-                      </span>
-                      <span className="font-bold text-sm text-stone-900 dark:text-stone-100">
-                        3. Gastos Operacionales (Sueldos, Luz, Arriendo, Servicios)
-                      </span>
-                    </div>
-                    <span className="font-mono font-bold text-base text-rose-700 dark:text-rose-400">
-                      ${formatMoney(incomeStatement.gastosOperacionales.total)}
-                    </span>
-                  </div>
-
-                  <div className="divide-y divide-stone-100 dark:divide-[#281C17] bg-white dark:bg-[#16100E]">
-                    {incomeStatement.gastosOperacionales.accounts.length === 0 ? (
-                      <div className="px-4 py-3 text-xs text-stone-400 italic">
-                        No se registran gastos operativos en el período.
-                      </div>
-                    ) : (
-                      incomeStatement.gastosOperacionales.accounts.map((acc) => (
-                        <div key={acc.id} className="px-4 py-2.5 flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-stone-400 text-[11px]">{acc.code}</span>
-                            <span className="font-medium text-stone-800 dark:text-stone-200">{acc.name}</span>
-                          </div>
-                          <span className="font-mono font-semibold text-stone-900 dark:text-stone-100">
-                            ${formatMoney(acc.amount)}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Total Final: UTILIDAD NETA */}
-                <div
-                  className={`p-5 rounded-2xl border-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                    incomeStatement.utilidadNeta >= 0
-                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-950 dark:text-emerald-100'
-                      : 'bg-rose-500/10 border-rose-500/40 text-rose-950 dark:text-rose-100'
-                  }`}
-                >
-                  <div>
-                    <span className="text-xs uppercase font-extrabold tracking-wider block">
-                      (=) Utilidad Neta del Ejercicio
-                    </span>
-                    <p className="text-xs opacity-80 mt-0.5">
-                      Margen Bruto − Gastos Operacionales (Superávit contable final)
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span
-                      className={`text-3xl font-black font-mono block ${
-                        incomeStatement.utilidadNeta >= 0
-                          ? 'text-emerald-700 dark:text-emerald-400'
-                          : 'text-rose-700 dark:text-rose-400'
-                      }`}
-                    >
-                      ${formatMoney(incomeStatement.utilidadNeta)}
-                    </span>
-                    <span className="text-xs font-bold font-mono opacity-80">
-                      Margen Neto: {incomeStatement.margenNetoPercentage}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <IncomeStatementSection incomeStatement={incomeStatement} />
           )}
 
-          {/* 4. SECCIÓN: BALANCE GENERAL (SITUACIÓN FINANCIERA) */}
           {(activeTab === 'overview' || activeTab === 'balance') && balanceSheet && (
-            <div className="bg-white dark:bg-[#16100E] p-6 rounded-[26px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#EADBCE] dark:border-[#35251F] pb-4">
-                <div>
-                  <h4 className="text-lg font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif">
-                    Balance General / Estado de Situación Financiera
-                  </h4>
-                  <p className="text-xs text-stone-500 dark:text-stone-400">
-                    Agrupación formal: Activo = Pasivo + Patrimonio (Permite saber cuánto vale la empresa y cuánto se debe)
-                  </p>
-                </div>
-                <div className="text-xs text-stone-500 font-mono">
-                  Corte al: {balanceSheet.asOfDate}
-                </div>
-              </div>
-
-              {/* Grid 2 Columnas: ACTIVOS vs PASIVOS + PATRIMONIO */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* LADO IZQUIERDO: ACTIVOS */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-stone-100 dark:bg-[#201612] border border-stone-200 dark:border-[#35251F]">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-5 h-5 text-emerald-600" />
-                      <span className="font-bold text-sm text-stone-900 dark:text-white uppercase">
-                        TOTAL ACTIVOS
-                      </span>
-                    </div>
-                    <span className="text-xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
-                      ${formatMoney(balanceSheet.activos.total)}
-                    </span>
-                  </div>
-
-                  {/* Grupo Disponible */}
-                  <div className="rounded-2xl border border-stone-200/80 dark:border-[#2C1F1A] overflow-hidden">
-                    <div className="bg-stone-50 dark:bg-[#1C1411] px-4 py-2.5 flex items-center justify-between text-xs font-bold text-stone-700 dark:text-stone-300">
-                      <span>Activo Disponible (Caja y Bancos)</span>
-                      <span className="font-mono">${formatMoney(balanceSheet.activos.disponible.total)}</span>
-                    </div>
-                    <div className="divide-y divide-stone-100 dark:divide-[#281C17] bg-white dark:bg-[#16100E]">
-                      {balanceSheet.activos.disponible.accounts.map((acc) => (
-                        <div key={acc.id} className="px-4 py-2 flex items-center justify-between text-xs">
-                          <span className="text-stone-600 dark:text-stone-400 font-medium">
-                            <b className="font-mono text-stone-400 mr-2">{acc.code}</b>
-                            {acc.name}
-                          </span>
-                          <span className="font-mono font-semibold">${formatMoney(acc.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Grupo Inventarios */}
-                  <div className="rounded-2xl border border-stone-200/80 dark:border-[#2C1F1A] overflow-hidden">
-                    <div className="bg-stone-50 dark:bg-[#1C1411] px-4 py-2.5 flex items-center justify-between text-xs font-bold text-stone-700 dark:text-stone-300">
-                      <span>Inventarios Contables (Materias Primas y Terminado)</span>
-                      <span className="font-mono">${formatMoney(balanceSheet.activos.inventarios.total)}</span>
-                    </div>
-                    <div className="divide-y divide-stone-100 dark:divide-[#281C17] bg-white dark:bg-[#16100E]">
-                      {balanceSheet.activos.inventarios.accounts.map((acc) => (
-                        <div key={acc.id} className="px-4 py-2 flex items-center justify-between text-xs">
-                          <span className="text-stone-600 dark:text-stone-400 font-medium">
-                            <b className="font-mono text-stone-400 mr-2">{acc.code}</b>
-                            {acc.name}
-                          </span>
-                          <span className="font-mono font-semibold">${formatMoney(acc.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* LADO DERECHO: PASIVOS Y PATRIMONIO */}
-                <div className="space-y-4">
-                  {/* Pasivos */}
-                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-stone-100 dark:bg-[#201612] border border-stone-200 dark:border-[#35251F]">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-5 h-5 text-rose-600" />
-                      <span className="font-bold text-sm text-stone-900 dark:text-white uppercase">
-                        TOTAL PASIVOS (DEUDAS)
-                      </span>
-                    </div>
-                    <span className="text-xl font-bold font-mono text-rose-700 dark:text-rose-400">
-                      ${formatMoney(balanceSheet.pasivos.total)}
-                    </span>
-                  </div>
-
-                  {/* Desglose Pasivos */}
-                  <div className="rounded-2xl border border-stone-200/80 dark:border-[#2C1F1A] overflow-hidden">
-                    <div className="bg-stone-50 dark:bg-[#1C1411] px-4 py-2.5 flex items-center justify-between text-xs font-bold text-stone-700 dark:text-stone-300">
-                      <span>Obligaciones con Proveedores e Impuestos</span>
-                      <span className="font-mono">${formatMoney(balanceSheet.pasivos.total)}</span>
-                    </div>
-                    <div className="divide-y divide-stone-100 dark:divide-[#281C17] bg-white dark:bg-[#16100E]">
-                      {balanceSheet.pasivos.obligaciones.accounts.map((acc) => (
-                        <div key={acc.id} className="px-4 py-2 flex items-center justify-between text-xs">
-                          <span className="text-stone-600 dark:text-stone-400 font-medium">
-                            <b className="font-mono text-stone-400 mr-2">{acc.code}</b>
-                            {acc.name}
-                          </span>
-                          <span className="font-mono font-semibold">${formatMoney(acc.amount)}</span>
-                        </div>
-                      ))}
-                      {balanceSheet.pasivos.impuestos.accounts.map((acc) => (
-                        <div key={acc.id} className="px-4 py-2 flex items-center justify-between text-xs">
-                          <span className="text-stone-600 dark:text-stone-400 font-medium">
-                            <b className="font-mono text-stone-400 mr-2">{acc.code}</b>
-                            {acc.name}
-                          </span>
-                          <span className="font-mono font-semibold">${formatMoney(acc.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Patrimonio */}
-                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-stone-100 dark:bg-[#201612] border border-stone-200 dark:border-[#35251F]">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-5 h-5 text-blue-600" />
-                      <span className="font-bold text-sm text-stone-900 dark:text-white uppercase">
-                        PATRIMONIO NETO
-                      </span>
-                    </div>
-                    <span className="text-xl font-bold font-mono text-blue-700 dark:text-blue-400">
-                      ${formatMoney(balanceSheet.patrimonio.total)}
-                    </span>
-                  </div>
-
-                  {/* Desglose Patrimonio */}
-                  <div className="rounded-2xl border border-stone-200/80 dark:border-[#2C1F1A] overflow-hidden">
-                    <div className="bg-stone-50 dark:bg-[#1C1411] px-4 py-2.5 flex items-center justify-between text-xs font-bold text-stone-700 dark:text-stone-300">
-                      <span>Composición del Patrimonio</span>
-                      <span className="font-mono">${formatMoney(balanceSheet.patrimonio.total)}</span>
-                    </div>
-                    <div className="divide-y divide-stone-100 dark:divide-[#281C17] bg-white dark:bg-[#16100E]">
-                      {balanceSheet.patrimonio.capital.accounts.map((acc) => (
-                        <div key={acc.id} className="px-4 py-2 flex items-center justify-between text-xs">
-                          <span className="text-stone-600 dark:text-stone-400 font-medium">
-                            <b className="font-mono text-stone-400 mr-2">{acc.code}</b>
-                            {acc.name}
-                          </span>
-                          <span className="font-mono font-semibold">${formatMoney(acc.amount)}</span>
-                        </div>
-                      ))}
-                      <div className="px-4 py-2.5 flex items-center justify-between text-xs bg-blue-50/40 dark:bg-blue-950/20">
-                        <span className="font-semibold text-blue-900 dark:text-blue-300">
-                          Resultado Acumulado del Ejercicio
-                        </span>
-                        <span className="font-mono font-bold text-blue-700 dark:text-blue-400">
-                          ${formatMoney(balanceSheet.patrimonio.resultadoEjercicio)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Total Pasivo + Patrimonio */}
-                  <div className="p-4 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border-2 border-stone-300 dark:border-stone-700 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold uppercase text-stone-600 dark:text-stone-300">
-                        Total Pasivo + Patrimonio
-                      </span>
-                      <p className="text-[11px] text-stone-400">Pasivo ($) + Patrimonio ($)</p>
-                    </div>
-                    <span className="text-2xl font-black font-mono text-stone-900 dark:text-white">
-                      ${formatMoney(balanceSheet.totalPasivoMasPatrimonio)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 5. SECCIÓN: VALORIZACIÓN EN TIEMPO REAL DE BODEGA E INVENTARIOS */}
-          {(activeTab === 'overview' || activeTab === 'balance') && balanceSheet && (
-            <div className="bg-white dark:bg-[#16100E] p-6 rounded-[26px] border border-[#EADBCE] dark:border-[#35251F] shadow-xs space-y-5">
-              <div className="border-b border-[#EADBCE] dark:border-[#35251F] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Boxes className="w-5 h-5 text-[#8C1F25]" />
-                    <h4 className="text-lg font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif">
-                      Valorización de Inventario Físico en Bodega & Mostrador
-                    </h4>
-                  </div>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                    Muestra en tiempo real cuánta harina, materias primas e insumos hay almacenados y cuánto producto terminado está listo para venta.
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs uppercase font-bold text-stone-400 block">Total Inventario Valorizado</span>
-                  <span className="text-xl font-bold font-mono text-[#8C1F25] dark:text-[#E8A598]">
-                    ${formatMoney(balanceSheet.inventoryValuation.totalWarehouseValue)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Materias Primas */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200">
-                    <span className="font-bold text-xs">
-                      Harina e Insumos en Bodega (Materia Prima)
-                    </span>
-                    <span className="font-mono font-bold text-sm">
-                      ${formatMoney(balanceSheet.inventoryValuation.rawMaterialsValue)}
-                    </span>
-                  </div>
-
-                  <div className="overflow-x-auto rounded-xl border border-stone-200 dark:border-stone-800">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-stone-50 dark:bg-[#1E1512] text-[10px] uppercase font-bold text-stone-500">
-                          <th className="py-2 px-3">Insumo</th>
-                          <th className="py-2 px-3 text-right">Stock</th>
-                          <th className="py-2 px-3 text-right">Costo Unit.</th>
-                          <th className="py-2 px-3 text-right">Valor Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-                        {balanceSheet.inventoryValuation.topRawMaterials.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="py-4 text-center text-stone-400">
-                              Sin materias primas registradas.
-                            </td>
-                          </tr>
-                        ) : (
-                          balanceSheet.inventoryValuation.topRawMaterials.map((ing) => (
-                            <tr key={ing.id} className="hover:bg-stone-50/50">
-                              <td className="py-2 px-3 font-medium text-stone-800 dark:text-stone-200">
-                                {ing.name}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                                {ing.stock} {ing.unit}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                                ${formatMoney(ing.unitCost)}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono font-bold text-stone-900 dark:text-stone-100">
-                                ${formatMoney(ing.totalValue)}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                                {/* Empaques Secundarios */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-orange-50 dark:bg-orange-950/20 text-orange-900 dark:text-orange-200">
-                    <span className="font-bold text-xs">
-                      Cajas y Empaques (Stock)
-                    </span>
-                    <span className="font-mono font-bold text-sm">
-                      ${formatMoney(balanceSheet.inventoryValuation.packagingValue ?? 0)}
-                    </span>
-                  </div>
-
-                  <div className="overflow-x-auto rounded-xl border border-stone-200 dark:border-stone-800">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-stone-50 dark:bg-[#1E1512] text-[10px] uppercase font-bold text-stone-500">
-                          <th className="py-2 px-3">Empaque</th>
-                          <th className="py-2 px-3 text-right">Stock</th>
-                          <th className="py-2 px-3 text-right">Costo</th>
-                          <th className="py-2 px-3 text-right">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-                        {(!balanceSheet.inventoryValuation.topPackaging || balanceSheet.inventoryValuation.topPackaging.length === 0) ? (
-                          <tr>
-                            <td colSpan={4} className="py-4 text-center text-stone-400">
-                              Sin empaques registrados.
-                            </td>
-                          </tr>
-                        ) : (
-                          balanceSheet.inventoryValuation.topPackaging.map((pack) => (
-                            <tr key={pack.id} className="hover:bg-stone-50/50">
-                              <td className="py-2 px-3 font-medium text-stone-800 dark:text-stone-200">
-                                {pack.name}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                                {pack.stock} {pack.unit}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                                ${formatMoney(pack.unitCost)}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono font-bold text-stone-900 dark:text-stone-100">
-                                ${formatMoney(pack.totalValue)}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Productos Terminados */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-200">
-                    <span className="font-bold text-xs">
-                      Productos Terminados Listos para Venta
-                    </span>
-                    <span className="font-mono font-bold text-sm">
-                      ${formatMoney(balanceSheet.inventoryValuation.finishedProductsValue)}
-                    </span>
-                  </div>
-
-                  <div className="overflow-x-auto rounded-xl border border-stone-200 dark:border-stone-800">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-stone-50 dark:bg-[#1E1512] text-[10px] uppercase font-bold text-stone-500">
-                          <th className="py-2 px-3">Producto</th>
-                          <th className="py-2 px-3 text-right">Stock</th>
-                          <th className="py-2 px-3 text-right">Costo Unit.</th>
-                          <th className="py-2 px-3 text-right">Valor Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-                        {balanceSheet.inventoryValuation.topProducts.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="py-4 text-center text-stone-400">
-                              Sin productos en catálogo.
-                            </td>
-                          </tr>
-                        ) : (
-                          balanceSheet.inventoryValuation.topProducts.map((prod) => (
-                            <tr key={prod.id} className="hover:bg-stone-50/50">
-                              <td className="py-2 px-3 font-medium text-stone-800 dark:text-stone-200">
-                                {prod.name}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                                {prod.stock} {prod.unit}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                                ${formatMoney(prod.unitCost)}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono font-bold text-stone-900 dark:text-stone-100">
-                                ${formatMoney(prod.totalValue)}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <BalanceSheetSection balanceSheet={balanceSheet} />
           )}
         </>
       )}
     </div>
   );
 };
-

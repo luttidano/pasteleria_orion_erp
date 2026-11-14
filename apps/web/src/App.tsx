@@ -9,6 +9,8 @@ import { ToastContainer } from './components/common/Toast';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthGuard, RoleGuard, GuestGuard } from './guards';
 import { UnauthorizedView } from './components/common/UnauthorizedView';
+import { LoadingScreen } from './components/common/LoadingScreen';
+import { PwaStatusOverlay } from './components/pwa/PwaStatusOverlay';
 import {
   checkServerHealth,
   getConnectionStatus,
@@ -18,26 +20,12 @@ import {
 } from './lib/connectionStatus';
 import './App.css';
 
-/**
- * Pantalla de carga inicial con la identidad de marca de Pastelería Orión
- */
-const LoadingScreen = () => (
-  <div className="min-h-screen bg-[#FAF5ED] dark:bg-[#0F0B09] flex flex-col items-center justify-center p-4">
-    <div className="flex flex-col items-center gap-4">
-      <div className="w-12 h-12 border-4 border-[#8C1F25]/20 border-t-[#8C1F25] rounded-full animate-spin"></div>
-      <div className="font-serif text-2xl font-bold text-[#8C1F25] dark:text-[#E25C64]">
-        Pastelería Orión
-      </div>
-      <p className="text-xs text-[#7B685C] dark:text-[#B39F93] font-medium tracking-wide">
-        Cargando sistema ERP...
-      </p>
-    </div>
-  </div>
-);
+const canAccessIngredients = (role?: User['role']): boolean =>
+  role === 'admin' || role === 'baker';
 
 function AppContent() {
   const navigate = useNavigate();
-  const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isIngredientsLoading, setIsIngredientsLoading] = useState(false);
@@ -63,10 +51,10 @@ function AppContent() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Carga de catálogo de materias primas solo para usuarios autenticados
+  // Carga de catálogo de materias primas solo para roles con permiso de inventario
   const loadIngredients = useCallback(async () => {
     const user = authService.getCurrentUser();
-    if (!user) {
+    if (!user || !canAccessIngredients(user.role)) {
       setIngredients([]);
       return;
     }
@@ -96,7 +84,6 @@ function AppContent() {
   useEffect(() => {
     let isMounted = true;
 
-    // Suscribirse a cambios continuos (login, logout, token refresh, initial session)
     const { unsubscribe } = authService.subscribeToAuthChanges((updatedUser) => {
       if (!isMounted) return;
       setCurrentUser((prev) => {
@@ -105,39 +92,34 @@ function AppContent() {
         }
         return updatedUser;
       });
-
-      if (updatedUser) {
-        loadIngredients().finally(() => {
-          if (isMounted) setIsLoading(false);
-        });
-      } else {
+      if (!updatedUser) {
         setIngredients([]);
+      }
+    });
+
+    authService
+      .ensureAuthReady()
+      .then((user) => {
+        if (!isMounted) return;
+        setCurrentUser(user ?? null);
+        if (!user) {
+          setIngredients([]);
+        }
+      })
+      .finally(() => {
         if (isMounted) setIsLoading(false);
-      }
-    });
-
-    // Garantizar resolución asíncrona de sesión y token antes de la primera carga
-    authService.ensureAuthReady().then((user) => {
-      if (!isMounted) return;
-      if (user) {
-        setCurrentUser(user);
-        loadIngredients().finally(() => {
-          if (isMounted) setIsLoading(false);
-        });
-      } else {
-        setIsLoading(false);
-        setIngredients([]);
-      }
-    });
+      });
 
     return () => {
       isMounted = false;
       unsubscribe();
     };
-  }, [loadIngredients]);
+  }, []);
 
   // 3. Monitoreo real de conexión (Red + API NestJS + PostgreSQL) y re-sincronización
   useEffect(() => {
+    const hasIngredientScope = canAccessIngredients(currentUser?.role);
+
     const unsubscribe = subscribeConnectionStatus((next) => {
       setConnectionStatus(next);
       const prev = prevHealthRef.current;
@@ -148,7 +130,7 @@ function AppContent() {
           title: 'Conexión Restablecida',
           message: 'El servidor ERP y la base de datos vuelven a estar operativos.',
         });
-        if (currentUser?.id && !isFetchingRef.current) {
+        if (currentUser?.id && hasIngredientScope && !isFetchingRef.current) {
           void loadIngredients();
         }
       } else if (next.health === 'degraded' && prev !== 'degraded') {
@@ -172,7 +154,7 @@ function AppContent() {
 
     const handleFocusOrOnline = () => {
       void checkServerHealth();
-      if (currentUser?.id && !isFetchingRef.current) {
+      if (currentUser?.id && hasIngredientScope && !isFetchingRef.current) {
         void loadIngredients();
       }
     };
@@ -191,7 +173,7 @@ function AppContent() {
       window.removeEventListener('online', handleFocusOrOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [currentUser?.id, loadIngredients, addToast]);
+  }, [currentUser?.id, currentUser?.role, loadIngredients, addToast]);
 
   // 3b. Polling adaptativo de salud solo cuando la pestaña está visible
   useEffect(() => {
@@ -209,16 +191,17 @@ function AppContent() {
     return () => window.clearInterval(intervalId);
   }, [connectionStatus.health]);
 
-  // 4. Sincronización reactiva del catálogo ante cualquier cambio de sesión o usuario
+  // 4. Sincronización reactiva del catálogo ante cualquier cambio de sesión o rol
   useEffect(() => {
-    if (currentUser?.id) {
-      loadIngredients();
+    if (currentUser?.id && canAccessIngredients(currentUser.role)) {
+      void loadIngredients();
+    } else {
+      setIngredients([]);
     }
-  }, [currentUser?.id, loadIngredients]);
+  }, [currentUser?.id, currentUser?.role, loadIngredients]);
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
-    loadIngredients();
     const roleMessages: Record<string, string> = {
       admin: 'Has ingresado al Panel ERP como Administrador.',
       baker: 'Has ingresado al Módulo de Inventario como Maestro Pastelero.',
@@ -251,6 +234,7 @@ function AppContent() {
   return (
     <>
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <PwaStatusOverlay />
 
       <Routes>
         {/* 1. Ruta Pública: Login (Protegido por GuestGuard) */}

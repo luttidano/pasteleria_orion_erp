@@ -2,18 +2,24 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
+  ConflictException,
   NotFoundException,
   ValidationPipe,
 } from '@nestjs/common';
 import { GeneralSupplyService } from './general-supply.service';
+import { SupplierService } from './supplier.service';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateGeneralSupplyDto } from './dto/create-general-supply.dto';
 import { UpdateGeneralSupplyDto } from './dto/update-general-supply.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
+import { StockMovementService } from './stock-movement.service';
+import { AccountingOutboxService } from '../accounting/accounting-outbox.service';
+import { AccountingOutboxProcessorService } from '../accounting/accounting-outbox-processor.service';
 
 describe('GeneralSupplyService', () => {
   let service: GeneralSupplyService;
   let prisma: any;
+  let outboxProcessor: any;
 
   beforeEach(async () => {
     prisma = {
@@ -27,12 +33,42 @@ describe('GeneralSupplyService', () => {
       supplier: {
         findUnique: jest.fn(),
       },
+      stockMovement: {
+        create: jest
+          .fn<(...args: unknown[]) => Promise<unknown>>()
+          .mockResolvedValue({ id: 'mov-gs-1' }),
+      },
+      accountingOutbox: {
+        upsert: jest
+          .fn<(...args: unknown[]) => Promise<unknown>>()
+          .mockResolvedValue({ id: 'outbox-gs-1' }),
+      },
+      $queryRaw: jest
+        .fn<(...args: unknown[]) => Promise<unknown[]>>()
+        .mockResolvedValue([]),
       $transaction: jest.fn((cb: any) => cb(prisma)),
+    };
+
+    outboxProcessor = {
+      processEvent: jest
+        .fn<(...args: unknown[]) => Promise<unknown>>()
+        .mockResolvedValue({
+          outboxId: 'outbox-gs-1',
+          aggregateType: 'inventory_purchase',
+          aggregateId: 'mov-gs-1',
+          entryId: 'entry-gs-1',
+          entryNumber: 1,
+          alreadyProcessed: false,
+        }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GeneralSupplyService,
+        SupplierService,
+        StockMovementService,
+        AccountingOutboxService,
+        { provide: AccountingOutboxProcessorService, useValue: outboxProcessor },
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();
@@ -123,7 +159,7 @@ describe('GeneralSupplyService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('debe ajustar stock sin permitir valores negativos y pasar a agotado en 0', async () => {
+  it('debe rechazar stock negativo con ConflictException, permitir ajuste exacto a 0 sin duplicar gasto y contabilizar compras en outbox', async () => {
     prisma.generalSupply.findUnique.mockResolvedValue({
       id: 'gs-1',
       name: 'Guantes de Nitrilo M',
@@ -133,6 +169,12 @@ describe('GeneralSupplyService', () => {
       unit: 'caja',
       costPrice: 4500,
     });
+
+    await expect(
+      service.adjustStock('gs-1', { delta: -5, reasonType: 'internal_use' }),
+    ).rejects.toThrow(ConflictException);
+    expect(prisma.generalSupply.update).not.toHaveBeenCalled();
+
     prisma.generalSupply.update.mockImplementation(({ data }: any) => ({
       id: 'gs-1',
       name: 'Guantes de Nitrilo M',
@@ -140,13 +182,31 @@ describe('GeneralSupplyService', () => {
       stock: data.stock,
       minStock: 3,
       unit: 'caja',
-      costPrice: 4500,
+      costPrice: data.costPrice ?? 4500,
       supplier: null,
     }));
 
-    const result = await service.adjustStock('gs-1', { delta: -5 });
+    // Ajuste físico negativo en general_supply: registra Kardex pero NO duplica asiento contable (ya fue gasto en 6101 al comprarse)
+    const result = await service.adjustStock('gs-1', {
+      delta: -2,
+      reasonType: 'internal_use',
+    });
     expect(result.stock).toBe(0);
     expect(result.status).toBe('agotado');
+    expect(prisma.stockMovement.create).toHaveBeenCalledTimes(1);
+    expect(prisma.accountingOutbox.upsert).not.toHaveBeenCalled();
+
+    // Compra de general_supply: SÍ encola evento inventory_purchase para contabilizar 6101 + 1108 IVA
+    const purchaseRes = await service.adjustStock('gs-1', {
+      delta: 2,
+      reasonType: 'purchase',
+      totalCost: 11900,
+      hasInvoice: true,
+      paymentMethod: 'efectivo',
+    });
+    expect(purchaseRes.stock).toBe(4);
+    expect(prisma.accountingOutbox.upsert).toHaveBeenCalledTimes(1);
+    expect(outboxProcessor.processEvent).toHaveBeenCalledWith('outbox-gs-1');
   });
 
   it('debe lanzar NotFoundException si el insumo general no existe', async () => {

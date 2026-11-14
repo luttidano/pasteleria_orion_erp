@@ -5,6 +5,10 @@ import {
   Sparkles,
   Sun,
   Moon,
+  Download,
+  WifiOff,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import type { User, Ingredient, ToastMessage, CatalogProduct, Packaging, GeneralSupply } from '../../types';
 import { productService } from '../../services/productService';
@@ -25,6 +29,7 @@ import { AccountingView } from '../accounting/AccountingView';
 import { useTheme } from '../../context/ThemeContext';
 import { SettingsView } from '../settings/SettingsView';
 import type { ConnectionStatusSnapshot } from '../../lib/connectionStatus';
+import { usePwaInstall } from '../../lib/usePwaInstall';
 
 interface AdminLayoutProps {
   user: User;
@@ -37,6 +42,35 @@ interface AdminLayoutProps {
   connectionStatus?: ConnectionStatusSnapshot;
   onCheckConnection?: () => void;
 }
+
+const ALLOWED_SECTIONS_BY_ROLE: Record<string, AdminSection[]> = {
+  admin: [
+    'despensa',
+    'recetas',
+    'productos',
+    'empaques',
+    'insumos-generales',
+    'compras',
+    'proveedores',
+    'pos-caja',
+    'pos-historial',
+    'pos-cierre',
+    'contabilidad-diario',
+    'contabilidad-mayor',
+    'contabilidad-balances',
+    'contabilidad-reportes',
+    'contabilidad-periodos',
+    'ajustes',
+  ],
+  baker: ['despensa', 'recetas', 'productos', 'empaques', 'insumos-generales'],
+  cashier: ['pos-caja', 'pos-historial', 'pos-cierre'],
+};
+
+const DEFAULT_SECTION_FOR_ROLE: Record<string, AdminSection> = {
+  admin: 'despensa',
+  baker: 'despensa',
+  cashier: 'pos-caja',
+};
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   user,
@@ -52,48 +86,21 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const navigate = useNavigate();
   const { section } = useParams<{ section?: string }>();
 
-  // Matriz de permisos de navegación por rol
-  const allowedSectionsByRole: Record<string, AdminSection[]> = {
-    admin: [
-      'despensa',
-      'recetas',
-      'productos',
-      'empaques',
-      'insumos-generales',
-      'compras',
-      'proveedores',
-      'pos-caja',
-      'pos-historial',
-      'pos-cierre',
-      'contabilidad-diario',
-      'contabilidad-mayor',
-      'contabilidad-balances',
-      'contabilidad-reportes',
-      'contabilidad-periodos',
-      'ajustes',
-    ],
-    baker: ['despensa', 'recetas', 'productos', 'empaques', 'insumos-generales'],
-    cashier: ['pos-caja', 'pos-historial', 'pos-cierre'],
-  };
-
-  const allowedSections = allowedSectionsByRole[user.role] || ['despensa'];
-
-  const defaultSectionForRole: Record<string, AdminSection> = {
-    admin: 'despensa',
-    baker: 'despensa',
-    cashier: 'pos-caja',
-  };
+  const allowedSections = useMemo(
+    () => ALLOWED_SECTIONS_BY_ROLE[user.role] || ['despensa'],
+    [user.role],
+  );
 
   // Sincronizar sección activa con la URL (/:section) asegurando permisos
   const activeSection: AdminSection =
     section && allowedSections.includes(section as AdminSection)
       ? (section as AdminSection)
-      : defaultSectionForRole[user.role] || 'despensa';
+      : DEFAULT_SECTION_FOR_ROLE[user.role] || 'despensa';
 
   // Si el usuario intentó acceder por URL a una sección restringida para su rol, redirigir
   useEffect(() => {
     if (section && !allowedSections.includes(section as AdminSection)) {
-      navigate(`/${defaultSectionForRole[user.role] || 'despensa'}`, { replace: true });
+      navigate(`/${DEFAULT_SECTION_FOR_ROLE[user.role] || 'despensa'}`, { replace: true });
     }
   }, [section, user.role, allowedSections, navigate]);
 
@@ -104,26 +111,49 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const { isDarkMode, toggleDarkMode } = useTheme();
+  const { canInstall, promptInstall } = usePwaInstall();
 
   const [resaleItems, setResaleItems] = useState<CatalogProduct[]>([]);
   const [packagingItems, setPackagingItems] = useState<Packaging[]>([]);
   const [generalSupplyItems, setGeneralSupplyItems] = useState<GeneralSupply[]>([]);
 
   const refreshRestockInventory = useCallback(async () => {
-    const [resale, packs, supplies] = await Promise.all([
-      productService.getAll('resale').catch(() => []),
-      packagingService.getAll().catch(() => []),
-      generalSupplyService.getAll().catch(() => []),
-    ]);
-    setResaleItems(resale);
-    setPackagingItems(packs);
-    setGeneralSupplyItems(supplies);
-  }, []);
+    if (user.role !== 'admin') {
+      setResaleItems([]);
+      setPackagingItems([]);
+      setGeneralSupplyItems([]);
+      return;
+    }
 
-  // Sincronizar catálogo de reventa, empaques e insumos generales para mantener exacto el badge de compras
+    const [resaleRes, packsRes, suppliesRes] = await Promise.allSettled([
+      productService.getAll('resale'),
+      packagingService.getAll(),
+      generalSupplyService.getAll(),
+    ]);
+
+    if (resaleRes.status === 'fulfilled') {
+      setResaleItems(resaleRes.value);
+    } else {
+      console.error('[AppLayout] Error cargando productos de reventa:', resaleRes.reason);
+    }
+
+    if (packsRes.status === 'fulfilled') {
+      setPackagingItems(packsRes.value);
+    } else {
+      console.error('[AppLayout] Error cargando empaques:', packsRes.reason);
+    }
+
+    if (suppliesRes.status === 'fulfilled') {
+      setGeneralSupplyItems(suppliesRes.value);
+    } else {
+      console.error('[AppLayout] Error cargando insumos generales:', suppliesRes.reason);
+    }
+  }, [user.role]);
+
+  // Sincronizar catálogo de reventa, empaques e insumos generales solo cuando el usuario es admin
   useEffect(() => {
     void refreshRestockInventory();
-  }, [activeSection, ingredients, refreshRestockInventory]);
+  }, [refreshRestockInventory]);
 
   const handleRefreshAll = useCallback(async () => {
     await onRefresh();
@@ -283,6 +313,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 );
               })()}
 
+              {canInstall && (
+                <button
+                  type="button"
+                  onClick={() => void promptInstall()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#DFCAA9] dark:border-[#42312A] bg-[#FAF5ED] dark:bg-[#241712] hover:bg-[#F3E7D4] dark:hover:bg-[#2F1F19] text-[#8C1F25] dark:text-[#E8BD8A] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                  title="Instalar Pastelería Orión ERP en este dispositivo"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span className="hidden lg:inline">Instalar App</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={toggleDarkMode}
@@ -304,6 +346,68 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             </div>
           </div>
         </header>
+
+        {/* Banner informativo de conectividad (PWA Opción A: solo lectura cacheada cuando no hay servidor) */}
+        {(() => {
+          const bannerHealth = connectionStatus?.health ?? (isOnline ? 'online' : 'offline');
+          if (bannerHealth === 'offline') {
+            return (
+              <div
+                role="status"
+                className="bg-amber-50 dark:bg-amber-950/60 border-b border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-100 px-4 sm:px-6 py-2.5"
+              >
+                <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div className="flex items-start sm:items-center gap-2">
+                    <WifiOff className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+                    <span>
+                      <strong className="font-semibold">Sin conexión con el servidor ERP.</strong>{' '}
+                      Solo lectura disponible sobre catálogos visitados. Registrar ventas, producir o guardar asientos requiere conexión activa.
+                    </span>
+                  </div>
+                  {onCheckConnection && (
+                    <button
+                      type="button"
+                      onClick={onCheckConnection}
+                      className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition-colors shrink-0 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Reintentar
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          }
+          if (bannerHealth === 'degraded') {
+            return (
+              <div
+                role="alert"
+                className="bg-rose-50 dark:bg-rose-950/60 border-b border-rose-200 dark:border-rose-800/70 text-rose-900 dark:text-rose-100 px-4 sm:px-6 py-2.5"
+              >
+                <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div className="flex items-start sm:items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
+                    <span>
+                      <strong className="font-semibold">Incidencia en servidor/base de datos:</strong>{' '}
+                      {connectionStatus?.detail || 'El backend devolvió un error temporal.'}
+                    </span>
+                  </div>
+                  {onCheckConnection && (
+                    <button
+                      type="button"
+                      onClick={onCheckConnection}
+                      className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold transition-colors shrink-0 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Comprobar
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Contenido según el Módulo y Sub-sección activa */}
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
@@ -332,7 +436,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           )}
 
           {activeSection === 'productos' && (
-            <ProductsView user={user} addToast={addToast} />
+            <ProductsView
+              user={user}
+              addToast={addToast}
+              onInventoryChange={() => void refreshRestockInventory()}
+            />
           )}
 
           {activeSection === 'compras' && (
@@ -344,7 +452,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           )}
 
           {activeSection === 'empaques' && (
-            <PackagingView addToast={addToast} />
+            <PackagingView
+              addToast={addToast}
+              onInventoryChange={() => void refreshRestockInventory()}
+            />
           )}
 
           {activeSection === 'insumos-generales' && (

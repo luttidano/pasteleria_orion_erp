@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Copy,
   Check,
@@ -21,7 +21,11 @@ import { ingredientService } from '../../../services/ingredientService';
 import { productService } from '../../../services/productService';
 import { packagingService } from '../../../services/packagingService';
 import { generalSupplyService } from '../../../services/generalSupplyService';
-import { PurchaseItemModal } from './PurchaseItemModal';
+import { STORE_TIMEZONE } from '../../../utils/formatters';
+import {
+  PurchaseItemModal,
+  type ConfirmPurchaseDetails,
+} from './PurchaseItemModal';
 
 interface ShoppingListViewProps {
   ingredients: Ingredient[];
@@ -46,27 +50,53 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
   const [isLoadingExtras, setIsLoadingExtras] = useState(false);
 
   // Cargar productos de reventa, empaques e insumos generales desde el backend
-  const loadExtras = async () => {
+  const loadExtras = useCallback(async () => {
     setIsLoadingExtras(true);
     try {
-      const [prods, packs, supplies] = await Promise.all([
-        productService.getAll('resale').catch(() => []),
-        packagingService.getAll().catch(() => []),
-        generalSupplyService.getAll().catch(() => []),
+      const [prodsRes, packsRes, suppliesRes] = await Promise.allSettled([
+        productService.getAll('resale'),
+        packagingService.getAll(),
+        generalSupplyService.getAll(),
       ]);
-      setResaleProducts(prods);
-      setPackagings(packs);
-      setGeneralSupplies(supplies);
-    } catch (err) {
-      console.error('[ShoppingList] Error cargando catálogo de reventa, empaques e insumos generales:', err);
+
+      let failedCount = 0;
+
+      if (prodsRes.status === 'fulfilled') {
+        setResaleProducts(prodsRes.value);
+      } else {
+        failedCount++;
+        console.error('[ShoppingList] Error cargando productos de reventa:', prodsRes.reason);
+      }
+
+      if (packsRes.status === 'fulfilled') {
+        setPackagings(packsRes.value);
+      } else {
+        failedCount++;
+        console.error('[ShoppingList] Error cargando empaques:', packsRes.reason);
+      }
+
+      if (suppliesRes.status === 'fulfilled') {
+        setGeneralSupplies(suppliesRes.value);
+      } else {
+        failedCount++;
+        console.error('[ShoppingList] Error cargando insumos generales:', suppliesRes.reason);
+      }
+
+      if (failedCount > 0) {
+        addToast({
+          type: 'warning',
+          title: 'Carga parcial de reposición',
+          message: 'Algunas categorías de reabastecimiento no pudieron sincronizarse.',
+        });
+      }
     } finally {
       setIsLoadingExtras(false);
     }
-  };
+  }, [addToast]);
 
   useEffect(() => {
-    loadExtras();
-  }, []);
+    void loadExtras();
+  }, [loadExtras]);
 
   // Consolidar todos los ítems adquiribles que necesitan reposición (stock <= minStock)
   const allNeededItems = useMemo<ShoppingItem[]>(() => {
@@ -84,7 +114,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
           minStock: ing.minStock,
           unit: ing.unit || 'kg',
           price: ing.price ?? 0,
-          description: ing.description,
+          description: ing.description ?? undefined,
           icon: ing.icon || '🌾',
         });
       }
@@ -102,9 +132,9 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
           minStock: prod.minStock,
           unit: prod.unit || 'un',
           price: prod.costPrice ?? 0,
-          description: prod.description,
+          description: prod.description ?? undefined,
           icon: prod.icon || '🥤',
-          supplierName: prod.supplierName,
+          supplierName: prod.supplierName ?? undefined,
         });
       }
     });
@@ -121,7 +151,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
           minStock: pack.minStock,
           unit: pack.unit || 'un',
           price: pack.costPrice ?? 0,
-          description: pack.description,
+          description: pack.description ?? undefined,
           icon: pack.icon || '📦',
           supplierName: pack.supplier?.name,
         });
@@ -170,43 +200,76 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
     });
   }, [allNeededItems, urgencyFilter, kindFilter]);
 
-  // Confirmar y registrar compra delegando al servicio correcto
-  const handleConfirmPurchase = async (item: ShoppingItem, quantityBought: number) => {
+  // Confirmar y registrar compra delegando al servicio correcto con respaldo contable
+  const handleConfirmPurchase = async (
+    item: ShoppingItem,
+    quantityBought: number,
+    details: ConfirmPurchaseDetails,
+  ) => {
     try {
+      let newStock = item.stock + quantityBought;
+      let accountingWarning: string | null | undefined;
+      const purchasePayload = {
+        delta: quantityBought,
+        reasonType: 'purchase' as const,
+        totalCost: details.totalCost,
+        hasInvoice: details.hasInvoice,
+        paymentMethod: details.paymentMethod,
+        reason: `Compra desde Lista de Compras (${details.hasInvoice ? 'Factura' : 'Boleta/Exento'})`,
+      };
+
       if (item.kind === 'ingredient') {
-        await ingredientService.registerPurchase(item.id, quantityBought);
+        const updated = await ingredientService.registerPurchase(item.id, quantityBought, {
+          totalCost: details.totalCost,
+          hasInvoice: details.hasInvoice,
+          paymentMethod: details.paymentMethod,
+          reason: purchasePayload.reason,
+        });
+        newStock = updated.stock;
+        accountingWarning = updated.accountingWarning;
         await onRefresh();
       } else if (item.kind === 'resale') {
-        await productService.adjustStock(item.id, quantityBought, item.stock);
+        const updated = await productService.adjustStock(item.id, purchasePayload);
+        newStock = updated.stock;
+        accountingWarning = updated.accountingWarning;
         const prods = await productService.getAll('resale');
         setResaleProducts(prods);
         await onRefresh();
       } else if (item.kind === 'packaging') {
-        await packagingService.adjustStock(item.id, quantityBought);
+        const updated = await packagingService.adjustStock(item.id, purchasePayload);
+        newStock = updated.stock;
+        accountingWarning = updated.accountingWarning;
         const packs = await packagingService.getAll();
         setPackagings(packs);
         await onRefresh();
       } else if (item.kind === 'general_supply') {
-        await generalSupplyService.adjustStock(item.id, quantityBought);
+        const updated = await generalSupplyService.adjustStock(item.id, purchasePayload);
+        newStock = updated.stock;
+        accountingWarning = updated.accountingWarning;
         const supplies = await generalSupplyService.getAll();
         setGeneralSupplies(supplies);
         await onRefresh();
       }
 
-      const newStock = item.stock + quantityBought;
       const unit = item.unit || 'un';
 
-      if (newStock > item.minStock) {
+      if (accountingWarning) {
+        addToast({
+          type: 'warning',
+          title: 'Compra anotada con advertencia contable',
+          message: accountingWarning,
+        });
+      } else if (newStock > item.minStock) {
         addToast({
           type: 'success',
-          title: '✓ Compra registrada',
+          title: '✓ Compra registrada y contabilizada',
           message: `Se sumaron ${quantityBought} ${unit} de "${item.name}". ¡Stock ahora suficiente (${newStock} ${unit})! Sale de la lista.`,
         });
       } else {
         const stillMissing = Math.max(0, item.minStock - newStock);
         addToast({
           type: 'info',
-          title: '✓ Compra parcial anotada',
+          title: '✓ Compra parcial anotada y contabilizada',
           message: `Se sumaron ${quantityBought} ${unit} de "${item.name}". Nuevo stock: ${newStock} ${unit} (faltan ${stillMissing} ${unit} para el mínimo).`,
         });
       }
@@ -216,6 +279,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
         title: 'Error al registrar compra',
         message: err instanceof Error ? err.message : 'No se pudo actualizar el inventario.',
       });
+      throw err;
     }
   };
 
@@ -231,6 +295,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
     }
 
     const today = new Date().toLocaleDateString('es-CL', {
+      timeZone: STORE_TIMEZONE,
       day: 'numeric',
       month: 'long',
       year: 'numeric',

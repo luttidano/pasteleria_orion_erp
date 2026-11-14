@@ -26,16 +26,16 @@ export const posShiftService = {
     });
   },
 
-  async closeShift(payload: {
-    countedCash: number;
-    openingCash?: number;
-    notes?: string;
-    from?: string;
-    to?: string;
-    localDate?: string;
-  }): Promise<PosShiftRecord> {
+  async closeShift(
+    payload: {
+      countedCash: number;
+      notes?: string;
+    },
+    idempotencyKey?: string,
+  ): Promise<PosShiftRecord> {
     return apiFetch<PosShiftRecord>('/pos/shifts/close', {
       method: 'POST',
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
       body: JSON.stringify(payload),
     });
   },

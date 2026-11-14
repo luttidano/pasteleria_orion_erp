@@ -4,8 +4,10 @@ import {PrismaModule} from './database/prisma.module';
 import {SupabaseModule} from './common/supabase/supabase.module';
 import {InventoryModule} from './modules/inventory/inventory.module';
 import {PosModule} from './modules/pos/pos.module';
-import {AccountingModule} from './modules/accounting/accounting.module';
+import { AccountingModule } from './modules/accounting/accounting.module';
+import { PosAccountingSyncModule } from './modules/integrations/pos-accounting-sync.module';
 import { UsersModule } from './modules/users/users.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -31,7 +33,9 @@ import * as path from 'path';
     InventoryModule,
     PosModule,
     AccountingModule,
+    PosAccountingSyncModule,
     UsersModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

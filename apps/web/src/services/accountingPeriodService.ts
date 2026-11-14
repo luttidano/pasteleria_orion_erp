@@ -3,42 +3,18 @@ import type {
   AccountingPeriod,
   AccountingSettings,
   AccountingYearOverview,
+  AnnualClosingExecutionResult,
   AnnualClosingPreview,
   PeriodCheckResult,
+  ReverseClosingResult,
+  VoidEntryResult,
 } from '../types';
 
-export interface AnnualClosingExecutionResult {
-  success: boolean;
-  year: number;
-  closingDate: string;
-  resultadoEjercicio: number;
-  entry: {
-    id: string;
-    entryNumber: number;
-    entryDate: string;
-    concept: string;
-    origin: string;
-    itemsCount: number;
-  };
-}
-
-export interface ReverseClosingResult {
-  success: boolean;
-  year: number;
-  voidedEntryId: string;
-  reversalEntryId: string;
-  reversalEntryNumber: number;
-  message: string;
-}
-
-export interface VoidEntryResult {
-  success: boolean;
-  voidedEntryId: string;
-  voidedEntryNumber: number;
-  reversalEntryId: string;
-  reversalEntryNumber: number;
-  message: string;
-}
+export type {
+  AnnualClosingExecutionResult,
+  ReverseClosingResult,
+  VoidEntryResult,
+};
 
 export const accountingPeriodService = {
   async getYearOverview(year?: number): Promise<AccountingYearOverview> {

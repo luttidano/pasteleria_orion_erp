@@ -1,13 +1,22 @@
 import { Module } from '@nestjs/common';
 import { PosController } from './pos.controller';
 import { PosShiftController } from './pos-shift.controller';
-import { PosService } from './pos.service';
+import { PosSaleService } from './pos-sale.service';
+import { PosShiftService } from './pos-shift.service';
+import { PosSummaryService } from './pos-summary.service';
+import { PosAccountingStatusService } from './pos-accounting-status.service';
 import { AccountingModule } from '../accounting/accounting.module';
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
-  imports: [AccountingModule],
+  imports: [InventoryModule, AccountingModule],
   controllers: [PosController, PosShiftController],
-  providers: [PosService],
-  exports: [PosService],
+  providers: [
+    PosSaleService,
+    PosShiftService,
+    PosSummaryService,
+    PosAccountingStatusService,
+  ],
+  exports: [PosAccountingStatusService],
 })
 export class PosModule {}

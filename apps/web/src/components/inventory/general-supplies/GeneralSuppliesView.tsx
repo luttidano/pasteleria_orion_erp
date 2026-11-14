@@ -10,13 +10,20 @@ import {
   MinusCircle,
   ShoppingCart,
 } from 'lucide-react';
-import type { GeneralSupply, ToastMessage, User } from '../../../types';
+import type {
+  AdjustStockPayload,
+  GeneralSupply,
+  ToastMessage,
+  User,
+} from '../../../types';
 import {
   generalSupplyService,
   type SaveGeneralSupplyPayload,
 } from '../../../services/generalSupplyService';
+import { formatMoney } from '../../../utils/formatters';
 import { GeneralSupplyModal } from './GeneralSupplyModal';
-import { DeleteGeneralSupplyModal } from './DeleteGeneralSupplyModal';
+import { StockAdjustmentModal, type StockAdjustmentTarget } from '../StockAdjustmentModal';
+import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
 
 interface GeneralSuppliesViewProps {
   user: User;
@@ -40,6 +47,8 @@ export const GeneralSuppliesView: React.FC<GeneralSuppliesViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<GeneralSupply | null>(null);
   const [deletingItem, setDeletingItem] = useState<GeneralSupply | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [adjustmentTarget, setAdjustmentTarget] = useState<StockAdjustmentTarget | null>(null);
 
   const isAdmin = user.role === 'admin';
 
@@ -128,7 +137,8 @@ export const GeneralSuppliesView: React.FC<GeneralSuppliesViewProps> = ({
   };
 
   const handleDelete = async () => {
-    if (!deletingItem) return;
+    if (!deletingItem || isDeleting) return;
+    setIsDeleting(true);
     try {
       await generalSupplyService.delete(deletingItem.id);
       addToast({
@@ -148,23 +158,41 @@ export const GeneralSuppliesView: React.FC<GeneralSuppliesViewProps> = ({
             ? err.message
             : 'No se pudo eliminar el insumo general.',
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const handleQuickAdjust = async (id: string, delta: number) => {
-    try {
-      const updated = await generalSupplyService.adjustStock(id, delta);
-      setItems((prev) =>
-        prev.map((item) => (item.id === id ? updated : item)),
-      );
-      onInventoryChange?.();
-    } catch {
-      addToast({
-        type: 'error',
-        title: 'Error',
-        message: 'No se pudo actualizar el stock.',
-      });
-    }
+  const openAdjustmentModal = (item: GeneralSupply, delta: number) => {
+    setAdjustmentTarget({
+      id: item.id,
+      name: item.name,
+      itemType: 'general_supply',
+      currentStock: item.stock,
+      unit: item.unit,
+      unitCost: item.costPrice,
+      initialDelta: delta,
+    });
+  };
+
+  const handleConfirmAdjustment = async (
+    id: string,
+    payload: AdjustStockPayload,
+  ) => {
+    const updated = await generalSupplyService.adjustStock(id, payload);
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? updated : item)),
+    );
+    onInventoryChange?.();
+    addToast({
+      type: updated.accountingWarning ? 'warning' : 'success',
+      title: updated.accountingWarning
+        ? 'Stock actualizado (pendiente contable)'
+        : 'Stock actualizado',
+      message: updated.accountingWarning
+        ? `${updated.name}: ${updated.stock} ${updated.unit}. ${updated.accountingWarning}`
+        : `${updated.name}: ${updated.stock} ${updated.unit}`,
+    });
   };
 
   return (
@@ -386,16 +414,17 @@ export const GeneralSuppliesView: React.FC<GeneralSuppliesViewProps> = ({
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => handleQuickAdjust(item.id, -1)}
-                          title="-1 unidad"
-                          className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                          onClick={() => openAdjustmentModal(item, -1)}
+                          disabled={item.stock <= 0}
+                          title="Registrar consumo / merma"
+                          className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer disabled:opacity-40"
                         >
                           <MinusCircle className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleQuickAdjust(item.id, 1)}
-                          title="+1 unidad"
+                          onClick={() => openAdjustmentModal(item, 1)}
+                          title="Registrar compra / reposición"
                           className="p-1 rounded-md text-stone-400 hover:text-emerald-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
                         >
                           <PlusCircle className="w-4 h-4" />
@@ -403,7 +432,7 @@ export const GeneralSuppliesView: React.FC<GeneralSuppliesViewProps> = ({
                       </div>
                     </td>
                     <td className="py-3 px-4 font-mono text-xs text-stone-600 dark:text-stone-300">
-                      ${Number(item.costPrice || 0).toLocaleString('es-CL')}
+                      {formatMoney(item.costPrice)}
                     </td>
                     <td className="py-3 px-4 text-xs text-stone-600 dark:text-stone-300">
                       {item.supplier ? (
@@ -457,11 +486,28 @@ export const GeneralSuppliesView: React.FC<GeneralSuppliesViewProps> = ({
         itemToEdit={editingItem}
       />
 
-      <DeleteGeneralSupplyModal
+      <ConfirmDeleteModal
         isOpen={Boolean(deletingItem)}
-        onClose={() => setDeletingItem(null)}
+        title="¿Eliminar insumo general?"
+        description={
+          deletingItem ? (
+            <>
+              Estás a punto de eliminar{' '}
+              <strong className="text-[#1C120D] dark:text-[#FBF4EB]">"{deletingItem.name}"</strong>{' '}
+              del inventario de insumos generales.
+            </>
+          ) : null
+        }
+        confirmLabel="Sí, eliminar insumo"
+        isDeleting={isDeleting}
+        onClose={() => !isDeleting && setDeletingItem(null)}
         onConfirm={handleDelete}
-        item={deletingItem}
+      />
+
+      <StockAdjustmentModal
+        target={adjustmentTarget}
+        onClose={() => setAdjustmentTarget(null)}
+        onConfirm={handleConfirmAdjustment}
       />
     </div>
   );

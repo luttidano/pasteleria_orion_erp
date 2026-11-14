@@ -341,7 +341,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
             <label className="block text-xs font-semibold text-[#4A3B32] dark:text-[#C4B2A5] mb-1.5">
               Modalidad de Abastecimiento <span className="text-[#8C1F25]">*</span>
             </label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-stone-100/80 dark:bg-[#201612] rounded-xl border border-[#DFCAA9]/70 dark:border-[#35251F]">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1 bg-stone-100/80 dark:bg-[#201612] rounded-xl border border-[#DFCAA9]/70 dark:border-[#35251F]">
               <button
                 type="button"
                 onClick={() => {
@@ -370,7 +370,22 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                 }`}
               >
                 <Store className="w-3.5 h-3.5" />
-                <span>Compra en Local / Mayorista</span>
+                <span>Compra en Local</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSupplyModality('mixto');
+                  if (!supplierToEdit) setIcon('🏪');
+                }}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  supplyModality === 'mixto'
+                    ? 'bg-white dark:bg-[#2A1D18] text-[#8C1F25] dark:text-[#E8BD8A] shadow-xs'
+                    : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Mixto (Ambos)</span>
               </button>
             </div>
           </div>
@@ -381,7 +396,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
               Icono de identidad
             </label>
             <div className="flex flex-wrap gap-1.5 p-2 bg-stone-100/70 dark:bg-[#201612] rounded-xl border border-[#EADBCE] dark:border-[#2C1D18]">
-              {(supplyModality === 'presencial' ? ICONS_PRESENCIAL : ICONS_DESPACHO).map((emoji) => (
+              {(supplyModality === 'presencial' ? ICONS_PRESENCIAL : supplyModality === 'mixto' ? Array.from(new Set([...ICONS_DESPACHO, ...ICONS_PRESENCIAL])) : ICONS_DESPACHO).map((emoji) => (
                 <button
                   key={emoji}
                   type="button"

@@ -1,11 +1,39 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import type { AccountLedgerData, AccountingEntryOrigin, AccountingEntryStatus } from '@repo/types';
 import { PrismaService } from '../../database/prisma.service';
+import { parseStrictUtcBounds } from '../../common/utils/chile-time.util';
+import { roundMoney } from '../../common/utils/money.util';
 
 @Injectable()
 export class LedgerService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getAccountLedger(accountId: string, startDate?: string, endDate?: string) {
+  async getAccountLedger(
+    accountId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<AccountLedgerData> {
+    const normalizedStart = startDate?.trim() || undefined;
+    const normalizedEnd = endDate?.trim() || undefined;
+
+    const startBounds = normalizedStart
+      ? parseStrictUtcBounds(normalizedStart, 'startDate')
+      : null;
+    const endBounds = normalizedEnd
+      ? parseStrictUtcBounds(normalizedEnd, 'endDate')
+      : null;
+
+    if (startBounds && endBounds && startBounds.isoDate > endBounds.isoDate) {
+      throw new BadRequestException(
+        'La fecha inicial (startDate) no puede ser posterior a la fecha final (endDate).',
+      );
+    }
+
     const account = await this.prisma.accountingAccount.findUnique({
       where: { id: accountId },
     });
@@ -18,11 +46,11 @@ export class LedgerService {
 
     // Saldo Inicial anterior a startDate
     let initialBalance = 0;
-    if (startDate) {
+    if (startBounds) {
       const priorItems = await this.prisma.accountingEntryItem.findMany({
         where: {
           accountId,
-          entry: { entryDate: { lt: new Date(startDate) } },
+          entry: { entryDate: { lt: startBounds.start } },
         },
         select: { debit: true, credit: true },
       });
@@ -33,16 +61,12 @@ export class LedgerService {
     }
 
     // Filtro del período
-    const dateFilter: any = {};
-    if (startDate) dateFilter.gte = new Date(startDate);
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      dateFilter.lte = end;
-    }
+    const dateFilter: Prisma.DateTimeFilter = {};
+    if (startBounds) dateFilter.gte = startBounds.start;
+    if (endBounds) dateFilter.lte = endBounds.end;
 
-    const whereClause: any = { accountId };
-    if (startDate || endDate) {
+    const whereClause: Prisma.AccountingEntryItemWhereInput = { accountId };
+    if (startBounds || endBounds) {
       whereClause.entry = { entryDate: dateFilter };
     }
 
@@ -83,12 +107,12 @@ export class LedgerService {
         entryNumber: Number(it.entry.entryNumber),
         entryDate: it.entry.entryDate.toISOString().slice(0, 10),
         concept: it.entry.concept,
-        origin: it.entry.origin,
-        entryStatus: it.entry.status,
+        origin: it.entry.origin as AccountingEntryOrigin,
+        entryStatus: it.entry.status as AccountingEntryStatus,
         description: it.description,
         debit,
         credit,
-        runningBalance: Math.round(runningBalance * 100) / 100,
+        runningBalance: roundMoney(runningBalance),
       };
     });
 
@@ -104,14 +128,14 @@ export class LedgerService {
         nature: isDebitNature ? 'deudora' : 'acreedora',
       },
       period: {
-        startDate: startDate || null,
-        endDate: endDate || null,
+        startDate: startBounds?.isoDate ?? null,
+        endDate: endBounds?.isoDate ?? null,
       },
-      initialBalance: Math.round(initialBalance * 100) / 100,
+      initialBalance: roundMoney(initialBalance),
       movements,
-      totalDebit: Math.round(totalPeriodDebit * 100) / 100,
-      totalCredit: Math.round(totalPeriodCredit * 100) / 100,
-      finalBalance: Math.round(runningBalance * 100) / 100,
+      totalDebit: roundMoney(totalPeriodDebit),
+      totalCredit: roundMoney(totalPeriodCredit),
+      finalBalance: roundMoney(runningBalance),
       finalBalanceType: runningBalance >= 0
         ? (isDebitNature ? 'deudor' : 'acreedor')
         : (isDebitNature ? 'acreedor' : 'deudor'),

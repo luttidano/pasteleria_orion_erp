@@ -18,9 +18,9 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    // Si la ruta no especifica @Roles(), permite el paso a cualquier autenticado
+    // Fail-closed: toda ruta protegida por RolesGuard debe declarar explícitamente @Roles(...)
     if (!requiredRoles || requiredRoles.length === 0) {
-      return true;
+      throw new ForbiddenException('Access denied: route role policy is not configured');
     }
 
     const { user } = context.switchToHttp().getRequest();
@@ -29,12 +29,10 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('User has no role assigned');
     }
 
-    const hasPermission = requiredRoles.includes(user.role);
+    const hasPermission = requiredRoles.includes(user.role as Role);
 
     if (!hasPermission) {
-      throw new ForbiddenException(
-        `Access denied. Required roles: [${requiredRoles.join(', ')}]. Your role: ${user.role}`,
-      );
+      throw new ForbiddenException('No tienes permisos suficientes para realizar esta acción.');
     }
 
     return true;

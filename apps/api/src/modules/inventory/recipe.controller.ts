@@ -8,6 +8,7 @@ import {
   Delete,
   ParseUUIDPipe,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { RecipeService } from './recipe.service';
 import { CreateRecipeDto } from './dto/create-recipe.dto';
@@ -16,7 +17,9 @@ import { ProduceRecipeDto } from './dto/produce-recipe.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Role } from '../../common/enums';
+import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
 
 @Controller('recipes')
 @UseGuards(AuthGuard, RolesGuard)
@@ -39,16 +42,19 @@ export class RecipeController {
   // Orden de producción (hornear tanda): admin y pastelero (baker)
   @Post(':id/produce')
   @Roles(Role.admin, Role.baker)
+  @UseInterceptors(IdempotencyInterceptor)
   produce(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ProduceRecipeDto,
+    @CurrentUser('id') userId?: string,
   ) {
-    return this.recipeService.produce(id, dto);
+    return this.recipeService.produce(id, dto, userId);
   }
 
   // Creación de recetas: exclusivo admin
   @Post()
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   create(@Body() createRecipeDto: CreateRecipeDto) {
     return this.recipeService.create(createRecipeDto);
   }

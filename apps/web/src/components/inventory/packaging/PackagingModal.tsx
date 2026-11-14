@@ -27,6 +27,7 @@ export const PackagingModal: React.FC<PackagingModalProps> = ({
   const [minStock, setMinStock] = useState<number>(10);
   const [unit, setUnit] = useState('un');
   const [costPrice, setCostPrice] = useState<number>(0);
+  const [salePrice, setSalePrice] = useState<number>(0);
   const [supplierId, setSupplierId] = useState<string>('');
   const [icon, setIcon] = useState('📦');
   const [description, setDescription] = useState('');
@@ -51,6 +52,7 @@ export const PackagingModal: React.FC<PackagingModalProps> = ({
         setMinStock(itemToEdit.minStock);
         setUnit(itemToEdit.unit || 'un');
         setCostPrice(itemToEdit.costPrice || 0);
+        setSalePrice(itemToEdit.salePrice || 0);
         setSupplierId(itemToEdit.supplierId || '');
         setIcon(itemToEdit.icon || '📦');
         setDescription(itemToEdit.description || '');
@@ -62,6 +64,7 @@ export const PackagingModal: React.FC<PackagingModalProps> = ({
         setMinStock(10);
         setUnit('un');
         setCostPrice(0);
+        setSalePrice(0);
         setSupplierId('');
         setIcon('📦');
         setDescription('');
@@ -88,13 +91,14 @@ export const PackagingModal: React.FC<PackagingModalProps> = ({
         minStock: Number(minStock),
         unit: unit.trim() || 'un',
         costPrice: Number(costPrice) || 0,
+        salePrice: packageType === 'secundario' ? Number(salePrice) || 0 : undefined,
         supplierId: supplierId || undefined,
         icon,
         description: description.trim() || undefined,
       });
       onClose();
-    } catch (err: any) {
-      setError(err?.message || 'Error al guardar el empaque.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al guardar el empaque.');
     } finally {
       setIsSubmitting(false);
     }
@@ -227,6 +231,26 @@ export const PackagingModal: React.FC<PackagingModalProps> = ({
               />
             </div>
           </div>
+
+          {packageType === 'secundario' && (
+            <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40">
+              <label className="block text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">
+                Precio de Venta Mostrador / POS ($)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={salePrice}
+                onChange={(e) => setSalePrice(Number(e.target.value))}
+                placeholder="Ej: 100 para bolsa, 500 para caja especial"
+                className="w-full px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-[#150F0D] text-sm font-mono"
+              />
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1">
+                Precio unitario cobrado al cliente en caja (POS) al agregar este empaque secundario.
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">

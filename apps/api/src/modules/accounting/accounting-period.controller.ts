@@ -1,10 +1,22 @@
-import { Body, Controller, Get, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { Role } from '../../common/enums';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
 import { AccountingPeriodService } from './accounting-period.service';
+import { AccountingSettingsService } from './accounting-settings.service';
+import { AnnualClosingService } from './annual-closing.service';
 import {
   CheckPeriodDateQueryDto,
   ExecuteAnnualClosingDto,
@@ -17,7 +29,11 @@ import {
 @Controller('accounting/periods')
 @UseGuards(AuthGuard, RolesGuard)
 export class AccountingPeriodController {
-  constructor(private readonly periodService: AccountingPeriodService) {}
+  constructor(
+    private readonly periodService: AccountingPeriodService,
+    private readonly settingsService: AccountingSettingsService,
+    private readonly annualClosingService: AnnualClosingService,
+  ) {}
 
   @Get()
   @Roles(Role.admin)
@@ -28,16 +44,17 @@ export class AccountingPeriodController {
   @Get('settings')
   @Roles(Role.admin)
   getSettings() {
-    return this.periodService.getAccountingSettings();
+    return this.settingsService.getSettings();
   }
 
   @Put('settings')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   updateSettings(
     @Body() dto: UpdateAccountingSettingsDto,
     @CurrentUser('id') userId?: string,
   ) {
-    return this.periodService.updateAccountingSettings(dto, userId);
+    return this.settingsService.updateSettings(dto, userId);
   }
 
   @Get('check')
@@ -48,6 +65,7 @@ export class AccountingPeriodController {
 
   @Post('close')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   closePeriod(
     @Body() dto: PeriodIdentifierDto,
     @CurrentUser('id') userId?: string,
@@ -57,6 +75,7 @@ export class AccountingPeriodController {
 
   @Post('reopen')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   reopenPeriod(
     @Body() dto: PeriodIdentifierDto,
     @CurrentUser('id') userId?: string,
@@ -67,25 +86,27 @@ export class AccountingPeriodController {
   @Get('annual-closing/preview')
   @Roles(Role.admin)
   previewAnnualClosing(@Query() query: PeriodYearQueryDto) {
-    return this.periodService.previewAnnualClosing(query.year);
+    return this.annualClosingService.previewAnnualClosing(query.year);
   }
 
   @Post('annual-closing')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   executeAnnualClosing(
     @Body() dto: ExecuteAnnualClosingDto,
     @CurrentUser('id') userId?: string,
   ) {
-    return this.periodService.executeAnnualClosing(dto, userId);
+    return this.annualClosingService.executeAnnualClosing(dto, userId);
   }
 
   @Post('annual-closing/reverse')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   reverseAnnualClosing(
     @Body() dto: ReverseAnnualClosingDto,
     @CurrentUser('id') userId?: string,
   ) {
-    return this.periodService.reverseAnnualClosing(dto, userId);
+    return this.annualClosingService.reverseAnnualClosing(dto, userId);
   }
 }
 

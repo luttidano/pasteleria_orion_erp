@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccountingModule } from '../accounting/accounting.module';
 import { IngredientService } from './ingredient.service';
 import { IngredientController } from './ingredient.controller';
 import { RecipeService } from './recipe.service';
@@ -13,7 +14,12 @@ import { PackagingService } from './packaging.service';
 import { PackagingController } from './packaging.controller';
 import { GeneralSupplyService } from './general-supply.service';
 import { GeneralSupplyController } from './general-supply.controller';
+import { InventoryStockService } from './inventory-stock.service';
+import { InventoryValuationModule } from './inventory-valuation.module';
+import { StockMovementService } from './stock-movement.service';
+
 @Module({
+  imports: [InventoryValuationModule, AccountingModule],
   controllers: [
     CategoryController,
     RecipeController,
@@ -31,15 +37,13 @@ import { GeneralSupplyController } from './general-supply.controller';
     SupplierService,
     PackagingService,
     GeneralSupplyService,
+    InventoryStockService,
+    StockMovementService,
   ],
   exports: [
-    IngredientService,
-    RecipeService,
-    CategoryService,
-    ProductService,
-    SupplierService,
-    PackagingService,
-    GeneralSupplyService,
+    InventoryStockService,
+    InventoryValuationModule,
+    StockMovementService,
   ],
 })
 export class InventoryModule {}

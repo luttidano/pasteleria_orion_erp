@@ -4,11 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { AccountingEntryOrigin } from '../../common/enums';
-import { VoidAccountingEntryDto } from './dto/accounting-period.dto';
-import { AccountingPeriodService } from './accounting-period.service';
-import { rethrowPrismaError } from '../../common/utils/prisma-error.util';
+import { PrismaService } from '../../../database/prisma.service';
+import { AccountingEntryOrigin } from '../../../common/enums';
+import { VoidAccountingEntryDto } from '../dto/accounting-period.dto';
+import { AccountingPeriodService } from '../periods/accounting-period.service';
+import { rethrowPrismaError } from '../../../common/utils/prisma-error.util';
 
 @Injectable()
 export class EntryVoidService {

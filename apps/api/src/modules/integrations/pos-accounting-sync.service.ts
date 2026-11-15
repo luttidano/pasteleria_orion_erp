@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { AccountingOutboxService } from '../accounting/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/accounting-outbox-processor.service';
+import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
+import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
 import { PosAccountingStatusService } from '../pos/pos-accounting-status.service';
 
 @Injectable()

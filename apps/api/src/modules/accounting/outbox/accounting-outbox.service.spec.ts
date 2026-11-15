@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountingOutboxService } from './accounting-outbox.service';
 import { AccountingOutboxProcessorService } from './accounting-outbox-processor.service';
-import { EntryService } from './entry.service';
-import { PrismaService } from '../../database/prisma.service';
-import { PosAccountingSyncService } from '../integrations/pos-accounting-sync.service';
-import { PosAccountingStatusService } from '../pos/pos-accounting-status.service';
+import { EntryService } from '../entries/entry.service';
+import { PrismaService } from '../../../database/prisma.service';
+import { PosAccountingSyncService } from '../../integrations/pos-accounting-sync.service';
+import { PosAccountingStatusService } from '../../pos/pos-accounting-status.service';
 
 describe('AccountingOutbox & PosAccountingSync (Transactional Outbox)', () => {
   let outboxService: AccountingOutboxService;

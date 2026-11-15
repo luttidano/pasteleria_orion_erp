@@ -1,19 +1,14 @@
 import {
   BadRequestException,
-  HttpException,
   Injectable,
   InternalServerErrorException,
-  NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../database/prisma.service';
-import { AccountingEntryOrigin } from '../../common/enums';
-import { CreateAccountingEntryDto } from './dto/create-accounting-entry.dto';
-import { VoidAccountingEntryDto } from './dto/accounting-period.dto';
-import { AccountingPeriodService } from './accounting-period.service';
-import { EntryVoidService } from './entry-void.service';
-import { InventoryValuationService } from '../inventory/inventory-valuation.service';
+import { PrismaService } from '../../../database/prisma.service';
+import { AccountingEntryOrigin } from '../../../common/enums';
+import { AccountingPeriodService } from '../periods/accounting-period.service';
+import { InventoryValuationService } from '../../inventory/inventory-valuation.service';
 import type {
   AccountingEntryCreatedResult,
   InventoryAdjustmentRequestedPayload,
@@ -26,12 +21,9 @@ import type {
 import {
   isUniqueViolation,
   rethrowPrismaError,
-} from '../../common/utils/prisma-error.util';
-import {
-  extractYearMonth,
-  toChileBusinessDateString,
-} from '../../common/utils/chile-time.util';
-import { roundMoney } from '../../common/utils/money.util';
+} from '../../../common/utils/prisma-error.util';
+import { toChileBusinessDateString } from '../../../common/utils/chile-time.util';
+import { roundMoney } from '../../../common/utils/money.util';
 
 const PAYMENT_ASSET_ACCOUNT_MAP: Record<string, string> = {
   efectivo: '1101',
@@ -41,182 +33,13 @@ const PAYMENT_ASSET_ACCOUNT_MAP: Record<string, string> = {
 };
 
 @Injectable()
-export class EntryService {
+export class AccountingIntegrationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly periodService: AccountingPeriodService,
     @Optional()
     private readonly inventoryValuationService?: InventoryValuationService,
-    @Optional()
-    private readonly entryVoidService?: EntryVoidService,
   ) {}
-
-  async findEntries() {
-    try {
-      const [entries, lockedLookup] = await Promise.all([
-        this.prisma.accountingEntry.findMany({
-          include: {
-            items: {
-              include: { account: true },
-              orderBy: { debit: 'desc' },
-            },
-          },
-          orderBy: [
-            { entryDate: 'desc' },
-            { entryNumber: 'desc' },
-          ],
-          take: 100,
-        }),
-        this.periodService.getLockedLookup(),
-      ]);
-
-      return entries.map((entry) => {
-        const totalDebit = entry.items.reduce((sum, it) => sum + Number(it.debit), 0);
-        const totalCredit = entry.items.reduce((sum, it) => sum + Number(it.credit), 0);
-        const entryDateStr = entry.entryDate.toISOString().slice(0, 10);
-        const year = entry.entryDate.getUTCFullYear();
-        const month = entry.entryDate.getUTCMonth() + 1;
-        const isPeriodLocked =
-          lockedLookup.closedYears.has(year) ||
-          lockedLookup.closedMonthKeys.has(`${year}-${month}`) ||
-          Boolean(
-            lockedLookup.accountingStartDate &&
-              entryDateStr < lockedLookup.accountingStartDate,
-          );
-        const ticketNumber =
-          entry.origin === AccountingEntryOrigin.pos &&
-          entry.posSaleId &&
-          entry.concept.startsWith('Venta POS ')
-            ? entry.concept.slice('Venta POS '.length)
-            : null;
-
-        return {
-          id: entry.id,
-          entryNumber: Number(entry.entryNumber),
-          entryDate: entryDateStr,
-          concept: entry.concept,
-          origin: entry.origin,
-          status: entry.status,
-          voidedAt: entry.voidedAt ? entry.voidedAt.toISOString() : null,
-          voidReason: entry.voidReason ?? null,
-          reversedEntryId: entry.reversedEntryId ?? null,
-          closingYear: entry.closingYear ?? null,
-          isPeriodLocked,
-          ticketNumber,
-          totalAmount: totalDebit,
-          isBalanced: Math.abs(totalDebit - totalCredit) < 0.01,
-          createdAt: entry.createdAt.toISOString(),
-          items: entry.items.map((it) => ({
-            id: it.id,
-            accountId: it.accountId,
-            accountCode: it.account.code,
-            accountName: it.account.name,
-            accountType: it.account.accountType,
-            debit: Number(it.debit),
-            credit: Number(it.credit),
-            description: it.description,
-          })),
-        };
-      });
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      console.error('[EntryService] Error consultando asientos:', error);
-      throw new InternalServerErrorException('No se pudieron consultar los asientos del libro diario.');
-    }
-  }
-
-  async createEntry(dto: CreateAccountingEntryDto) {
-    if (!dto.items || dto.items.length < 2) {
-      throw new BadRequestException('Un asiento contable debe tener al menos dos líneas.');
-    }
-
-    extractYearMonth(dto.entryDate);
-
-    const normalizedItems = dto.items.map((it) => ({
-      accountId: it.accountId,
-      debit: roundMoney(Number(it.debit || 0)),
-      credit: roundMoney(Number(it.credit || 0)),
-      description: it.description?.trim() || null,
-    }));
-
-    if (normalizedItems.some((it) => it.debit === 0 && it.credit === 0)) {
-      throw new BadRequestException(
-        'Cada línea del asiento contable debe tener un monto en Debe o en Haber mayor a cero.',
-      );
-    }
-
-    const totalDebit = roundMoney(
-      normalizedItems.reduce((sum, it) => sum + it.debit, 0),
-    );
-    const totalCredit = roundMoney(
-      normalizedItems.reduce((sum, it) => sum + it.credit, 0),
-    );
-
-    if (totalDebit <= 0 || totalCredit <= 0) {
-      throw new BadRequestException(
-        'El asiento contable debe registrar montos totales mayores a cero.',
-      );
-    }
-
-    if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      throw new BadRequestException(
-        `El asiento está descuadrado: Total Debe ($${totalDebit}) debe ser igual al Total Haber ($${totalCredit}).`,
-      );
-    }
-
-    try {
-      const entry = await this.prisma.$transaction(async (tx) => {
-        await this.periodService.assertPeriodOpen(dto.entryDate, tx);
-
-        return tx.accountingEntry.create({
-          data: {
-            entryDate: new Date(`${dto.entryDate}T00:00:00.000Z`),
-            concept: dto.concept.trim(),
-            origin: AccountingEntryOrigin.manual,
-            status: 'active',
-            items: {
-              create: normalizedItems,
-            },
-          },
-          include: {
-            items: { include: { account: true } },
-          },
-        });
-      });
-
-      return {
-        id: entry.id,
-        entryNumber: Number(entry.entryNumber),
-        entryDate: entry.entryDate.toISOString().slice(0, 10),
-        concept: entry.concept,
-        origin: entry.origin,
-        status: entry.status,
-        totalAmount: totalDebit,
-        items: entry.items.map((it) => ({
-          id: it.id,
-          accountId: it.accountId,
-          accountCode: it.account.code,
-          accountName: it.account.name,
-          debit: Number(it.debit),
-          credit: Number(it.credit),
-        })),
-      };
-    } catch (error) {
-      rethrowPrismaError(error, {
-        foreignKey: 'Una o más cuentas contables especificadas no existen.',
-        fallback: 'No se pudo registrar el asiento contable.',
-      });
-    }
-  }
-
-  async voidEntry(id: string, dto: VoidAccountingEntryDto, userId?: string) {
-    const voidService =
-      this.entryVoidService ??
-      new EntryVoidService(this.prisma, this.periodService);
-    return voidService.voidEntry(id, dto, userId);
-  }
 
   private async runInTransaction<T>(
     tx: Prisma.TransactionClient | undefined,
@@ -361,8 +184,6 @@ export class EntryService {
           where: { isActive: true, accountType: 'ingreso' },
           orderBy: { code: 'asc' },
         })))(),
-      // Resolver estrictamente cuentas de IVA (2102 en seed baseline, o 2105 / pasivo con "IVA"),
-      // evitando caer genéricamente en cualquier pasivo como 2101 Proveedores por Pagar.
       (async () =>
         (await this.prisma.accountingAccount.findFirst({
           where: { isActive: true, code: '2102' },

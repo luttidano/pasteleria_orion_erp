@@ -9,20 +9,20 @@ import type {
   AccountingYearOverview,
   PeriodCheckResult,
 } from '@repo/types';
-import { PrismaService } from '../../database/prisma.service';
-import { AccountingEntryOrigin, AccountingPeriodStatus } from '../../common/enums';
+import { PrismaService } from '../../../database/prisma.service';
+import { AccountingEntryOrigin, AccountingPeriodStatus } from '../../../common/enums';
 import {
   extractUtcDate,
   extractYearMonth as extractYearMonthUtc,
   getMonthDateRangeUtc,
-} from '../../common/utils/chile-time.util';
+} from '../../../common/utils/chile-time.util';
 import {
   isUniqueViolation,
   rethrowPrismaError,
-} from '../../common/utils/prisma-error.util';
+} from '../../../common/utils/prisma-error.util';
 import { AccountingSettingsService } from './accounting-settings.service';
-import { AccountingOutboxService } from './accounting-outbox.service';
-import { PeriodIdentifierDto } from './dto/accounting-period.dto';
+import { AccountingOutboxService } from '../outbox/accounting-outbox.service';
+import { PeriodIdentifierDto } from '../dto/accounting-period.dto';
 
 const MONTH_NAMES = [
   'Enero',

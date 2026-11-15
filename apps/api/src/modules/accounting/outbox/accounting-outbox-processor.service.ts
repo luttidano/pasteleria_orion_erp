@@ -3,8 +3,8 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { EntryService } from './entry.service';
+import { PrismaService } from '../../../database/prisma.service';
+import { EntryService } from '../entries/entry.service';
 import { AccountingOutboxService } from './accounting-outbox.service';
 import type {
   InventoryAdjustmentRequestedPayload,

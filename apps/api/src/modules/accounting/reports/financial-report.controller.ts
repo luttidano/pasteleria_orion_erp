@@ -1,13 +1,13 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { Role } from '../../common/enums';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { AuthGuard } from '../../common/guards/auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
+import { Role } from '../../../common/enums';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { AuthGuard } from '../../../common/guards/auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { FinancialReportService } from './financial-report.service';
 import {
   BalanceSheetQueryDto,
   DateRangeQueryDto,
-} from './dto/report-query.dto';
+} from '../dto/report-query.dto';
 
 @Controller('accounting/reports')
 @UseGuards(AuthGuard, RolesGuard)

@@ -5,12 +5,12 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountingSettingsService } from './accounting-settings.service';
-import { AccountingOutboxService } from './accounting-outbox.service';
-import { PrismaService } from '../../database/prisma.service';
+import { AccountingOutboxService } from '../outbox/accounting-outbox.service';
+import { PrismaService } from '../../../database/prisma.service';
 import {
   BalanceSheetQueryDto,
   DateRangeQueryDto,
-} from './dto/report-query.dto';
+} from '../dto/report-query.dto';
 
 describe('AccountingSettingsService & Report Query DTOs', () => {
   let service: AccountingSettingsService;

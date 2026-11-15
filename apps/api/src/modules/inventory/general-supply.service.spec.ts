@@ -13,8 +13,8 @@ import { CreateGeneralSupplyDto } from './dto/create-general-supply.dto';
 import { UpdateGeneralSupplyDto } from './dto/update-general-supply.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { StockMovementService } from './stock-movement.service';
-import { AccountingOutboxService } from '../accounting/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/accounting-outbox-processor.service';
+import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
+import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
 
 describe('GeneralSupplyService', () => {
   let service: GeneralSupplyService;

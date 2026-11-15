@@ -8,8 +8,8 @@ import { CreatePackagingDto } from './dto/create-packaging.dto';
 import { UpdatePackagingDto } from './dto/update-packaging.dto';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { StockMovementService } from './stock-movement.service';
-import { AccountingOutboxService } from '../accounting/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/accounting-outbox-processor.service';
+import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
+import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
 import {
   processInventoryOutboxAfterCommit,
   recordInventoryAdjustmentInTx,

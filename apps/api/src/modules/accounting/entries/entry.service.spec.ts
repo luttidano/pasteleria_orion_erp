@@ -2,11 +2,12 @@ import { BadRequestException, ConflictException, ValidationPipe } from '@nestjs/
 import { Test, TestingModule } from '@nestjs/testing';
 import { EntryService } from './entry.service';
 import { EntryVoidService } from './entry-void.service';
-import { PrismaService } from '../../database/prisma.service';
-import { AccountingPeriodService } from './accounting-period.service';
-import { InventoryValuationService } from '../inventory/inventory-valuation.service';
-import { AccountingEntryOrigin } from '../../common/enums';
-import { CreateAccountingEntryDto } from './dto/create-accounting-entry.dto';
+import { AccountingIntegrationService } from '../outbox/accounting-integration.service';
+import { PrismaService } from '../../../database/prisma.service';
+import { AccountingPeriodService } from '../periods/accounting-period.service';
+import { InventoryValuationService } from '../../inventory/inventory-valuation.service';
+import { AccountingEntryOrigin } from '../../../common/enums';
+import { CreateAccountingEntryDto } from '../dto/create-accounting-entry.dto';
 
 interface SeedAccount {
   id: string;
@@ -95,6 +96,7 @@ describe('EntryService', () => {
       providers: [
         EntryService,
         EntryVoidService,
+        AccountingIntegrationService,
         { provide: PrismaService, useValue: prisma },
         { provide: AccountingPeriodService, useValue: periodService },
         { provide: InventoryValuationService, useValue: valuationService },

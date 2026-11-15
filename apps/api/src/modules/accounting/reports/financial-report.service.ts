@@ -10,14 +10,14 @@ import type {
   IncomeStatementReport,
   ReportAccountLine,
 } from '@repo/types';
-import { PrismaService } from '../../database/prisma.service';
-import { InventoryValuationService } from '../inventory/inventory-valuation.service';
+import { PrismaService } from '../../../database/prisma.service';
+import { InventoryValuationService } from '../../inventory/inventory-valuation.service';
 import {
   getZonedDateString,
   parseStrictUtcBounds,
   STORE_TIMEZONE,
-} from '../../common/utils/chile-time.util';
-import { roundMoney, roundPercentage } from '../../common/utils/money.util';
+} from '../../../common/utils/chile-time.util';
+import { roundMoney, roundPercentage } from '../../../common/utils/money.util';
 import {
   AssetBalanceBucket,
   classifyAssetBucket,

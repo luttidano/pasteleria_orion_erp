@@ -2,9 +2,9 @@ import { ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AnnualClosingService } from './annual-closing.service';
 import { AccountingSettingsService } from './accounting-settings.service';
-import { AccountingOutboxService } from './accounting-outbox.service';
-import { PrismaService } from '../../database/prisma.service';
-import { AccountingEntryOrigin } from '../../common/enums';
+import { AccountingOutboxService } from '../outbox/accounting-outbox.service';
+import { PrismaService } from '../../../database/prisma.service';
+import { AccountingEntryOrigin } from '../../../common/enums';
 
 describe('AnnualClosingService', () => {
   let service: AnnualClosingService;

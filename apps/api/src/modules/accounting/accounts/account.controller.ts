@@ -1,8 +1,8 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { Role } from '../../common/enums';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { AuthGuard } from '../../common/guards/auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
+import { Role } from '../../../common/enums';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { AuthGuard } from '../../../common/guards/auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { AccountService } from './account.service';
 
 @Controller('accounting')

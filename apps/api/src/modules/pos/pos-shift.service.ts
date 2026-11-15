@@ -8,8 +8,8 @@ import {
 import { Prisma } from '@prisma/client';
 import type { PosActiveShiftOverview, PosShiftRecord } from '@repo/types';
 import { ClosePosShiftDto, UpdateOpeningCashDto } from './dto/pos-shift.dto';
-import { AccountingOutboxService } from '../accounting/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/accounting-outbox-processor.service';
+import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
+import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
 import { PrismaService } from '../../database/prisma.service';
 import { PosAccountingStatusService } from './pos-accounting-status.service';
 import { roundMoney } from '../../common/utils/money.util';

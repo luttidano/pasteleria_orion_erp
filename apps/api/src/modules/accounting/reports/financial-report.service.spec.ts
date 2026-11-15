@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FinancialReportService } from './financial-report.service';
-import { InventoryValuationService } from '../inventory/inventory-valuation.service';
-import { PrismaService } from '../../database/prisma.service';
+import { InventoryValuationService } from '../../inventory/inventory-valuation.service';
+import { PrismaService } from '../../../database/prisma.service';
 
 describe('FinancialReportService', () => {
   let service: FinancialReportService;

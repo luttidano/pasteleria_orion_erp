@@ -5,9 +5,9 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { AccountLedgerData, AccountingEntryOrigin, AccountingEntryStatus } from '@repo/types';
-import { PrismaService } from '../../database/prisma.service';
-import { parseStrictUtcBounds } from '../../common/utils/chile-time.util';
-import { roundMoney } from '../../common/utils/money.util';
+import { PrismaService } from '../../../database/prisma.service';
+import { parseStrictUtcBounds } from '../../../common/utils/chile-time.util';
+import { roundMoney } from '../../../common/utils/money.util';
 
 @Injectable()
 export class LedgerService {

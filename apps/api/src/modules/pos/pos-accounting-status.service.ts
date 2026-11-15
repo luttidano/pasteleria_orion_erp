@@ -4,7 +4,7 @@ import type {
   RecoveredSaleItemCost,
   SyncedSaleRef,
   SyncedShiftRef,
-} from '../accounting/accounting-outbox.types';
+} from '../accounting/outbox/accounting-outbox.types';
 
 @Injectable()
 export class PosAccountingStatusService {

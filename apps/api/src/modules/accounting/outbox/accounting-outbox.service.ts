@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { PrismaService } from '../../database/prisma.service';
-import { roundMoney } from '../../common/utils/money.util';
+import { PrismaService } from '../../../database/prisma.service';
+import { roundMoney } from '../../../common/utils/money.util';
 import type {
   InventoryAdjustmentRequestedPayload,
   InventoryProductionRequestedPayload,

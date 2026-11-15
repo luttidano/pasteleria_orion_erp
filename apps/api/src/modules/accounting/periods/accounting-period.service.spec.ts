@@ -2,9 +2,9 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountingPeriodService } from './accounting-period.service';
 import { AccountingSettingsService } from './accounting-settings.service';
-import { AccountingOutboxService } from './accounting-outbox.service';
-import { PrismaService } from '../../database/prisma.service';
-import { AccountingPeriodStatus } from '../../common/enums';
+import { AccountingOutboxService } from '../outbox/accounting-outbox.service';
+import { PrismaService } from '../../../database/prisma.service';
+import { AccountingPeriodStatus } from '../../../common/enums';
 
 describe('AccountingPeriodService', () => {
   let service: AccountingPeriodService;

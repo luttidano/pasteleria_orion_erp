@@ -9,8 +9,8 @@ import { PosSaleService } from './pos-sale.service';
 import { PosShiftService } from './pos-shift.service';
 import { PosAccountingStatusService } from './pos-accounting-status.service';
 import { PrismaService } from '../../database/prisma.service';
-import { AccountingOutboxService } from '../accounting/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/accounting-outbox-processor.service';
+import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
+import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
 import { InventoryStockService } from '../inventory/inventory-stock.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 

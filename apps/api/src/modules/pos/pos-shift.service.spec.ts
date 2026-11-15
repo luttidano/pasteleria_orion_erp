@@ -8,8 +8,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PosShiftService } from './pos-shift.service';
 import { PosAccountingStatusService } from './pos-accounting-status.service';
 import { PrismaService } from '../../database/prisma.service';
-import { AccountingOutboxService } from '../accounting/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/accounting-outbox-processor.service';
+import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
+import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
 import { ClosePosShiftDto } from './dto/pos-shift.dto';
 
 describe('PosShiftService', () => {

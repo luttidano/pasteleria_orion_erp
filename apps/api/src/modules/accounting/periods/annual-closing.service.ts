@@ -12,19 +12,19 @@ import type {
   AnnualClosingPreview,
   ReverseClosingResult,
 } from '@repo/types';
-import { PrismaService } from '../../database/prisma.service';
-import { AccountingEntryOrigin, AccountingPeriodStatus } from '../../common/enums';
-import { roundMoney } from '../../common/utils/money.util';
+import { PrismaService } from '../../../database/prisma.service';
+import { AccountingEntryOrigin, AccountingPeriodStatus } from '../../../common/enums';
+import { roundMoney } from '../../../common/utils/money.util';
 import {
   isUniqueViolation,
   rethrowPrismaError,
-} from '../../common/utils/prisma-error.util';
+} from '../../../common/utils/prisma-error.util';
 import { AccountingSettingsService } from './accounting-settings.service';
-import { AccountingOutboxService } from './accounting-outbox.service';
+import { AccountingOutboxService } from '../outbox/accounting-outbox.service';
 import {
   ExecuteAnnualClosingDto,
   ReverseAnnualClosingDto,
-} from './dto/accounting-period.dto';
+} from '../dto/accounting-period.dto';
 
 @Injectable()
 export class AnnualClosingService {

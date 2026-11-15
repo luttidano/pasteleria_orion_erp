@@ -1,10 +1,10 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { AccountingSettings } from '@repo/types';
-import { PrismaService } from '../../database/prisma.service';
-import { extractUtcDate, toUtcDateOnly } from '../../common/utils/chile-time.util';
-import { AccountingOutboxService } from './accounting-outbox.service';
-import { UpdateAccountingSettingsDto } from './dto/accounting-period.dto';
+import { PrismaService } from '../../../database/prisma.service';
+import { extractUtcDate, toUtcDateOnly } from '../../../common/utils/chile-time.util';
+import { AccountingOutboxService } from '../outbox/accounting-outbox.service';
+import { UpdateAccountingSettingsDto } from '../dto/accounting-period.dto';
 
 @Injectable()
 export class AccountingSettingsService {

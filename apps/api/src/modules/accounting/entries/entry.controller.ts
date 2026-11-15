@@ -8,16 +8,16 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { Role } from '../../common/enums';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { AuthGuard } from '../../common/guards/auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
+import { Role } from '../../../common/enums';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { AuthGuard } from '../../../common/guards/auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { IdempotencyInterceptor } from '../../../common/interceptors/idempotency.interceptor';
 import { EntryService } from './entry.service';
 import { EntryVoidService } from './entry-void.service';
-import { CreateAccountingEntryDto } from './dto/create-accounting-entry.dto';
-import { VoidAccountingEntryDto } from './dto/accounting-period.dto';
+import { CreateAccountingEntryDto } from '../dto/create-accounting-entry.dto';
+import { VoidAccountingEntryDto } from '../dto/accounting-period.dto';
 
 @Controller('accounting')
 @UseGuards(AuthGuard, RolesGuard)

@@ -8,12 +8,12 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { Role } from '../../common/enums';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { AuthGuard } from '../../common/guards/auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
+import { Role } from '../../../common/enums';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { AuthGuard } from '../../../common/guards/auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { IdempotencyInterceptor } from '../../../common/interceptors/idempotency.interceptor';
 import { AccountingPeriodService } from './accounting-period.service';
 import { AccountingSettingsService } from './accounting-settings.service';
 import { AnnualClosingService } from './annual-closing.service';
@@ -24,7 +24,7 @@ import {
   PeriodYearQueryDto,
   ReverseAnnualClosingDto,
   UpdateAccountingSettingsDto,
-} from './dto/accounting-period.dto';
+} from '../dto/accounting-period.dto';
 
 @Controller('accounting/periods')
 @UseGuards(AuthGuard, RolesGuard)

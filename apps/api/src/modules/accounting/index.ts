@@ -7,6 +7,7 @@ export * from './outbox/accounting-outbox-processor.service';
 export * from './outbox/accounting-outbox.types';
 export * from './outbox/accounting-integration.service';
 export * from './periods/accounting-period.service';
+export * from './periods/period-lock.service';
 export * from './periods/accounting-settings.service';
 export * from './periods/annual-closing.service';
 export * from './reports/balance.service';

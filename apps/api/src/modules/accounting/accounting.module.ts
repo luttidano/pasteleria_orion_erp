@@ -4,6 +4,7 @@ import { AccountController } from './accounts/account.controller';
 import { AccountService } from './accounts/account.service';
 import { AccountingPeriodController } from './periods/accounting-period.controller';
 import { AccountingPeriodService } from './periods/accounting-period.service';
+import { PeriodLockService } from './periods/period-lock.service';
 import { AccountingSettingsService } from './periods/accounting-settings.service';
 import { AnnualClosingService } from './periods/annual-closing.service';
 import { EntryController } from './entries/entry.controller';
@@ -34,6 +35,7 @@ import { FinancialReportService } from './reports/financial-report.service';
     AccountingOutboxService,
     AccountingSettingsService,
     AccountingPeriodService,
+    PeriodLockService,
     AnnualClosingService,
     EntryService,
     EntryVoidService,
@@ -45,6 +47,7 @@ import { FinancialReportService } from './reports/financial-report.service';
   ],
   exports: [
     AccountingPeriodService,
+    PeriodLockService,
     EntryService,
     EntryVoidService,
     AccountingIntegrationService,

@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountingPeriodService } from './accounting-period.service';
+import { PeriodLockService } from './period-lock.service';
 import { AccountingSettingsService } from './accounting-settings.service';
 import { AccountingOutboxService } from '../outbox/accounting-outbox.service';
 import { PrismaService } from '../../../database/prisma.service';
@@ -44,6 +45,7 @@ describe('AccountingPeriodService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AccountingPeriodService,
+        PeriodLockService,
         AccountingSettingsService,
         AccountingOutboxService,
         { provide: PrismaService, useValue: prisma },

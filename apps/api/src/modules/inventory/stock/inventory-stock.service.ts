@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client';
 import {
   resolveSecondaryPackagingPrice,
   roundMoney,
-} from '../../common/utils/money.util';
+} from '../../../common/utils/money.util';
 import { StockMovementService } from './stock-movement.service';
 
 export interface SaleStockRequestItem {

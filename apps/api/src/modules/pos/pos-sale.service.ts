@@ -9,7 +9,7 @@ import type { PosSaleRecord } from '@repo/types';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
 import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
-import { InventoryStockService } from '../inventory/inventory-stock.service';
+import { InventoryStockService } from '../inventory/stock/inventory-stock.service';
 import { PrismaService } from '../../database/prisma.service';
 import { rethrowPrismaError } from '../../common/utils/prisma-error.util';
 import { roundMoney } from '../../common/utils/money.util';

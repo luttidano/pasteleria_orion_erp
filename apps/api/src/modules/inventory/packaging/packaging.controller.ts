@@ -12,16 +12,16 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { PackagingService } from './packaging.service';
-import { CreatePackagingDto } from './dto/create-packaging.dto';
-import { UpdatePackagingDto } from './dto/update-packaging.dto';
-import { AdjustStockDto } from './dto/adjust-stock.dto';
-import { PackagingQueryDto } from './dto/inventory-query.dto';
-import { AuthGuard } from '../../common/guards/auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Role } from '../../common/enums';
-import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
+import { CreatePackagingDto } from '../dto/create-packaging.dto';
+import { UpdatePackagingDto } from '../dto/update-packaging.dto';
+import { AdjustStockDto } from '../dto/adjust-stock.dto';
+import { PackagingQueryDto } from '../dto/inventory-query.dto';
+import { AuthGuard } from '../../../common/guards/auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { Role } from '../../../common/enums';
+import { IdempotencyInterceptor } from '../../../common/interceptors/idempotency.interceptor';
 
 @Controller('packaging')
 @UseGuards(AuthGuard, RolesGuard)

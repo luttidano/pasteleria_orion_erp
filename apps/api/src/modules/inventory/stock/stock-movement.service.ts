@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { StockMovementItemType, StockMovementType } from '@repo/types';
-import { roundMoney, roundQuantity } from '../../common/utils/money.util';
+import { roundMoney, roundQuantity } from '../../../common/utils/money.util';
 
 export function computeWeightedAverageUnitCost(params: {
   currentStock: number;

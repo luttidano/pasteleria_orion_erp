@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SupplierService } from './supplier.service';
-import { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../../database/prisma.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('SupplierService', () => {

@@ -4,10 +4,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../database/prisma.service';
-import { CreateSupplierDto } from './dto/create-supplier.dto';
-import { UpdateSupplierDto } from './dto/update-supplier.dto';
-import { rethrowPrismaError } from '../../common/utils/prisma-error.util';
+import { PrismaService } from '../../../database/prisma.service';
+import { CreateSupplierDto } from '../dto/create-supplier.dto';
+import { UpdateSupplierDto } from '../dto/update-supplier.dto';
+import { rethrowPrismaError } from '../../../common/utils/prisma-error.util';
 
 @Injectable()
 export class SupplierService {

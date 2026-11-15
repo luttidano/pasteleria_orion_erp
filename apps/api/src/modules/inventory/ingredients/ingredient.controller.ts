@@ -11,15 +11,15 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { IngredientService } from './ingredient.service';
-import { CreateIngredientDto } from './dto/create-ingredient.dto';
-import { UpdateIngredientDto } from './dto/update-ingredient.dto';
-import { AdjustStockDto } from './dto/adjust-stock.dto';
-import { AuthGuard } from '../../common/guards/auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Role } from '../../common/enums';
-import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
+import { CreateIngredientDto } from '../dto/create-ingredient.dto';
+import { UpdateIngredientDto } from '../dto/update-ingredient.dto';
+import { AdjustStockDto } from '../dto/adjust-stock.dto';
+import { AuthGuard } from '../../../common/guards/auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { Role } from '../../../common/enums';
+import { IdempotencyInterceptor } from '../../../common/interceptors/idempotency.interceptor';
 
 @Controller('ingredients')
 @UseGuards(AuthGuard, RolesGuard)

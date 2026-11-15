@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { InventoryValuationService } from './inventory-valuation.service';
-import { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../../database/prisma.service';
 
 describe('InventoryValuationService', () => {
   let service: InventoryValuationService;

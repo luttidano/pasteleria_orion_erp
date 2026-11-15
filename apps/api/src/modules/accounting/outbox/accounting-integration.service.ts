@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import { AccountingEntryOrigin } from '../../../common/enums';
 import { AccountingPeriodService } from '../periods/accounting-period.service';
-import { InventoryValuationService } from '../../inventory/inventory-valuation.service';
+import { InventoryValuationService } from '../../inventory/valuation/inventory-valuation.service';
 import type {
   AccountingEntryCreatedResult,
   InventoryAdjustmentRequestedPayload,

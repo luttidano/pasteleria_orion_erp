@@ -3,20 +3,20 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { CreatePackagingDto } from './dto/create-packaging.dto';
-import { UpdatePackagingDto } from './dto/update-packaging.dto';
-import { AdjustStockDto } from './dto/adjust-stock.dto';
-import { StockMovementService } from './stock-movement.service';
-import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
+import { PrismaService } from '../../../database/prisma.service';
+import { CreatePackagingDto } from '../dto/create-packaging.dto';
+import { UpdatePackagingDto } from '../dto/update-packaging.dto';
+import { AdjustStockDto } from '../dto/adjust-stock.dto';
+import { StockMovementService } from '../stock/stock-movement.service';
+import { AccountingOutboxService } from '../../accounting/outbox/accounting-outbox.service';
+import { AccountingOutboxProcessorService } from '../../accounting/outbox/accounting-outbox-processor.service';
 import {
   processInventoryOutboxAfterCommit,
   recordInventoryAdjustmentInTx,
   resolveInventoryAdjustmentDecision,
-} from './inventory-adjustment.helper';
-import { rethrowPrismaError } from '../../common/utils/prisma-error.util';
-import { computeStockStatus } from '../../common/utils/stock-status.util';
+} from '../stock/inventory-adjustment.helper';
+import { rethrowPrismaError } from '../../../common/utils/prisma-error.util';
+import { computeStockStatus } from '../../../common/utils/stock-status.util';
 
 @Injectable()
 export class PackagingService {

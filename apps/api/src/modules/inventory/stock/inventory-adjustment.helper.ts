@@ -9,10 +9,10 @@ import type {
   InventoryPurchasePaymentMethod,
   StockMovementItemType,
 } from '@repo/types';
-import { roundMoney, roundQuantity } from '../../common/utils/money.util';
-import type { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
-import type { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
-import { AdjustStockDto } from './dto/adjust-stock.dto';
+import { roundMoney, roundQuantity } from '../../../common/utils/money.util';
+import type { AccountingOutboxService } from '../../accounting/outbox/accounting-outbox.service';
+import type { AccountingOutboxProcessorService } from '../../accounting/outbox/accounting-outbox-processor.service';
+import { AdjustStockDto } from '../dto/adjust-stock.dto';
 import {
   computeWeightedAverageUnitCost,
   StockMovementService,

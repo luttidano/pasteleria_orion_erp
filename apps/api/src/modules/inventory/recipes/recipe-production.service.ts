@@ -7,18 +7,18 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { PrismaService } from '../../database/prisma.service';
-import { ProduceRecipeDto } from './dto/produce-recipe.dto';
+import { PrismaService } from '../../../database/prisma.service';
+import { ProduceRecipeDto } from '../dto/produce-recipe.dto';
 import {
   computeWeightedAverageUnitCost,
   StockMovementService,
-} from './stock-movement.service';
-import { processInventoryOutboxAfterCommit } from './inventory-adjustment.helper';
-import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
-import { convertToTargetUnit } from '../../common/utils/unit-converter';
-import { rethrowPrismaError } from '../../common/utils/prisma-error.util';
-import { roundMoney, roundQuantity } from '../../common/utils/money.util';
+} from '../stock/stock-movement.service';
+import { processInventoryOutboxAfterCommit } from '../stock/inventory-adjustment.helper';
+import { AccountingOutboxService } from '../../accounting/outbox/accounting-outbox.service';
+import { AccountingOutboxProcessorService } from '../../accounting/outbox/accounting-outbox-processor.service';
+import { convertToTargetUnit } from '../../../common/utils/unit-converter';
+import { rethrowPrismaError } from '../../../common/utils/prisma-error.util';
+import { roundMoney, roundQuantity } from '../../../common/utils/money.util';
 
 @Injectable()
 export class RecipeProductionService {

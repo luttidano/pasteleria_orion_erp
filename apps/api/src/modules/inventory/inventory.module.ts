@@ -1,23 +1,23 @@
 import { Module } from '@nestjs/common';
 import { AccountingModule } from '../accounting/accounting.module';
-import { IngredientService } from './ingredient.service';
-import { IngredientController } from './ingredient.controller';
-import { RecipeService } from './recipe.service';
-import { RecipeProductionService } from './recipe-production.service';
-import { RecipeController } from './recipe.controller';
-import { CategoryService } from './category.service';
-import { CategoryController } from './category.controller';
-import { ProductService } from './product.service';
-import { ProductController } from './product.controller';
-import { SupplierService } from './supplier.service';
-import { SupplierController } from './supplier.controller';
-import { PackagingService } from './packaging.service';
-import { PackagingController } from './packaging.controller';
-import { GeneralSupplyService } from './general-supply.service';
-import { GeneralSupplyController } from './general-supply.controller';
-import { InventoryStockService } from './inventory-stock.service';
-import { InventoryValuationModule } from './inventory-valuation.module';
-import { StockMovementService } from './stock-movement.service';
+import { IngredientService } from './ingredients/ingredient.service';
+import { IngredientController } from './ingredients/ingredient.controller';
+import { RecipeService } from './recipes/recipe.service';
+import { RecipeProductionService } from './recipes/recipe-production.service';
+import { RecipeController } from './recipes/recipe.controller';
+import { CategoryService } from './categories/category.service';
+import { CategoryController } from './categories/category.controller';
+import { ProductService } from './products/product.service';
+import { ProductController } from './products/product.controller';
+import { SupplierService } from './suppliers/supplier.service';
+import { SupplierController } from './suppliers/supplier.controller';
+import { PackagingService } from './packaging/packaging.service';
+import { PackagingController } from './packaging/packaging.controller';
+import { GeneralSupplyService } from './supplies/general-supply.service';
+import { GeneralSupplyController } from './supplies/general-supply.controller';
+import { InventoryStockService } from './stock/inventory-stock.service';
+import { InventoryValuationModule } from './valuation/inventory-valuation.module';
+import { StockMovementService } from './stock/stock-movement.service';
 
 @Module({
   imports: [InventoryValuationModule, AccountingModule],

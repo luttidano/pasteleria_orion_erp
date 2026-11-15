@@ -12,14 +12,14 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { CategoryService } from './category.service';
-import { CreateCategoryDto } from './dto/create-category.dto';
-import { UpdateCategoryDto } from './dto/update-category.dto';
-import { CategoryQueryDto } from './dto/inventory-query.dto';
-import { AuthGuard } from '../../common/guards/auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { Role } from '../../common/enums';
-import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
+import { CreateCategoryDto } from '../dto/create-category.dto';
+import { UpdateCategoryDto } from '../dto/update-category.dto';
+import { CategoryQueryDto } from '../dto/inventory-query.dto';
+import { AuthGuard } from '../../../common/guards/auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { Role } from '../../../common/enums';
+import { IdempotencyInterceptor } from '../../../common/interceptors/idempotency.interceptor';
 
 @Controller('categories')
 @UseGuards(AuthGuard, RolesGuard)

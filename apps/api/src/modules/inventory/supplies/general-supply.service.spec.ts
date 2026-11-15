@@ -7,14 +7,14 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { GeneralSupplyService } from './general-supply.service';
-import { SupplierService } from './supplier.service';
-import { PrismaService } from '../../database/prisma.service';
-import { CreateGeneralSupplyDto } from './dto/create-general-supply.dto';
-import { UpdateGeneralSupplyDto } from './dto/update-general-supply.dto';
-import { CreateSupplierDto } from './dto/create-supplier.dto';
-import { StockMovementService } from './stock-movement.service';
-import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
+import { SupplierService } from '../suppliers/supplier.service';
+import { PrismaService } from '../../../database/prisma.service';
+import { CreateGeneralSupplyDto } from '../dto/create-general-supply.dto';
+import { UpdateGeneralSupplyDto } from '../dto/update-general-supply.dto';
+import { CreateSupplierDto } from '../dto/create-supplier.dto';
+import { StockMovementService } from '../stock/stock-movement.service';
+import { AccountingOutboxService } from '../../accounting/outbox/accounting-outbox.service';
+import { AccountingOutboxProcessorService } from '../../accounting/outbox/accounting-outbox-processor.service';
 
 describe('GeneralSupplyService', () => {
   let service: GeneralSupplyService;

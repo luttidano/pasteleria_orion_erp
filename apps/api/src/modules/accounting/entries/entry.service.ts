@@ -13,7 +13,7 @@ import { VoidAccountingEntryDto } from '../dto/accounting-period.dto';
 import { AccountingPeriodService } from '../periods/accounting-period.service';
 import { EntryVoidService } from './entry-void.service';
 import { AccountingIntegrationService } from '../outbox/accounting-integration.service';
-import { InventoryValuationService } from '../../inventory/inventory-valuation.service';
+import { InventoryValuationService } from '../../inventory/valuation/inventory-valuation.service';
 import type {
   AccountingEntryCreatedResult,
   InventoryAdjustmentRequestedPayload,

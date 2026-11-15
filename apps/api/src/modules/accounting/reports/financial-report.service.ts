@@ -11,7 +11,7 @@ import type {
   ReportAccountLine,
 } from '@repo/types';
 import { PrismaService } from '../../../database/prisma.service';
-import { InventoryValuationService } from '../../inventory/inventory-valuation.service';
+import { InventoryValuationService } from '../../inventory/valuation/inventory-valuation.service';
 import {
   getZonedDateString,
   parseStrictUtcBounds,

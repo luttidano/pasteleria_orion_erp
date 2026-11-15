@@ -12,16 +12,16 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { GeneralSupplyService } from './general-supply.service';
-import { CreateGeneralSupplyDto } from './dto/create-general-supply.dto';
-import { UpdateGeneralSupplyDto } from './dto/update-general-supply.dto';
-import { AdjustStockDto } from './dto/adjust-stock.dto';
-import { GeneralSupplyQueryDto } from './dto/inventory-query.dto';
-import { AuthGuard } from '../../common/guards/auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Role } from '../../common/enums';
-import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
+import { CreateGeneralSupplyDto } from '../dto/create-general-supply.dto';
+import { UpdateGeneralSupplyDto } from '../dto/update-general-supply.dto';
+import { AdjustStockDto } from '../dto/adjust-stock.dto';
+import { GeneralSupplyQueryDto } from '../dto/inventory-query.dto';
+import { AuthGuard } from '../../../common/guards/auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { Role } from '../../../common/enums';
+import { IdempotencyInterceptor } from '../../../common/interceptors/idempotency.interceptor';
 
 @Controller('general-supplies')
 @UseGuards(AuthGuard, RolesGuard)

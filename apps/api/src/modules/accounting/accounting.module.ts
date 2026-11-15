@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { InventoryValuationModule } from '../inventory/inventory-valuation.module';
+import { InventoryValuationModule } from '../inventory/valuation/inventory-valuation.module';
 import { AccountController } from './accounts/account.controller';
 import { AccountService } from './accounts/account.service';
 import { AccountingPeriodController } from './periods/accounting-period.controller';

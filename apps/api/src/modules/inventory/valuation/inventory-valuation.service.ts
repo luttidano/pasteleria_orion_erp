@@ -4,8 +4,8 @@ import type {
   InventoryTopValuationItem,
   InventoryValuationReport,
 } from '@repo/types';
-import { PrismaService } from '../../database/prisma.service';
-import { roundMoney } from '../../common/utils/money.util';
+import { PrismaService } from '../../../database/prisma.service';
+import { roundMoney } from '../../../common/utils/money.util';
 
 @Injectable()
 export class InventoryValuationService {

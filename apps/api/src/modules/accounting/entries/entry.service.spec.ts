@@ -5,7 +5,7 @@ import { EntryVoidService } from './entry-void.service';
 import { AccountingIntegrationService } from '../outbox/accounting-integration.service';
 import { PrismaService } from '../../../database/prisma.service';
 import { AccountingPeriodService } from '../periods/accounting-period.service';
-import { InventoryValuationService } from '../../inventory/inventory-valuation.service';
+import { InventoryValuationService } from '../../inventory/valuation/inventory-valuation.service';
 import { AccountingEntryOrigin } from '../../../common/enums';
 import { CreateAccountingEntryDto } from '../dto/create-accounting-entry.dto';
 

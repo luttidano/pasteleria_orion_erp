@@ -4,14 +4,14 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { CreateRecipeDto } from './dto/create-recipe.dto';
-import { UpdateRecipeDto } from './dto/update-recipe.dto';
-import { ProduceRecipeDto } from './dto/produce-recipe.dto';
-import { CategoryService } from './category.service';
+import { PrismaService } from '../../../database/prisma.service';
+import { CreateRecipeDto } from '../dto/create-recipe.dto';
+import { UpdateRecipeDto } from '../dto/update-recipe.dto';
+import { ProduceRecipeDto } from '../dto/produce-recipe.dto';
+import { CategoryService } from '../categories/category.service';
 import { RecipeProductionService } from './recipe-production.service';
-import { toBaseUnits } from '../../common/utils/unit-converter';
-import { rethrowPrismaError } from '../../common/utils/prisma-error.util';
+import { toBaseUnits } from '../../../common/utils/unit-converter';
+import { rethrowPrismaError } from '../../../common/utils/prisma-error.util';
 
 @Injectable()
 export class RecipeService {

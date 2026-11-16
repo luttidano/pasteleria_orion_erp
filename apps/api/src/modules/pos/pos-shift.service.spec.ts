@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PosShiftService } from './pos-shift.service';
+import { PosShiftReconciliationService } from './pos-shift-reconciliation.service';
 import { PosAccountingStatusService } from './pos-accounting-status.service';
 import { PrismaService } from '../../database/prisma.service';
 import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
@@ -52,6 +53,7 @@ describe('PosShiftService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PosShiftService,
+        PosShiftReconciliationService,
         PosAccountingStatusService,
         AccountingOutboxService,
         { provide: PrismaService, useValue: prisma },

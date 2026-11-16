@@ -3,6 +3,7 @@ import { PosController } from './pos.controller';
 import { PosShiftController } from './pos-shift.controller';
 import { PosSaleService } from './pos-sale.service';
 import { PosShiftService } from './pos-shift.service';
+import { PosShiftReconciliationService } from './pos-shift-reconciliation.service';
 import { PosSummaryService } from './pos-summary.service';
 import { PosAccountingStatusService } from './pos-accounting-status.service';
 import { AccountingModule } from '../accounting/accounting.module';
@@ -14,9 +15,10 @@ import { InventoryModule } from '../inventory/inventory.module';
   providers: [
     PosSaleService,
     PosShiftService,
+    PosShiftReconciliationService,
     PosSummaryService,
     PosAccountingStatusService,
   ],
-  exports: [PosAccountingStatusService],
+  exports: [PosAccountingStatusService, PosShiftReconciliationService],
 })
 export class PosModule {}

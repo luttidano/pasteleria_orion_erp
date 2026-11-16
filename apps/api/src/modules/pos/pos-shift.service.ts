@@ -8,10 +8,8 @@ import {
 import { Prisma } from '@prisma/client';
 import type { PosActiveShiftOverview, PosShiftRecord } from '@repo/types';
 import { ClosePosShiftDto, UpdateOpeningCashDto } from './dto/pos-shift.dto';
-import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
 import { PrismaService } from '../../database/prisma.service';
-import { PosAccountingStatusService } from './pos-accounting-status.service';
+import { PosShiftReconciliationService } from './pos-shift-reconciliation.service';
 import { roundMoney } from '../../common/utils/money.util';
 import {
   getTimeZoneDayBounds,
@@ -29,9 +27,7 @@ import {
 export class PosShiftService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accountingOutboxService: AccountingOutboxService,
-    private readonly accountingOutboxProcessor: AccountingOutboxProcessorService,
-    private readonly posAccountingStatusService: PosAccountingStatusService,
+    private readonly reconciliationService: PosShiftReconciliationService,
   ) {}
 
   async getActiveShiftOverview(
@@ -300,18 +296,13 @@ export class PosShiftService {
           let enqueuedOutboxId: string | null = null;
           if (hasDifference) {
             const closedAtDate = updatedShift.closedAt ?? now;
-            const outboxEvent =
-              await this.accountingOutboxService.enqueueShiftDifferenceInTx(
-                tx,
-                {
-                  shiftId: updatedShift.id,
-                  shiftNumber: Number(updatedShift.shiftNumber),
-                  closedAt: closedAtDate,
-                  cashDifference,
-                  entryDate: getZonedDateString(closedAtDate, STORE_TIMEZONE),
-                },
-              );
-            enqueuedOutboxId = outboxEvent?.id ?? null;
+            enqueuedOutboxId =
+              await this.reconciliationService.enqueueShiftDifferenceInTx(tx, {
+                shiftId: updatedShift.id,
+                shiftNumber: Number(updatedShift.shiftNumber),
+                closedAt: closedAtDate,
+                cashDifference,
+              });
           }
 
           return {
@@ -343,57 +334,29 @@ export class PosShiftService {
       );
     }
 
-    let finalAccountingStatus = closedShift.accountingStatus as
-      | 'none'
-      | 'posted'
-      | 'pending';
-    let finalAccountingWarning: string | null =
-      closedShift.accountingWarning ?? null;
-    let finalClosingEntryId = closedShift.closingEntryId ?? null;
-    let finalClosingEntryNumber = closedShift.closingEntry
-      ? Number(closedShift.closingEntry.entryNumber)
-      : null;
-
-    const cashDiff = Number(closedShift.cashDifference ?? 0);
-    if (Math.abs(cashDiff) >= 0.01 && outboxEventId) {
-      try {
-        const adj =
-          await this.accountingOutboxProcessor.processEvent(outboxEventId);
-
-        if (adj.entryId) {
-          finalAccountingStatus = 'posted';
-          finalClosingEntryId = adj.entryId;
-          finalClosingEntryNumber = adj.entryNumber;
-          finalAccountingWarning = null;
-
-          await this.posAccountingStatusService
-            .markShiftPosted(closedShift.id, adj.entryId)
-            .catch(() => undefined);
-        }
-      } catch (accError) {
-        finalAccountingStatus = 'pending';
-        const errorMsg =
-          accError instanceof Error
-            ? accError.message
-            : 'Error al registrar diferencia de caja en contabilidad.';
-        finalAccountingWarning = `Turno cerrado en caja. El ajuste contable por diferencia quedó pendiente: ${errorMsg}`;
-        console.warn(
-          `[PosShiftService] Turno #${Number(closedShift.shiftNumber)} cerrado, ajuste contable pendiente:`,
-          errorMsg,
-        );
-
-        await this.posAccountingStatusService
-          .markShiftPending(closedShift.id, finalAccountingWarning)
-          .catch(() => undefined);
-      }
-    }
+    const reconciliation =
+      await this.reconciliationService.reconcileShiftDifference({
+        shiftId: closedShift.id,
+        shiftNumber: closedShift.shiftNumber,
+        cashDifference: Number(closedShift.cashDifference ?? 0),
+        outboxEventId,
+        initialAccountingStatus: closedShift.accountingStatus as
+          | 'none'
+          | 'posted'
+          | 'pending',
+        initialAccountingWarning: closedShift.accountingWarning ?? null,
+        initialClosingEntryId: closedShift.closingEntryId ?? null,
+        initialClosingEntryNumber: closedShift.closingEntry
+          ? Number(closedShift.closingEntry.entryNumber)
+          : null,
+      });
 
     return {
       ...mapShiftRecord(closedShift),
-      accountingStatus: finalAccountingStatus,
-      accountingWarning: finalAccountingWarning,
-      closingEntryId: finalClosingEntryId,
-      closingEntryNumber: finalClosingEntryNumber,
+      accountingStatus: reconciliation.accountingStatus,
+      accountingWarning: reconciliation.accountingWarning,
+      closingEntryId: reconciliation.closingEntryId,
+      closingEntryNumber: reconciliation.closingEntryNumber,
     };
   }
 

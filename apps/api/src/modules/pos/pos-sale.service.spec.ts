@@ -7,6 +7,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { PosSaleService } from './pos-sale.service';
 import { PosShiftService } from './pos-shift.service';
+import { PosShiftReconciliationService } from './pos-shift-reconciliation.service';
 import { PosAccountingStatusService } from './pos-accounting-status.service';
 import { PrismaService } from '../../database/prisma.service';
 import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
@@ -54,6 +55,7 @@ describe('PosSaleService', () => {
       providers: [
         PosSaleService,
         PosShiftService,
+        PosShiftReconciliationService,
         PosAccountingStatusService,
         AccountingOutboxService,
         InventoryStockService,

@@ -12,6 +12,9 @@ describe('FinancialReportService', () => {
       accountingAccount: {
         findMany: jest.fn(),
       },
+      accountingEntryItem: {
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
       ingredient: {
         findMany: jest.fn(),
       },
@@ -42,31 +45,27 @@ describe('FinancialReportService', () => {
           code: '4101',
           name: 'Venta de Pastelería y Bollería',
           accountType: 'ingreso',
-          entryItems: [
-            { debit: 0, credit: 1000000 }, // 1.000.000 ingreso
-          ],
         },
         {
           id: 'acc-costo-1',
           code: '5101',
           name: 'Costo de Materias Primas e Insumos',
           accountType: 'costo',
-          entryItems: [
-            { debit: 350000, credit: 0 }, // 350.000 costo materias primas
-          ],
         },
         {
           id: 'acc-gasto-1',
           code: '6101',
           name: 'Gastos Operativos y Remuneraciones',
           accountType: 'gasto',
-          entryItems: [
-            { debit: 250000, credit: 0 }, // 250.000 sueldos, arriendo, luz
-          ],
         },
       ];
 
       prisma.accountingAccount.findMany.mockResolvedValue(mockAccounts);
+      prisma.accountingEntryItem.groupBy.mockResolvedValue([
+        { accountId: 'acc-ingreso-1', _sum: { debit: 0, credit: 1000000 } },
+        { accountId: 'acc-costo-1', _sum: { debit: 350000, credit: 0 } },
+        { accountId: 'acc-gasto-1', _sum: { debit: 250000, credit: 0 } },
+      ]);
 
       const report = await service.getIncomeStatement('2026-11-01', '2026-11-30');
 
@@ -98,21 +97,18 @@ describe('FinancialReportService', () => {
           code: '1101',
           name: 'Caja General Efectivo',
           accountType: 'activo',
-          entryItems: [{ debit: 500000, credit: 0 }],
         },
         {
           id: 'acc-1105',
           code: '1105',
           name: 'Inventario Materias Primas',
           accountType: 'activo',
-          entryItems: [{ debit: 600000, credit: 0 }],
         },
         {
           id: 'acc-1106',
           code: '1106',
           name: 'Inventario Productos Terminados',
           accountType: 'activo',
-          entryItems: [{ debit: 400000, credit: 0 }],
         },
         // Pasivos: $500.000
         {
@@ -120,14 +116,12 @@ describe('FinancialReportService', () => {
           code: '2101',
           name: 'Proveedores por Pagar',
           accountType: 'pasivo',
-          entryItems: [{ debit: 0, credit: 400000 }],
         },
         {
           id: 'acc-2102',
           code: '2102',
           name: 'IVA Débito Fiscal',
           accountType: 'pasivo',
-          entryItems: [{ debit: 0, credit: 100000 }],
         },
         // Patrimonio: $700.000
         {
@@ -135,7 +129,6 @@ describe('FinancialReportService', () => {
           code: '3101',
           name: 'Capital Social Inicial',
           accountType: 'patrimonio',
-          entryItems: [{ debit: 0, credit: 700000 }],
         },
         // Resultados acumulados del período: Utilidad de $300.000
         {
@@ -143,21 +136,18 @@ describe('FinancialReportService', () => {
           code: '4101',
           name: 'Ventas de Pastelería',
           accountType: 'ingreso',
-          entryItems: [{ debit: 0, credit: 800000 }],
         },
         {
           id: 'acc-5101',
           code: '5101',
           name: 'Costo de Materias Primas',
           accountType: 'costo',
-          entryItems: [{ debit: 300000, credit: 0 }],
         },
         {
           id: 'acc-6101',
           code: '6101',
           name: 'Gastos Operativos',
           accountType: 'gasto',
-          entryItems: [{ debit: 200000, credit: 0 }],
         },
       ];
 
@@ -175,6 +165,17 @@ describe('FinancialReportService', () => {
       ];
 
       prisma.accountingAccount.findMany.mockResolvedValue(mockAccounts);
+      prisma.accountingEntryItem.groupBy.mockResolvedValue([
+        { accountId: 'acc-1101', _sum: { debit: 500000, credit: 0 } },
+        { accountId: 'acc-1105', _sum: { debit: 600000, credit: 0 } },
+        { accountId: 'acc-1106', _sum: { debit: 400000, credit: 0 } },
+        { accountId: 'acc-2101', _sum: { debit: 0, credit: 400000 } },
+        { accountId: 'acc-2102', _sum: { debit: 0, credit: 100000 } },
+        { accountId: 'acc-3101', _sum: { debit: 0, credit: 700000 } },
+        { accountId: 'acc-4101', _sum: { debit: 0, credit: 800000 } },
+        { accountId: 'acc-5101', _sum: { debit: 300000, credit: 0 } },
+        { accountId: 'acc-6101', _sum: { debit: 200000, credit: 0 } },
+      ]);
       prisma.ingredient.findMany.mockResolvedValue(mockIngredients);
       prisma.packaging.findMany.mockResolvedValue(mockPackaging);
       prisma.product.findMany.mockResolvedValue(mockProducts);

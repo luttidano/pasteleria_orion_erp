@@ -18,6 +18,7 @@ import { GeneralSupplyController } from './supplies/general-supply.controller';
 import { InventoryStockService } from './stock/inventory-stock.service';
 import { InventoryValuationModule } from './valuation/inventory-valuation.module';
 import { StockMovementService } from './stock/stock-movement.service';
+import { InventoryStockController } from './stock/inventory-stock.controller';
 
 @Module({
   imports: [InventoryValuationModule, AccountingModule],
@@ -29,6 +30,7 @@ import { StockMovementService } from './stock/stock-movement.service';
     SupplierController,
     PackagingController,
     GeneralSupplyController,
+    InventoryStockController,
   ],
   providers: [
     IngredientService,

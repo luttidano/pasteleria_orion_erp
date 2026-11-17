@@ -26,6 +26,9 @@ describe('AnnualClosingService', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
       },
+      accountingEntryItem: {
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
       accountingAccount: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
@@ -73,22 +76,25 @@ describe('AnnualClosingService', () => {
           code: '4101',
           name: 'Ventas de Pastelería y Cafetería',
           accountType: 'ingreso',
-          entryItems: [{ debit: 0, credit: 1000000 }],
         },
         {
           id: 'acc-5101',
           code: '5101',
           name: 'Costo Materia Prima',
           accountType: 'costo',
-          entryItems: [{ debit: 350000, credit: 0 }],
         },
         {
           id: 'acc-6102',
           code: '6102',
           name: 'Gastos Generales',
           accountType: 'gasto',
-          entryItems: [{ debit: 250000, credit: 0 }],
         },
+      ]);
+
+      prisma.accountingEntryItem.groupBy.mockResolvedValue([
+        { accountId: 'acc-4101', _sum: { debit: 0, credit: 1000000 } },
+        { accountId: 'acc-5101', _sum: { debit: 350000, credit: 0 } },
+        { accountId: 'acc-6102', _sum: { debit: 250000, credit: 0 } },
       ]);
 
       const preview = await service.previewAnnualClosing(2026);
@@ -127,15 +133,18 @@ describe('AnnualClosingService', () => {
           code: '4101',
           name: 'Ventas',
           accountType: 'ingreso',
-          entryItems: [{ debit: 0, credit: 200000 }],
         },
         {
           id: 'acc-6102',
           code: '6102',
           name: 'Gastos',
           accountType: 'gasto',
-          entryItems: [{ debit: 300000, credit: 0 }],
         },
+      ]);
+
+      prisma.accountingEntryItem.groupBy.mockResolvedValue([
+        { accountId: 'acc-4101', _sum: { debit: 0, credit: 200000 } },
+        { accountId: 'acc-6102', _sum: { debit: 300000, credit: 0 } },
       ]);
 
       prisma.accountingEntry.create.mockResolvedValue({

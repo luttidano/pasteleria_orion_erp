@@ -47,6 +47,7 @@ export class SupplierController {
 
   @Patch(':id')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateSupplierDto,
@@ -56,6 +57,7 @@ export class SupplierController {
 
   @Delete(':id')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.supplierService.remove(id);
   }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, ChefHat, Trash2 } from 'lucide-react';
-import type { Recipe, UserRole } from '../../../../types';
+import type { Recipe, UserRole } from '../../../types';
 
 interface RecipeCardItemProps {
   recipe: Recipe;

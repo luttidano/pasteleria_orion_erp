@@ -49,6 +49,7 @@ export class CategoryController {
 
   @Patch(':id')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateCategoryDto: UpdateCategoryDto,
@@ -58,6 +59,7 @@ export class CategoryController {
 
   @Delete(':id')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.categoryService.remove(id);
   }

@@ -62,6 +62,7 @@ export class IngredientController {
   // Edición de insumo: exclusivo de administrador
   @Patch(':id')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateIngredientDto: UpdateIngredientDto,
@@ -72,6 +73,7 @@ export class IngredientController {
   // Eliminación de insumo: exclusivo de administrador
   @Delete(':id')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.ingredientService.remove(id);
   }

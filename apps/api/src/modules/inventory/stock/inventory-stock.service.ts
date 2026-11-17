@@ -5,6 +5,8 @@ import {
   Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../../database/prisma.service';
+import type { InventoryStockAlertsSummary } from '@repo/types';
 import {
   resolveSecondaryPackagingPrice,
   roundMoney,
@@ -36,8 +38,44 @@ export interface SaleStockDeductionContext {
 @Injectable()
 export class InventoryStockService {
   constructor(
+    private readonly prisma: PrismaService,
     @Optional() private readonly stockMovementService?: StockMovementService,
   ) {}
+
+  /**
+   * Obtiene de forma nativa en PostgreSQL la cantidad de itemas
+   * con quiebre de stock y stock crítico
+   * consolidando insumo, productos, empaques e insumos generales
+   */
+
+  async getAlertCounts(): Promise<InventoryStockAlertsSummary> {
+    const [result] = await this.prisma.$queryRaw<
+      Array<{ outOfStockCount: number; restockCount: number }>
+    >`
+      SELECT
+        COALESCE(SUM(CASE WHEN stock <= 0 THEN 1 ELSE 0 END), 0)::int AS "outOfStockCount",
+        COALESCE(SUM(CASE WHEN stock > 0 AND stock <= min_stock THEN 1 ELSE 0 END), 0)::int AS "restockCount"
+      FROM (
+        SELECT stock, min_stock FROM ingredient WHERE is_active = true
+        UNION ALL
+        SELECT stock, min_stock FROM product WHERE is_active = true AND product_type = 'resale'
+        UNION ALL
+        SELECT stock, min_stock FROM packaging WHERE is_active = true
+        UNION ALL
+        SELECT stock, min_stock FROM general_supply WHERE is_active = true
+      ) AS inventory_alerts;
+    `;
+
+    const outOfStockCount = Number(result?.outOfStockCount ?? 0);
+    const restockCount = Number(result?.restockCount ?? 0);
+
+    return {
+      outOfStockCount,
+      restockCount,
+      totalAlerts: outOfStockCount + restockCount,
+    };
+  }
+
 
   /**
    * Reserva, valida precios autoritativos en base de datos, descuenta atómicamente

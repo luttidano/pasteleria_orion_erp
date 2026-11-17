@@ -8,7 +8,7 @@ import {
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '') + '/api';
 const REQUEST_TIMEOUT_MS = 6000;
 const SAFE_IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-const KEYED_MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+const KEYED_MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export function createIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {

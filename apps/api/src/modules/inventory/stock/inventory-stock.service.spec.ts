@@ -3,9 +3,23 @@ import { InventoryStockService } from './inventory-stock.service';
 
 describe('InventoryStockService (precios autoritativos y concurrencia ACID)', () => {
   let service: InventoryStockService;
-
+  let mockPrisma: any;
   beforeEach(() => {
-    service = new InventoryStockService();
+    mockPrisma = {
+      $queryRaw: jest.fn(),
+    };
+    service = new InventoryStockService(mockPrisma);
+  });
+  it('debe calcular las alertas consolidadas de stock vía queryRaw nativo', async () => {
+    mockPrisma.$queryRaw.mockResolvedValueOnce([
+      { outOfStockCount: 2, restockCount: 5 },
+    ]);
+
+    const result = await service.getAlertCounts();
+
+    expect(result.outOfStockCount).toBe(2);
+    expect(result.restockCount).toBe(5);
+    expect(result.totalAlerts).toBe(7);
   });
 
   it('debe bloquear por UUID ordenado, agregar cantidades duplicadas, calcular precios desde BD y cobrar Ley de Bolsas ($100 / $0)', async () => {

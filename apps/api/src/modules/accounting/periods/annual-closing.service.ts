@@ -48,6 +48,7 @@ export class AnnualClosingService {
       pendingSalesCount,
       equityAccount,
       nominalAccounts,
+      groupedItems,
       startInfo,
     ] = await Promise.all([
       db.accountingEntry.findFirst({
@@ -85,16 +86,17 @@ export class AnnualClosingService {
         where: {
           accountType: { in: ['ingreso', 'costo', 'gasto'] },
         },
-        include: {
-          entryItems: {
-            where: {
-              entry: {
-                entryDate: { lte: cutoffEnd },
-              },
-            },
+        orderBy: { code: 'asc' },
+      }),
+      db.accountingEntryItem.groupBy({
+        by: ['accountId'],
+        where: {
+          entry: {
+            entryDate: { lte: cutoffEnd },
+            status: 'active',
           },
         },
-        orderBy: { code: 'asc' },
+        _sum: { debit: true, credit: true },
       }),
       this.settingsService.getStartDateUtc(db),
     ]);
@@ -112,15 +114,24 @@ export class AnnualClosingService {
     let totalCostos = 0;
     let totalGastos = 0;
 
+    const totalsByAccount = new Map<
+      string,
+      { totalDebit: number; totalCredit: number }
+    >();
+    for (const row of groupedItems) {
+      totalsByAccount.set(row.accountId, {
+        totalDebit: roundMoney(Number(row._sum.debit ?? 0)),
+        totalCredit: roundMoney(Number(row._sum.credit ?? 0)),
+      });
+    }
+
     for (const acc of nominalAccounts) {
-      const totalDebit = acc.entryItems.reduce(
-        (sum, it) => sum + Number(it.debit),
-        0,
-      );
-      const totalCredit = acc.entryItems.reduce(
-        (sum, it) => sum + Number(it.credit),
-        0,
-      );
+      const totals = totalsByAccount.get(acc.id) ?? {
+        totalDebit: 0,
+        totalCredit: 0,
+      };
+      const totalDebit = totals.totalDebit;
+      const totalCredit = totals.totalCredit;
 
       if (acc.accountType === 'ingreso') {
         const netCredit = roundMoney(totalCredit - totalDebit);

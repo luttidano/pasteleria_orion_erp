@@ -1,72 +1,88 @@
-export type AssetBalanceBucket = 'disponible' | 'inventarios' | 'otrosActivos';
-export type LiabilityBalanceBucket =
-  | 'obligaciones'
-  | 'impuestos'
-  | 'otrosPasivos';
+import {
+  AccountClassificationRule,
+  AssetBalanceBucket,
+  DEFAULT_ASSET_CLASSIFICATION_RULES,
+  DEFAULT_LIABILITY_CLASSIFICATION_RULES,
+  LiabilityBalanceBucket,
+} from './balance-sheet-rules.config';
 
-interface AccountClassificationRule<TBucket extends string> {
-  bucket: TBucket;
-  codes: ReadonlySet<string>;
-  namePattern: RegExp;
+export type { AssetBalanceBucket, LiabilityBalanceBucket, AccountClassificationRule };
+
+/**
+ * Evalúa si una cuenta coincide con una regla de clasificación.
+ * Admite códigos explícitos, prefijos de código, expresiones regulares o matchers personalizados.
+ */
+export function matchesClassificationRule<TBucket extends string>(
+  code: string,
+  name: string,
+  rule: AccountClassificationRule<TBucket>,
+): boolean {
+  if (rule.matcher && rule.matcher(code, name)) {
+    return true;
+  }
+
+  if (rule.codes) {
+    if (rule.codes instanceof Set && rule.codes.has(code)) {
+      return true;
+    }
+    if (Array.isArray(rule.codes) && rule.codes.includes(code)) {
+      return true;
+    }
+  }
+
+  if (rule.codePrefixes && rule.codePrefixes.some((prefix) => code.startsWith(prefix))) {
+    return true;
+  }
+
+  if (rule.namePattern) {
+    const pattern =
+      typeof rule.namePattern === 'string'
+        ? new RegExp(rule.namePattern, 'i')
+        : rule.namePattern;
+    if (pattern.test(name)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
-const ASSET_CLASSIFICATION_RULES: ReadonlyArray<
-  AccountClassificationRule<AssetBalanceBucket>
-> = [
-  {
-    bucket: 'disponible',
-    codes: new Set(['1101', '1102', '1103', '1104']),
-    namePattern: /caja|banco|transbank|transferencia/i,
-  },
-  {
-    bucket: 'inventarios',
-    codes: new Set(['1105', '1106']),
-    namePattern: /inventario|materia|terminado/i,
-  },
-];
-
-const LIABILITY_CLASSIFICATION_RULES: ReadonlyArray<
-  AccountClassificationRule<LiabilityBalanceBucket>
-> = [
-  {
-    bucket: 'impuestos',
-    codes: new Set(['2102', '2105']),
-    namePattern: /iva|impuesto|retenc|ppm|f29/i,
-  },
-  {
-    bucket: 'obligaciones',
-    codes: new Set(['2101']),
-    namePattern: /proveedor|por pagar|acreedor/i,
-  },
-];
-
-function classifyByRules<TBucket extends string>(
+/**
+ * Clasifica una cuenta iterando un conjunto de reglas ordenadas por precedencia.
+ * Cumple OCP: permite inyectar reglas adicionales sin modificar la lógica interna.
+ */
+export function classifyByRules<TBucket extends string>(
   code: string,
   name: string,
   rules: ReadonlyArray<AccountClassificationRule<TBucket>>,
   fallback: TBucket,
 ): TBucket {
-  const matched = rules.find(
-    (rule) => rule.codes.has(code) || rule.namePattern.test(name),
-  );
+  const matched = rules.find((rule) => matchesClassificationRule(code, name, rule));
   return matched ? matched.bucket : fallback;
 }
 
 export function classifyAssetBucket(
   code: string,
   name: string,
+  customRules?: ReadonlyArray<AccountClassificationRule<AssetBalanceBucket>>,
 ): AssetBalanceBucket {
-  return classifyByRules(code, name, ASSET_CLASSIFICATION_RULES, 'otrosActivos');
+  return classifyByRules(
+    code,
+    name,
+    customRules ?? DEFAULT_ASSET_CLASSIFICATION_RULES,
+    'otrosActivos',
+  );
 }
 
 export function classifyLiabilityBucket(
   code: string,
   name: string,
+  customRules?: ReadonlyArray<AccountClassificationRule<LiabilityBalanceBucket>>,
 ): LiabilityBalanceBucket {
   return classifyByRules(
     code,
     name,
-    LIABILITY_CLASSIFICATION_RULES,
+    customRules ?? DEFAULT_LIABILITY_CLASSIFICATION_RULES,
     'otrosPasivos',
   );
 }

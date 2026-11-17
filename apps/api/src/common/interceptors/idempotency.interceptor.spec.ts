@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ExecutionContext,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { lastValueFrom, of, throwError } from 'rxjs';
@@ -62,7 +63,7 @@ describe('IdempotencyInterceptor', () => {
     interceptor = new IdempotencyInterceptor(prisma);
   });
 
-  it('debe dejar pasar solicitudes GET o sin encabezado Idempotency-Key', async () => {
+  it('debe dejar pasar solicitudes GET sin crear registro de idempotencia', async () => {
     const getCtx = createHttpContext({
       method: 'GET',
       headers: { 'idempotency-key': 'k-1' },
@@ -71,12 +72,18 @@ describe('IdempotencyInterceptor', () => {
     const getObs = await interceptor.intercept(getCtx.context, nextGet);
     expect(await lastValueFrom(getObs)).toEqual({ ok: true });
     expect(prisma.idempotencyRecord.create).not.toHaveBeenCalled();
+  });
 
+  it('debe rechazar solicitudes mutantes sin encabezado Idempotency-Key', async () => {
     const postNoKeyCtx = createHttpContext({ method: 'POST', headers: {} });
-    const nextPost = { handle: jest.fn(() => of({ created: 1 })) };
-    const postObs = await interceptor.intercept(postNoKeyCtx.context, nextPost);
-    expect(await lastValueFrom(postObs)).toEqual({ created: 1 });
-    expect(prisma.idempotencyRecord.create).not.toHaveBeenCalled();
+    await expect(
+      interceptor.intercept(postNoKeyCtx.context, { handle: jest.fn() }),
+    ).rejects.toThrow(BadRequestException);
+
+    const deleteNoKeyCtx = createHttpContext({ method: 'DELETE', headers: {} });
+    await expect(
+      interceptor.intercept(deleteNoKeyCtx.context, { handle: jest.fn() }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('debe rechazar encabezados Idempotency-Key inválidos o duplicados', async () => {
@@ -147,6 +154,24 @@ describe('IdempotencyInterceptor', () => {
     expect(prisma.idempotencyRecord.deleteMany).toHaveBeenCalledWith({
       where: { id: 'rec-1', status: 'processing' },
     });
+  });
+
+  it('debe reintentar la persistencia de completed y lanzar InternalServerErrorException si ambos fallan', async () => {
+    prisma.idempotencyRecord.update
+      .mockRejectedValueOnce(new Error('DB Timeout'))
+      .mockRejectedValueOnce(new Error('DB Disconnect'));
+
+    const ctx = createHttpContext({
+      headers: { 'idempotency-key': 'uuid-retry-fail' },
+      body: { action: 'test' },
+    });
+
+    const obs = await interceptor.intercept(ctx.context, {
+      handle: () => of({ done: true }),
+    });
+
+    await expect(lastValueFrom(obs)).rejects.toThrow(InternalServerErrorException);
+    expect(prisma.idempotencyRecord.update).toHaveBeenCalledTimes(2);
   });
 
   it('debe reproducir respuesta cacheada con Idempotent-Replayed cuando el hash canónico coincide', async () => {

@@ -80,18 +80,36 @@ export class FinancialReportService {
         ...(hasDateFilter ? { entryDate: dateFilter } : {}),
       };
 
-      const accounts = await this.prisma.accountingAccount.findMany({
-        where: {
-          isActive: true,
-          accountType: { in: ['ingreso', 'costo', 'gasto'] },
-        },
-        include: {
-          entryItems: {
-            where: { entry: entryFilter },
+      const [accounts, grouped] = await Promise.all([
+        this.prisma.accountingAccount.findMany({
+          where: {
+            isActive: true,
+            accountType: { in: ['ingreso', 'costo', 'gasto'] },
           },
-        },
-        orderBy: { code: 'asc' },
-      });
+          orderBy: { code: 'asc' },
+        }),
+        this.prisma.accountingEntryItem.groupBy({
+          by: ['accountId'],
+          where: {
+            entry: entryFilter,
+            account: {
+              accountType: { in: ['ingreso', 'costo', 'gasto'] },
+            },
+          },
+          _sum: { debit: true, credit: true },
+        }),
+      ]);
+
+      const totalsByAccount = new Map<
+        string,
+        { totalDebit: number; totalCredit: number }
+      >();
+      for (const row of grouped) {
+        totalsByAccount.set(row.accountId, {
+          totalDebit: roundMoney(Number(row._sum.debit ?? 0)),
+          totalCredit: roundMoney(Number(row._sum.credit ?? 0)),
+        });
+      }
 
       const incomeAccounts: ReportAccountLine[] = [];
       const costAccounts: ReportAccountLine[] = [];
@@ -102,14 +120,12 @@ export class FinancialReportService {
       let totalGastos = 0;
 
       for (const acc of accounts) {
-        const totalDebit = acc.entryItems.reduce(
-          (sum, it) => sum + Number(it.debit),
-          0,
-        );
-        const totalCredit = acc.entryItems.reduce(
-          (sum, it) => sum + Number(it.credit),
-          0,
-        );
+        const totals = totalsByAccount.get(acc.id) ?? {
+          totalDebit: 0,
+          totalCredit: 0,
+        };
+        const totalDebit = totals.totalDebit;
+        const totalCredit = totals.totalCredit;
 
         if (acc.accountType === 'ingreso') {
           const netAmount = roundMoney(totalCredit - totalDebit);
@@ -202,22 +218,35 @@ export class FinancialReportService {
         asOfDate?.trim() || getZonedDateString(new Date(), STORE_TIMEZONE);
       const cutoffDate = parseStrictUtcBounds(targetIso, 'asOfDate').end;
 
-      const [allAccounts, inventoryValuation] = await Promise.all([
-        this.prisma.accountingAccount.findMany({
-          where: { isActive: true },
-          include: {
-            entryItems: {
-              where: {
-                entry: {
-                  entryDate: { lte: cutoffDate },
-                },
+      const [allAccounts, groupedItems, inventoryValuation] =
+        await Promise.all([
+          this.prisma.accountingAccount.findMany({
+            where: { isActive: true },
+            orderBy: { code: 'asc' },
+          }),
+          this.prisma.accountingEntryItem.groupBy({
+            by: ['accountId'],
+            where: {
+              entry: {
+                entryDate: { lte: cutoffDate },
+                status: 'active',
               },
             },
-          },
-          orderBy: { code: 'asc' },
-        }),
-        this.inventoryValuationService.getValuationSummary(),
-      ]);
+            _sum: { debit: true, credit: true },
+          }),
+          this.inventoryValuationService.getValuationSummary(),
+        ]);
+
+      const totalsByAccount = new Map<
+        string,
+        { totalDebit: number; totalCredit: number }
+      >();
+      for (const row of groupedItems) {
+        totalsByAccount.set(row.accountId, {
+          totalDebit: roundMoney(Number(row._sum.debit ?? 0)),
+          totalCredit: roundMoney(Number(row._sum.credit ?? 0)),
+        });
+      }
 
       const assetBuckets: Record<AssetBalanceBucket, ReportAccountLine[]> = {
         disponible: [],
@@ -242,14 +271,12 @@ export class FinancialReportService {
       let totalGastosHist = 0;
 
       for (const acc of allAccounts) {
-        const totalDebit = acc.entryItems.reduce(
-          (sum, it) => sum + Number(it.debit),
-          0,
-        );
-        const totalCredit = acc.entryItems.reduce(
-          (sum, it) => sum + Number(it.credit),
-          0,
-        );
+        const totals = totalsByAccount.get(acc.id) ?? {
+          totalDebit: 0,
+          totalCredit: 0,
+        };
+        const totalDebit = totals.totalDebit;
+        const totalCredit = totals.totalCredit;
 
         if (acc.accountType === 'activo') {
           const balance = roundMoney(totalDebit - totalCredit);

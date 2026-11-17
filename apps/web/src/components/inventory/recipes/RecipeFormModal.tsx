@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus } from 'lucide-react';
-import type { Category, Ingredient } from '../../../../types';
+import type { Category, Ingredient } from '../../../types';
 
 export interface RecipeFormData {
   name: string;

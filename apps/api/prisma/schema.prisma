@@ -303,6 +303,8 @@ model AccountingEntry {
   @@index([posShiftId], map: "idx_accounting_entry_pos_shift")
   @@index([outboxId], map: "idx_accounting_entry_outbox")
   @@index([reversedEntryId], map: "idx_accounting_entry_reversed")
+  @@index([status, entryDate], map: "idx_accounting_entry_status_date")
+  @@index([entryDate], map: "idx_accounting_entry_date")
   @@map("accounting_entry")
 }
 
@@ -317,6 +319,8 @@ model AccountingEntryItem {
   entry       AccountingEntry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
   account     AccountingAccount @relation(fields: [accountId], references: [id])
 
+  @@index([accountId], map: "idx_accounting_entry_item_account")
+  @@index([entryId], map: "idx_accounting_entry_item_entry")
   @@map("accounting_entry_item")
 }
 

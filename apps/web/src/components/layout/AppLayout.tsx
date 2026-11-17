@@ -10,10 +10,8 @@ import {
   AlertTriangle,
   RefreshCw,
 } from 'lucide-react';
-import type { User, Ingredient, ToastMessage, CatalogProduct, Packaging, GeneralSupply } from '../../types';
-import { productService } from '../../services/productService';
-import { packagingService } from '../../services/packagingService';
-import { generalSupplyService } from '../../services/generalSupplyService';
+import type { User, Ingredient, ToastMessage } from '../../types';
+import { inventoryStockService } from '../../services/inventoryStockService';
 import { Sidebar } from './Sidebar';
 import type { AdminSection } from './Sidebar';
 import { IngredientsView } from '../inventory/ingredients/IngredientsView';
@@ -113,75 +111,36 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { canInstall, promptInstall } = usePwaInstall();
 
-  const [resaleItems, setResaleItems] = useState<CatalogProduct[]>([]);
-  const [packagingItems, setPackagingItems] = useState<Packaging[]>([]);
-  const [generalSupplyItems, setGeneralSupplyItems] = useState<GeneralSupply[]>([]);
+  const [stockAlerts, setStockAlerts] = useState<{ restockCount: number; outOfStockCount: number }>({
+    restockCount: 0,
+    outOfStockCount: 0,
+  });
 
-  const refreshRestockInventory = useCallback(async () => {
+  const refreshStockAlerts = useCallback(async () => {
     if (user.role !== 'admin') {
-      setResaleItems([]);
-      setPackagingItems([]);
-      setGeneralSupplyItems([]);
+      setStockAlerts({ restockCount: 0, outOfStockCount: 0 });
       return;
     }
-
-    const [resaleRes, packsRes, suppliesRes] = await Promise.allSettled([
-      productService.getAll('resale'),
-      packagingService.getAll(),
-      generalSupplyService.getAll(),
-    ]);
-
-    if (resaleRes.status === 'fulfilled') {
-      setResaleItems(resaleRes.value);
-    } else {
-      console.error('[AppLayout] Error cargando productos de reventa:', resaleRes.reason);
-    }
-
-    if (packsRes.status === 'fulfilled') {
-      setPackagingItems(packsRes.value);
-    } else {
-      console.error('[AppLayout] Error cargando empaques:', packsRes.reason);
-    }
-
-    if (suppliesRes.status === 'fulfilled') {
-      setGeneralSupplyItems(suppliesRes.value);
-    } else {
-      console.error('[AppLayout] Error cargando insumos generales:', suppliesRes.reason);
+    try {
+      const summary = await inventoryStockService.getAlertCounts();
+      setStockAlerts({
+        restockCount: summary.restockCount,
+        outOfStockCount: summary.outOfStockCount,
+      });
+    } catch (err) {
+      console.error('[AppLayout] Error cargando alertas de stock:', err);
     }
   }, [user.role]);
 
-  // Sincronizar catálogo de reventa, empaques e insumos generales solo cuando el usuario es admin
+  // Sincronizar alertas consolidadas de stock solo cuando el usuario es admin
   useEffect(() => {
-    void refreshRestockInventory();
-  }, [refreshRestockInventory]);
+    void refreshStockAlerts();
+  }, [refreshStockAlerts]);
 
   const handleRefreshAll = useCallback(async () => {
     await onRefresh();
-    await refreshRestockInventory();
-  }, [onRefresh, refreshRestockInventory]);
-
-  // Contadores para insignias de la barra lateral (Insumos + Reventa + Empaques + Insumos Generales)
-  const { restockCount, outOfStockCount } = useMemo(() => {
-    let low = ingredients.filter((p) => p.stock > 0 && p.stock <= p.minStock).length;
-    let out = ingredients.filter((p) => p.stock <= 0).length;
-
-    for (const p of resaleItems) {
-      if (p.stock <= 0) out++;
-      else if (p.stock <= p.minStock) low++;
-    }
-
-    for (const pack of packagingItems) {
-      if (pack.stock <= 0) out++;
-      else if (pack.stock <= pack.minStock) low++;
-    }
-
-    for (const sup of generalSupplyItems) {
-      if (sup.stock <= 0) out++;
-      else if (sup.stock <= sup.minStock) low++;
-    }
-
-    return { restockCount: low, outOfStockCount: out };
-  }, [ingredients, resaleItems, packagingItems, generalSupplyItems]);
+    await refreshStockAlerts();
+  }, [onRefresh, refreshStockAlerts]);
 
   const getHeaderTitle = (sec: AdminSection): string => {
     switch (sec) {
@@ -234,8 +193,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onLogout={onLogout}
-        restockCount={restockCount}
-        outOfStockCount={outOfStockCount}
+        restockCount={stockAlerts.restockCount}
+        outOfStockCount={stockAlerts.outOfStockCount}
       />
 
       {/* 2. Área de Contenido Principal */}
@@ -439,7 +398,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <ProductsView
               user={user}
               addToast={addToast}
-              onInventoryChange={() => void refreshRestockInventory()}
+              onInventoryChange={() => void refreshStockAlerts()}
             />
           )}
 
@@ -454,7 +413,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           {activeSection === 'empaques' && (
             <PackagingView
               addToast={addToast}
-              onInventoryChange={() => void refreshRestockInventory()}
+              onInventoryChange={() => void refreshStockAlerts()}
             />
           )}
 
@@ -462,7 +421,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <GeneralSuppliesView
               user={user}
               addToast={addToast}
-              onInventoryChange={() => void refreshRestockInventory()}
+              onInventoryChange={() => void refreshStockAlerts()}
             />
           )}
 

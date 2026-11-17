@@ -4,6 +4,7 @@ import {
   ConflictException,
   ExecutionContext,
   Injectable,
+  InternalServerErrorException,
   NestInterceptor,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -82,8 +83,10 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
 
     const rawHeader = req?.headers?.['idempotency-key'];
-    if (rawHeader === undefined) {
-      return next.handle();
+    if (rawHeader === undefined || rawHeader === null) {
+      throw new BadRequestException(
+        'El encabezado Idempotency-Key es obligatorio para esta operación.',
+      );
     }
 
     if (Array.isArray(rawHeader)) {
@@ -145,27 +148,49 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const recordId = reservation.recordId;
 
     return next.handle().pipe(
-      concatMap((responseData) =>
-        from(
+      concatMap((responseData) => {
+        const resolvedStatusCode =
+          typeof res?.statusCode === 'number' && res.statusCode !== 200
+            ? res.statusCode
+            : method === 'POST'
+              ? 201
+              : 200;
+
+        const updatePayload = {
+          status: 'completed',
+          statusCode: resolvedStatusCode,
+          responseBody: toPrismaJsonValue(responseData),
+          expiresAt: new Date(Date.now() + COMPLETED_TTL_MS),
+        };
+
+        return from(
           this.prisma.idempotencyRecord
             .update({
               where: { id: recordId },
-              data: {
-                status: 'completed',
-                statusCode:
-                  typeof res?.statusCode === 'number' ? res.statusCode : 200,
-                responseBody: toPrismaJsonValue(responseData),
-                expiresAt: new Date(Date.now() + COMPLETED_TTL_MS),
-              },
+              data: updatePayload,
             })
-            .catch((err) => {
-              console.warn(
-                `[IdempotencyInterceptor] No se pudo persistir respuesta para clave "${idempotencyKey}":`,
+            .catch(async (err) => {
+              console.error(
+                `[IdempotencyInterceptor] Error persistiendo estado completed para clave "${idempotencyKey}", reintentando:`,
                 err instanceof Error ? err.message : String(err),
               );
+              try {
+                await this.prisma.idempotencyRecord.update({
+                  where: { id: recordId },
+                  data: updatePayload,
+                });
+              } catch (retryErr) {
+                console.error(
+                  `[IdempotencyInterceptor] Reintento fallido para clave "${idempotencyKey}":`,
+                  retryErr instanceof Error ? retryErr.message : String(retryErr),
+                );
+                throw new InternalServerErrorException(
+                  'No se pudo registrar la confirmación de la operación idempotente en la base de datos.',
+                );
+              }
             }),
-        ).pipe(concatMap(() => of(responseData))),
-      ),
+        ).pipe(concatMap(() => of(responseData)));
+      }),
       catchError((err) =>
         from(
           this.prisma.idempotencyRecord

@@ -44,20 +44,25 @@ export class LedgerService {
 
     const isDebitNature = ['activo', 'costo', 'gasto'].includes(account.accountType);
 
-    // Saldo Inicial anterior a startDate
+    // Saldo Inicial anterior a startDate calculado nativamente en PostgreSQL
     let initialBalance = 0;
     if (startBounds) {
-      const priorItems = await this.prisma.accountingEntryItem.findMany({
+      const priorAgg = await this.prisma.accountingEntryItem.aggregate({
         where: {
           accountId,
-          entry: { entryDate: { lt: startBounds.start } },
+          entry: {
+            entryDate: { lt: startBounds.start },
+            status: 'active',
+          },
         },
-        select: { debit: true, credit: true },
+        _sum: { debit: true, credit: true },
       });
 
-      const priorDebit = priorItems.reduce((sum, it) => sum + Number(it.debit), 0);
-      const priorCredit = priorItems.reduce((sum, it) => sum + Number(it.credit), 0);
-      initialBalance = isDebitNature ? priorDebit - priorCredit : priorCredit - priorDebit;
+      const priorDebit = roundMoney(Number(priorAgg._sum.debit ?? 0));
+      const priorCredit = roundMoney(Number(priorAgg._sum.credit ?? 0));
+      initialBalance = isDebitNature
+        ? roundMoney(priorDebit - priorCredit)
+        : roundMoney(priorCredit - priorDebit);
     }
 
     // Filtro del período

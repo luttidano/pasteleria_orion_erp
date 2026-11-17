@@ -317,3 +317,9 @@ export interface InventoryValuationReport {
   topPackaging: InventoryTopValuationItem[];
   topProducts: InventoryTopValuationItem[];
 }
+
+export interface InventoryStockAlertsSummary {
+  restockCount: number;
+  outOfStockCount: number;
+  totalAlerts: number;
+}

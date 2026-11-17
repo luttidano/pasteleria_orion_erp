@@ -49,6 +49,7 @@ export class ProductController {
 
   @Patch(':id')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProductDto,
@@ -69,6 +70,7 @@ export class ProductController {
 
   @Delete(':id')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.productService.remove(id);
   }

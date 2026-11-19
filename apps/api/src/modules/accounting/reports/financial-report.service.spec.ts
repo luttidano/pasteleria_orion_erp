@@ -24,6 +24,9 @@ describe('FinancialReportService', () => {
       product: {
         findMany: jest.fn(),
       },
+      generalSupply: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({

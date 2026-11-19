@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, Lock } from 'lucide-react';
 import type { Packaging, PackagingType, Supplier } from '../../../types';
 import { supplierService } from '../../../services/supplierService';
 
@@ -198,15 +198,28 @@ export const PackagingModal: React.FC<PackagingModalProps> = ({
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">Stock Actual</label>
+              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1 flex items-center gap-1">
+                <span>Stock Actual</span>
+                {Boolean(itemToEdit) && <Lock className="w-3 h-3 text-stone-400" />}
+              </label>
               <input
                 type="number"
                 min="0"
                 step="1"
+                disabled={Boolean(itemToEdit)}
                 value={stock}
                 onChange={(e) => setStock(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#150F0D] text-sm font-mono"
+                className={`w-full px-3 py-2 rounded-xl border text-sm font-mono ${
+                  Boolean(itemToEdit)
+                    ? 'bg-stone-200/60 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 border-stone-300 dark:border-stone-700 cursor-not-allowed select-none'
+                    : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-[#150F0D]'
+                }`}
               />
+              {Boolean(itemToEdit) && (
+                <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1 leading-tight">
+                  Para merma, uso interno o conteo, usa el botón "Ajustar (+/-)" en la tabla.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">Stock Mínimo</label>

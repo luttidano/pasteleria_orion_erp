@@ -87,7 +87,6 @@ export const ingredientService = {
       body: JSON.stringify({
         ...(updates.name !== undefined && { name: updates.name }),
         ...(updates.category !== undefined && { category: updates.category }),
-        ...(updates.stock !== undefined && { stock: updates.stock }),
         ...(updates.minStock !== undefined && { minStock: updates.minStock }),
         ...(updates.unit !== undefined && { unit: updates.unit }),
         ...(updates.price !== undefined && { price: updates.price }),

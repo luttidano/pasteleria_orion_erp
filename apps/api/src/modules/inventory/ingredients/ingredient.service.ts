@@ -128,7 +128,6 @@ export class IngredientService {
         const updateData: Record<string, any> = {};
         if (dto.name !== undefined) updateData.name = dto.name;
         if (categoryId !== undefined) updateData.categoryId = categoryId;
-        if (dto.stock !== undefined) updateData.stock = dto.stock;
         if (dto.minStock !== undefined) updateData.minStock = dto.minStock;
         if (dto.unit !== undefined) updateData.unit = dto.unit;
         if (dto.price !== undefined) updateData.price = dto.price;

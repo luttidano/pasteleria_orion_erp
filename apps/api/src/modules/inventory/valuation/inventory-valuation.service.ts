@@ -50,7 +50,7 @@ export class InventoryValuationService {
    * materias primas, empaques y productos terminados / de reventa.
    */
   async getValuationSummary(): Promise<InventoryValuationReport> {
-    const [ingredients, packagingList, products] = await Promise.all([
+    const [ingredients, packagingList, products, generalSupplies] = await Promise.all([
       this.prisma.ingredient.findMany({
         select: { id: true, name: true, stock: true, unit: true, price: true },
         orderBy: { stock: 'desc' },
@@ -68,6 +68,10 @@ export class InventoryValuationService {
           costPrice: true,
           salePrice: true,
         },
+        orderBy: { stock: 'desc' },
+      }),
+      this.prisma.generalSupply.findMany({
+        select: { id: true, name: true, stock: true, unit: true, costPrice: true },
         orderBy: { stock: 'desc' },
       }),
     ]);
@@ -98,7 +102,20 @@ export class InventoryValuationService {
         name: prod.name,
         stock: Number(prod.stock ?? 0),
         unit: prod.unit || 'un',
-        unitCost: Number(prod.costPrice ?? prod.salePrice ?? 0),
+        unitCost:
+          prod.costPrice && Number(prod.costPrice) > 0
+            ? Number(prod.costPrice)
+            : Number(prod.salePrice ?? 0),
+      })),
+    );
+
+    const generalSuppliesVal = this.computeTopValuation(
+      generalSupplies.map((sup) => ({
+        id: sup.id,
+        name: sup.name,
+        stock: Number(sup.stock ?? 0),
+        unit: sup.unit || 'un',
+        unitCost: Number(sup.costPrice ?? 0),
       })),
     );
 
@@ -106,14 +123,17 @@ export class InventoryValuationService {
       totalWarehouseValue: roundMoney(
         rawMaterials.totalValue +
           packaging.totalValue +
-          finishedProducts.totalValue,
+          finishedProducts.totalValue +
+          generalSuppliesVal.totalValue,
       ),
       rawMaterialsValue: rawMaterials.totalValue,
       packagingValue: packaging.totalValue,
       finishedProductsValue: finishedProducts.totalValue,
+      generalSuppliesValue: generalSuppliesVal.totalValue,
       topRawMaterials: rawMaterials.topItems,
       topPackaging: packaging.topItems,
       topProducts: finishedProducts.topItems,
+      topGeneralSupplies: generalSuppliesVal.topItems,
     };
   }
 

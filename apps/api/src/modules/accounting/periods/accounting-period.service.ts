@@ -11,7 +11,7 @@ import type {
 } from '@repo/types';
 import { PrismaService } from '../../../database/prisma.service';
 import { AccountingEntryOrigin, AccountingPeriodStatus } from '../../../common/enums';
-import { getMonthDateRangeUtc } from '../../../common/utils/chile-time.util';
+import { getChileMonthDateRangeUtc } from '../../../common/utils/chile-time.util';
 import {
   isUniqueViolation,
   rethrowPrismaError,
@@ -193,7 +193,7 @@ export class AccountingPeriodService {
     userId?: string,
   ): Promise<AccountingPeriod | undefined> {
     const { year, month } = dto;
-    const range = getMonthDateRangeUtc(year, month);
+    const range = getChileMonthDateRangeUtc(year, month);
     const monthEndIso = range.end.toISOString().slice(0, 10);
 
     try {

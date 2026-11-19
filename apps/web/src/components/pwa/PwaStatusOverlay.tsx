@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, WifiOff, X, CheckCircle2 } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
@@ -10,6 +10,7 @@ const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
  */
 export const PwaStatusOverlay: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
+  const intervalRef = useRef<number | null>(null);
 
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -20,13 +21,25 @@ export const PwaStatusOverlay: React.FC = () => {
       if (!registration) {
         return;
       }
-      window.setInterval(() => {
+      if (intervalRef.current !== null) {
+        window.clearInterval(intervalRef.current);
+      }
+      intervalRef.current = window.setInterval(() => {
         if (navigator.onLine && document.visibilityState === 'visible') {
           void registration.update();
         }
       }, UPDATE_CHECK_INTERVAL_MS);
     },
   });
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current !== null) {
+        window.clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!offlineReady) {

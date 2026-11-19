@@ -48,9 +48,10 @@ export const generalSupplyService = {
     id: string,
     data: Partial<SaveGeneralSupplyPayload>,
   ): Promise<GeneralSupply> {
+    const { stock: _stock, ...updatePayload } = data;
     return apiFetch<GeneralSupply>(`/general-supplies/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: JSON.stringify(updatePayload),
     });
   },
 

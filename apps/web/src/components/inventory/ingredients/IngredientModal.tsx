@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles } from 'lucide-react';
+import { X, Sparkles, Lock } from 'lucide-react';
 import type { Ingredient, IngredientCategory, Category } from '../../../types';
 import { categoryService } from '../../../services/categoryService';
 import { getCategoryDefaultIcon } from '../../../utils/categoryIcons';
@@ -230,17 +230,28 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-[#4A382C] dark:text-[#D5C2B4] mb-1">
-                  Cantidad actual *
+                <label className="block text-xs font-semibold text-[#4A382C] dark:text-[#D5C2B4] mb-1 flex items-center gap-1">
+                  <span>Cantidad actual *</span>
+                  {Boolean(ingredientToEdit) && <Lock className="w-3 h-3 text-stone-400" />}
                 </label>
                 <input
                   type="number"
                   min="0"
                   step="0.5"
+                  disabled={Boolean(ingredientToEdit)}
                   value={stock}
                   onChange={(e) => setStock(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] bg-white dark:bg-[#19100D] text-base font-bold text-[#1C120D] dark:text-[#FBF4EB] focus:outline-none focus:ring-2 focus:ring-[#8C1F25]"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-base font-bold ${
+                    Boolean(ingredientToEdit)
+                      ? 'bg-stone-200/60 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 border-stone-300 dark:border-stone-700 cursor-not-allowed select-none'
+                      : 'border-[#DFCAA9] dark:border-[#3D2C24] bg-white dark:bg-[#19100D] text-[#1C120D] dark:text-[#FBF4EB] focus:outline-none focus:ring-2 focus:ring-[#8C1F25]'
+                  }`}
                 />
+                {Boolean(ingredientToEdit) && (
+                  <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1 leading-tight">
+                    Para merma, uso interno o conteo, usa el botón "Ajustar (+/-)" en la tabla.
+                  </p>
+                )}
               </div>
 
               <div>

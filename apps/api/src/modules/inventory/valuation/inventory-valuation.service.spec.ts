@@ -11,6 +11,7 @@ describe('InventoryValuationService', () => {
       ingredient: { findMany: jest.fn() },
       packaging: { findMany: jest.fn() },
       product: { findMany: jest.fn() },
+      generalSupply: { findMany: jest.fn() },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -33,14 +34,23 @@ describe('InventoryValuationService', () => {
     ]);
     prisma.product.findMany.mockResolvedValue([
       { id: 'prod-1', name: 'Torta Selva Negra', stock: 15, unit: 'un', costPrice: 8000, salePrice: 15000 },
+      // Producto con costPrice 0: debe hacer fallback a salePrice en vez de evaluarse en $0
+      { id: 'prod-2', name: 'Pie de Limón', stock: 5, unit: 'un', costPrice: 0, salePrice: 10000 },
+    ]);
+    prisma.generalSupply.findMany.mockResolvedValue([
+      { id: 'sup-1', name: 'Guantes Nitrilo', stock: 10, unit: 'caja', costPrice: 4000 },
     ]);
 
     const summary = await service.getValuationSummary();
 
     expect(summary.rawMaterialsValue).toBe(190000);
     expect(summary.packagingValue).toBe(50000);
-    expect(summary.finishedProductsValue).toBe(120000);
-    expect(summary.totalWarehouseValue).toBe(360000);
+    // prod-1: 15 * 8000 = 120000; prod-2: 5 * 10000 = 50000; total = 170000
+    expect(summary.finishedProductsValue).toBe(170000);
+    expect(summary.generalSuppliesValue).toBe(40000);
+    // 190000 + 50000 + 170000 + 40000 = 450000
+    expect(summary.totalWarehouseValue).toBe(450000);
     expect(summary.topRawMaterials[0].id).toBe('ing-2');
+    expect(summary.topGeneralSupplies?.[0].id).toBe('sup-1');
   });
 });

@@ -333,6 +333,17 @@ export const authService = {
           if (profileRes.status === 401 || profileRes.status === 403) {
             await supabase.auth.signOut().catch(() => {});
             clearLocalSessionState();
+          } else if (profileRes.status === 0) {
+            // Error de red / Sin conexión a internet en PWA:
+            // Si el token aún no ha expirado y ya teníamos un usuario verificado en localStorage,
+            // preservamos la sesión para permitir que la PWA opere offline con caché local.
+            const offlineUser = this.getCurrentUser();
+            if (offlineUser && activeToken && !isTokenExpired(activeToken)) {
+              inMemoryAuthToken = activeToken;
+              return offlineUser;
+            }
+            inMemoryAuthToken = null;
+            persistVerifiedUser(null);
           } else {
             // Fall closed si no se pudo verificar con el servidor ERP
             inMemoryAuthToken = null;
@@ -345,6 +356,10 @@ export const authService = {
         return profileRes.user;
       } catch (e) {
         console.warn('[authService] Error verificando sesión en arranque:', e);
+        const offlineUser = this.getCurrentUser();
+        if (offlineUser && inMemoryAuthToken && !isTokenExpired(inMemoryAuthToken)) {
+          return offlineUser;
+        }
         inMemoryAuthToken = null;
         persistVerifiedUser(null);
         return null;
@@ -471,6 +486,9 @@ export const authService = {
       };
     }
 
+    // Purgar cachés del Service Worker para evitar fuga de datos entre usuarios
+    await clearPwaApiCaches().catch(() => {});
+
     isLoginFlowActive = true;
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -581,6 +599,7 @@ export const authService = {
       console.error('Error al cerrar sesión en Supabase:', err);
     } finally {
       clearLocalSessionState();
+      await clearPwaApiCaches().catch(() => {});
     }
   },
 

@@ -313,9 +313,11 @@ export interface InventoryValuationReport {
   rawMaterialsValue: number;
   packagingValue: number;
   finishedProductsValue: number;
+  generalSuppliesValue?: number;
   topRawMaterials: InventoryTopValuationItem[];
   topPackaging: InventoryTopValuationItem[];
   topProducts: InventoryTopValuationItem[];
+  topGeneralSupplies?: InventoryTopValuationItem[];
 }
 
 export interface InventoryStockAlertsSummary {

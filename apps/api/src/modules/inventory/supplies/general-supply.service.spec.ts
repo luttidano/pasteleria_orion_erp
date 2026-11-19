@@ -286,11 +286,19 @@ describe('GeneralSupply & Supplier DTOs con ValidationPipe estricto', () => {
 
   it('debe mantener supplierId undefined en UpdateGeneralSupplyDto cuando no se envía y aceptar insumo_general en CreateSupplierDto', async () => {
     const partial = await pipe.transform(
-      { stock: 10 },
+      { name: 'Guantes de Nitrilo' },
       { type: 'body', metatype: UpdateGeneralSupplyDto },
     );
-    expect(partial.stock).toBe(10);
+    expect(partial.name).toBe('Guantes de Nitrilo');
     expect(partial.supplierId).toBeUndefined();
+
+    // Validar que stock sea rechazado en UpdateGeneralSupplyDto para proteger Kardex
+    await expect(
+      pipe.transform(
+        { stock: 10 },
+        { type: 'body', metatype: UpdateGeneralSupplyDto },
+      ),
+    ).rejects.toThrow(BadRequestException);
 
     const supplier = await pipe.transform(
       {

@@ -36,9 +36,10 @@ export const packagingService = {
    * Actualiza los datos de un empaque
    */
   async update(id: string, data: Partial<Packaging>): Promise<Packaging> {
+    const { stock: _stock, ...updatePayload } = data;
     return apiFetch<Packaging>(`/packaging/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: JSON.stringify(updatePayload),
     });
   },
 

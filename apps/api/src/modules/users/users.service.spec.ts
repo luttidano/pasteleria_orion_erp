@@ -27,21 +27,16 @@ describe('UsersService & CreateUserDto', () => {
   let createUserMock: AsyncMock;
   let deleteAuthUserMock: AsyncMock;
   let updateUserByIdMock: AsyncMock;
-  let upsertProfileSingleMock: AsyncMock;
-  let updateProfileSingleMock: AsyncMock;
   let lookupProfileMaybeSingleMock: AsyncMock;
-  let deleteProfileEqMock: AsyncMock;
   let supabaseMock: any;
+  let prismaMock: any;
 
   beforeEach(() => {
     clearAuthCache();
     createUserMock = jest.fn<(...args: any[]) => Promise<any>>();
     deleteAuthUserMock = jest.fn<(...args: any[]) => Promise<any>>();
     updateUserByIdMock = jest.fn<(...args: any[]) => Promise<any>>();
-    upsertProfileSingleMock = jest.fn<(...args: any[]) => Promise<any>>();
-    updateProfileSingleMock = jest.fn<(...args: any[]) => Promise<any>>();
     lookupProfileMaybeSingleMock = jest.fn<(...args: any[]) => Promise<any>>();
-    deleteProfileEqMock = jest.fn<(...args: any[]) => Promise<any>>();
 
     supabaseMock = {
       auth: {
@@ -59,25 +54,24 @@ describe('UsersService & CreateUserDto', () => {
             maybeSingle: lookupProfileMaybeSingleMock,
           })),
         })),
-        upsert: jest.fn(() => ({
-          select: jest.fn(() => ({
-            single: upsertProfileSingleMock,
-          })),
-        })),
-        update: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            select: jest.fn(() => ({
-              single: updateProfileSingleMock,
-            })),
-          })),
-        })),
-        delete: jest.fn(() => ({
-          eq: deleteProfileEqMock,
-        })),
       })),
     };
 
-    service = new UsersService({ client: supabaseMock } as unknown as SupabaseService);
+    prismaMock = {
+      profile: {
+        findMany: jest.fn<(...args: any[]) => Promise<any>>(),
+        findUnique: jest.fn<(...args: any[]) => Promise<any>>(),
+        count: jest.fn<(...args: any[]) => Promise<any>>(),
+        upsert: jest.fn<(...args: any[]) => Promise<any>>(),
+        update: jest.fn<(...args: any[]) => Promise<any>>(),
+        delete: jest.fn<(...args: any[]) => Promise<any>>(),
+      },
+    };
+
+    service = new UsersService(
+      { client: supabaseMock } as unknown as SupabaseService,
+      prismaMock as unknown as PrismaService,
+    );
   });
 
   afterEach(() => {
@@ -127,16 +121,42 @@ describe('UsersService & CreateUserDto', () => {
     });
   });
 
+  describe('findAll', () => {
+    it('debe retornar lista de usuarios desde Prisma con mapeo de campos', async () => {
+      const now = new Date();
+      prismaMock.profile.findMany.mockResolvedValue([
+        {
+          id: 'u-1',
+          name: 'Ana',
+          email: 'ana@orion.cl',
+          role: 'baker',
+          avatarUrl: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]);
+
+      const result = await service.findAll();
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        id: 'u-1',
+        name: 'Ana',
+        email: 'ana@orion.cl',
+        role: 'baker',
+      });
+      expect(prismaMock.profile.findMany).toHaveBeenCalledWith({
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+  });
+
   describe('create', () => {
     it('no debe guardar role en user_metadata ni usar contraseña por defecto y debe compensar ante falla de perfil', async () => {
       createUserMock.mockResolvedValue({
         data: { user: { id: 'new-usr-1' } },
         error: null,
       });
-      upsertProfileSingleMock.mockResolvedValue({
-        data: null,
-        error: { message: 'constraint failed' },
-      });
+      prismaMock.profile.upsert.mockRejectedValue(new Error('constraint failed'));
       deleteAuthUserMock.mockResolvedValue({ error: null });
 
       await expect(
@@ -158,9 +178,51 @@ describe('UsersService & CreateUserDto', () => {
       });
       expect(deleteAuthUserMock).toHaveBeenCalledWith('new-usr-1');
     });
+
+    it('debe crear exitosamente en Auth y luego en Prisma', async () => {
+      createUserMock.mockResolvedValue({
+        data: { user: { id: 'new-usr-2' } },
+        error: null,
+      });
+      const now = new Date();
+      prismaMock.profile.upsert.mockResolvedValue({
+        id: 'new-usr-2',
+        name: 'Carlos',
+        email: 'carlos@orion.cl',
+        role: Role.baker,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const res = await service.create({
+        name: 'Carlos',
+        email: 'carlos@orion.cl',
+        password: 'Password123!',
+        role: Role.baker,
+      });
+
+      expect(res.id).toBe('new-usr-2');
+      expect(res.name).toBe('Carlos');
+      expect(prismaMock.profile.upsert).toHaveBeenCalled();
+    });
   });
 
   describe('update & cache sync', () => {
+    it('debe prohibir autodegradar la propia cuenta de administrador', async () => {
+      await expect(
+        service.update('admin-1', { role: Role.cashier }, 'admin-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('debe prohibir degradar al único administrador activo', async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: 'admin-1', role: Role.admin });
+      prismaMock.profile.count.mockResolvedValue(1);
+
+      await expect(
+        service.update('admin-1', { role: Role.cashier }, 'other-caller'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('debe sincronizar en caliente syncUserCache al cambiar el rol sin escribir role en user_metadata', async () => {
       const authGuard = new AuthGuard(
         { client: supabaseMock } as unknown as SupabaseService,
@@ -184,20 +246,18 @@ describe('UsersService & CreateUserDto', () => {
       } as any);
       expect(req.user).toMatchObject({ role: 'cashier' });
 
-      updateProfileSingleMock.mockResolvedValue({
-        data: {
-          id: 'usr-sync',
-          name: 'Carlos Jefe',
-          email: 'sync@orion.cl',
-          role: 'admin',
-          created_at: '2026-11-11T00:00:00Z',
-          updated_at: '2026-11-11T01:00:00Z',
-        },
-        error: null,
+      prismaMock.profile.findUnique.mockResolvedValue({ id: 'usr-sync', role: Role.cashier });
+      prismaMock.profile.update.mockResolvedValue({
+        id: 'usr-sync',
+        name: 'Carlos Jefe',
+        email: 'sync@orion.cl',
+        role: 'admin',
+        createdAt: new Date('2026-11-11T00:00:00Z'),
+        updatedAt: new Date('2026-11-11T01:00:00Z'),
       });
       updateUserByIdMock.mockResolvedValue({ error: null });
 
-      await service.update('usr-sync', { name: 'Carlos Jefe', role: Role.admin });
+      await service.update('usr-sync', { name: 'Carlos Jefe', role: Role.admin }, 'admin-boss');
 
       expect(updateUserByIdMock).toHaveBeenCalledWith('usr-sync', {
         user_metadata: { name: 'Carlos Jefe' },
@@ -219,8 +279,16 @@ describe('UsersService & CreateUserDto', () => {
       expect(deleteAuthUserMock).not.toHaveBeenCalled();
     });
 
+    it('debe prohibir eliminar al único administrador activo', async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: 'admin-solo', role: Role.admin });
+      prismaMock.profile.count.mockResolvedValue(1);
+
+      await expect(service.remove('admin-solo', 'caller-id')).rejects.toThrow(BadRequestException);
+      expect(deleteAuthUserMock).not.toHaveBeenCalled();
+    });
+
     it('debe eliminar auth.users ANTES que profile y fallar sin devolver success si falla auth.admin.deleteUser', async () => {
-      lookupProfileMaybeSingleMock.mockResolvedValue({ data: { id: 'target-1' }, error: null });
+      prismaMock.profile.findUnique.mockResolvedValue({ id: 'target-1', role: Role.baker });
       deleteAuthUserMock.mockResolvedValue({
         error: { status: 500, message: 'Auth service unavailable' },
       });
@@ -228,11 +296,11 @@ describe('UsersService & CreateUserDto', () => {
       await expect(service.remove('target-1', 'admin-1')).rejects.toThrow(
         InternalServerErrorException,
       );
-      expect(deleteProfileEqMock).not.toHaveBeenCalled();
+      expect(prismaMock.profile.delete).not.toHaveBeenCalled();
     });
 
     it('debe eliminar en Auth + profile, invalidar la caché de AuthGuard y lanzar NotFoundException si no existe', async () => {
-      lookupProfileMaybeSingleMock.mockResolvedValue({ data: null, error: null });
+      prismaMock.profile.findUnique.mockResolvedValue(null);
       deleteAuthUserMock.mockResolvedValue({
         error: { status: 404, message: 'User not found' },
       });
@@ -258,8 +326,9 @@ describe('UsersService & CreateUserDto', () => {
         }),
       } as any);
 
+      prismaMock.profile.findUnique.mockResolvedValue({ id: 'target-2', role: Role.baker });
       deleteAuthUserMock.mockResolvedValue({ error: null });
-      deleteProfileEqMock.mockResolvedValue({ error: null });
+      prismaMock.profile.delete.mockResolvedValue({ id: 'target-2' });
 
       const removed = await service.remove('target-2', 'admin-1');
       expect(removed).toMatchObject({ success: true, id: 'target-2' });

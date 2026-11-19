@@ -47,8 +47,9 @@ export class UsersController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateUserDto: UpdateUserDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
   ) {
-    return this.usersService.update(id, updateUserDto);
+    return this.usersService.update(id, updateUserDto, currentUser?.id || '');
   }
 
   @Delete(':id')

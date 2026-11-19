@@ -1,288 +1,274 @@
-# Auditoría Técnica Integral #3 — Pastelería Orión ERP
+# Auditoría Técnica Integral #3 — Pastelería Orión ERP (Hallazgos Vigentes)
 
-**Fecha de auditoría:** 12 de noviembre de 2026  
-**Alcance revisado:** `apps/api`, `apps/web`, `packages/types`, [`schema.prisma`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/prisma/schema.prisma), [`supabase/schema.sql`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/schema.sql) y migraciones SQL inspeccionadas ([`0001`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/migrations/0001_baseline_erp_schema.sql), [`0007`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/migrations/0007_add_accounting_periods.sql), [`0008`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/migrations/0008_add_accounting_settings.sql), [`0009`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/migrations/0009_add_pos_shift.sql))  
-**Enfoque:** Calidad de código, patrones y antipatrones de diseño, arquitectura de monolito modular, principios SOLID/SRP, transacciones ACID, concurrencia, idempotencia, bypasses Frontend → Supabase, seguridad HTTP/CORS/RLS, consumo de API, DTOs y madurez PWA.
-
-> **Alcance y verificación en vivo:** Auditoría estática de código/esquemas complementada con inspección directa de la base de datos real en Supabase (consultas de catálogo PostgreSQL `pg_class`, `pg_policies`, `role_table_grants`, `role_routine_grants`, `pg_indexes`, `pg_constraint`, `pg_proc`, `information_schema`, Advisors de Seguridad/Rendimiento y chequeo de integridad contable/POS; detalle completo en la **Sección 11**).
+**Fecha de actualización:** 17 de noviembre de 2026  
+**Rama:** `version-1.0`  
+**Alcance revisado:** `apps/api`, `apps/web`, `packages/types`, base de datos Supabase / PostgreSQL.  
+**Estado general:** Los hallazgos resueltos en auditorías previas e iteraciones recientes (bypasses frontend, Transactional Outbox Contabilidad ↔ POS, agregaciones SQL nativas en reportes, interceptor de idempotencia centralizado y desinstalación de Dexie) fueron depurados. Este documento consolida **exclusivamente los hallazgos reales y vigentes** pendientes de remediación.
 
 ---
 
 ## Tabla de Contenidos
 
-1. [Resumen Ejecutivo y Matriz de Cumplimiento](#1-resumen-ejecutivo-y-matriz-de-cumplimiento)
-2. [Fortalezas Consolidadas tras Remediaciones Previas](#2-fortalezas-consolidadas-tras-remediaciones-previas)
-3. [Bypasses Front → Supabase, Seguridad HTTP, CORS, Auth/RBAC y RLS](#3-bypasses-front--supabase-seguridad-http-cors-authrbac-y-rls)
-4. [Arquitectura de Monolito Modular y Principios SOLID / SRP](#4-arquitectura-de-monolito-modular-y-principios-solid--srp)
-5. [Transacciones ACID, Concurrencia y Zona Horaria](#5-transacciones-acid-concurrencia-y-zona-horaria)
-6. [Idempotencia y Reintentos Seguros](#6-idempotencia-y-reintentos-seguros)
-7. [Integridad Contable, Clasificación y Rendimiento SQL](#7-integridad-contable-clasificación-y-rendimiento-sql)
-8. [Diagnóstico PWA Offline, Ciclo de Sesión y Bugs de Frontend/Inventario](#8-diagnóstico-pwa-offline-ciclo-de-sesión-y-bugs-de-frontendinventario)
-9. [Consumo de API, DTOs y Contratos `@repo/types`](#9-consumo-de-api-dtos-y-contratos-repotypes)
-10. [Plan de Remediación Detallado (P0 → P3)](#10-plan-de-remediación-detallado-p0--p3)
-11. [Auditoría Confirmada de la Base de Datos en Vivo (Supabase)](#11-auditoría-confirmada-de-la-base-de-datos-en-vivo-supabase)
+1. [Matriz de Priorización de Hallazgos Vigentes](#1-matriz-de-priorización-de-hallazgos-vigentes)
+2. [Prioridad P0: Crítico — Seguridad, RBAC, Integridad de Stock y Plataforma HTTP](#2-prioridad-p0-crítico--seguridad-rbac-integridad-de-stock-y-plataforma-http)
+   - [2.1. Alteración Directa de Stock mediante PATCH en Inventario](#21-alteración-directa-de-stock-mediante-patch-en-inventario-crítico)
+   - [2.2. Seguridad HTTP: Ausencia de Helmet, Rate Limiting y CORS con Error 500](#22-seguridad-http-ausencia-de-helmet-rate-limiting-y-cors-con-error-500-alto)
+   - [2.3. Aplicación Manual de Guards y Falta de APP_GUARD Global](#23-aplicación-manual-de-guards-y-falta-de-app_guard-global-alto)
+   - [2.4. Bypass de Prisma en UsersService y Riesgo de Eliminación del Último Admin](#24-bypass-de-prisma-en-usersservice-y-riesgo-de-eliminación-del-último-admin-crítico)
+   - [2.5. Wipe Incondicional de Sesión Offline al Recargar la PWA](#25-wipe-incondicional-de-sesión-offline-al-recargar-la-pwa-crítico)
+   - [2.6. Funciones SECURITY DEFINER Expuestas e Índices Duplicados en Supabase](#26-funciones-security-definer-expuestas-e-índices-duplicados-en-supabase-alto)
+3. [Prioridad P1: Alto — Dominio, Valorización, UI y Zona Horaria](#3-prioridad-p1-alto--dominio-valorización-ui-y-zona-horaria)
+   - [3.1. Error de Coalescencia y Omisión de Insumos en Valorización de Bodega](#31-error-de-coalescencia-y-omisión-de-insumos-en-valorización-de-bodega-alto)
+   - [3.2. Desfase de Zona Horaria (UTC vs America/Santiago) en Cierres Contables](#32-desfase-de-zona-horaria-utc-vs-americasantiago-en-cierres-contables-alto)
+   - [3.3. Discrepancia Visual en Balance General por Cuentas No Renderizadas](#33-discrepancia-visual-en-balance-general-por-cuentas-no-renderizadas-alto)
+   - [3.4. RBAC Desalineado en Vista de Empaques (PackagingView)](#34-rbac-desalineado-en-vista-de-empaques-packagingview-medio-alto)
+   - [3.5. Inconsistencia de Filtro en Pestaña Stock Bajo de Insumos Generales](#35-inconsistencia-de-filtro-en-pestaña-stock-bajo-de-insumos-generales-medio)
+   - [3.6. Bloqueo de Tandas Decimales en Modal de Producción](#36-bloqueo-de-tandas-decimales-en-modal-de-producción-medio)
+   - [3.7. Fuga de Temporizador setInterval en Componente PWA](#37-fuga-de-temporizador-setinterval-en-componente-pwa-medio)
+   - [3.8. Fuga de Caché PWA entre Sesiones por Falta de Limpieza en Login](#38-fuga-de-caché-pwa-entre-sesiones-por-falta-de-limpieza-en-login-medio-alto)
+4. [Prioridad P2: Medio — DTOs, Contratos y Desduplicación de Reglas](#4-prioridad-p2-medio--dtos-contratos-y-desduplicación-de-reglas)
+   - [4.1. Incompatibilidad de DTO en Actualización de Caja Inicial POS](#41-incompatibilidad-de-dto-en-actualización-de-caja-inicial-pos-medio)
+   - [4.2. Lógica Comercial y Heurísticas Duplicadas entre Frontend y Backend](#42-lógica-comercial-y-heurísticas-duplicadas-entre-frontend-y-backend-medio)
+   - [4.3. Validación Laxa en DTOs Base de Inventario](#43-validación-laxa-en-dtos-base-de-inventario-medio)
+5. [Plan Detallado de Remediación (Archivos, Carpetas y Código)](#5-plan-detallado-de-remediación-archivos-carpetas-y-código)
 
 ---
 
-## 1. Resumen Ejecutivo y Matriz de Cumplimiento
+## 1. Matriz de Priorización de Hallazgos Vigentes
 
-El proyecto evolucionó de forma importante frente a las auditorías anteriores: **se eliminaron por completo los bypasses directos del frontend a Supabase**, se blindó el cálculo autoritativo de precios en el servidor, se implementó [`RolesGuard`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/guards/roles.guard.ts#L21-L24) *fail-closed*, se incorporó [`InventoryStockService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/inventory-stock.service.ts#L33-L242) con ordenamiento de locks y [`IdempotencyInterceptor`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/interceptors/idempotency.interceptor.ts#L1-L281), además de una base PWA inicial.
-
-Sin embargo, persisten **hallazgos estructurales críticos y altos** en aislamiento de fronteras del monolito modular, concurrencia ACID en cierres contables y turnos, desfase de zona horaria (`UTC` vs `America/Santiago`), atomización del registro idempotente, deriva entre [`schema.prisma`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/prisma/schema.prisma) y [`supabase/schema.sql`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/schema.sql), fuga de caché PWA entre sesiones y validación estricta de DTOs de inventario.
-
-### Matriz de Evaluación
-
-| Eje Auditado | Estado | Riesgo / Hallazgo Principal |
-| :--- | :--- | :--- |
-| **Bypasses Front → Supabase** | **Cumple** | Cero consultas de dominio directo; `supabase` en cliente queda limitado a Auth y los dos `fetch()` externos evitan ciclos de arranque/salud. |
-| **CORS, Auth/RBAC y Plataforma HTTP** | **Parcial (Medio-Alto)** | Sin `helmet`, `throttler`, `AllExceptionsFilter`, `APP_GUARD` global, protección al último `admin` ni invalidación distribuida de caché JWT. |
-| **Esquema DB, RLS y RPC** | **Alto** | Tablas cerradas (`rls_enabled=true`, `table_grants` solo `service_role`), pero funciones `SECURITY DEFINER` invocables por `anon`/`authenticated`, Sign-Up público activo, drift en `schema.sql`, `numeric` sin escala `(12,2)` y 5 índices duplicados. |
-| **Monolito Modular y SOLID / SRP** | **Crítico** | `AccountingModule` consulta/muta `pos_sale` y `pos_shift` saltándose `PosModule`; reglas de negocio duplicadas FE/BE; servicios y vistas monolíticas. |
-| **ACID y Concurrencia** | **Crítico** | POS ↔ Contabilidad en 2 transacciones sin retry de `pos_shift`; `upsert` sin `SAVEPOINT` (`25P02`); `closePeriod` bloqueando 0 filas; mismatch UTC vs Chile. |
-| **Idempotencia** | **Crítico** | Cierre de estado `completed` fuera de `$transaction`; `statusCode` `200` en `@Post()`; rutas `PATCH`/`DELETE` de inventario y `/users` descubiertas. |
-| **Integridad Contable y Reportes** | **Crítico** | En vivo faltan cuentas `1103`/`1104` (crédito/transferencia caen en `1101 Caja`), asientos #5/#7/#8 guardaron `8403.360000000001`, permite cuentas inactivas y `IVA por Pagar` mal clasificado. |
-| **Consumo API, DTOs y `@repo/types`** | **Parcial (Medio-Alto)** | DTOs legados de inventario sin `@Type`/`@Max`/whitelist URL; `PartialType` expone `stock`; `SupplyModality` y `PosSaleItem` desalineados. |
-| **PWA Offline y Calidad Frontend** | **Crítico** | Caché SW sin limpieza sincronizada entre sesiones; wipe de sesión offline al recargar; carrera `401`; leak `setInterval`; bugs en Empaques/Recetas/Compras. |
-
----
-
-## 2. Fortalezas Consolidadas tras Remediaciones Previas
-
-* **Ausencia total de bypasses de datos en frontend**: [`apps/web/src/lib/supabase.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/lib/supabase.ts#L27-L36) se restringe a autenticación (`storageKey: 'pasteleria_orion_auth_token'`). Todo el dominio consume el backend NestJS vía [`apiFetch`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/lib/api.ts#L53-L169).
-* **Autoridad de precios y bloqueo ordenado en ventas POS**: [`InventoryStockService.reserveAndDeductForSaleInTx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/inventory-stock.service.ts#L33-L242) ignora precios enviados por el cliente, ordena los UUID antes de ejecutar `FOR UPDATE` ([`L75-L97`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/inventory-stock.service.ts#L75-L97)) previniendo *deadlocks*, y realiza decremento condicional atómico (`stock: { gte: requiredQty }`, [`L178-L214`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/inventory-stock.service.ts#L178-L214)).
-* **Auth/RBAC autoritativo en backend**: [`AuthGuard`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/guards/auth.guard.ts#L135-L253) verifica JWT con Supabase, lee `public.profile` autoritativo (con fallback Prisma en [`L204-L225`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/guards/auth.guard.ts#L204-L225)), rechaza `'user'` mediante `ACTIVE_ERP_ROLES` ([`L21, L233`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/guards/auth.guard.ts#L21)) y acota el caché por expiración real del JWT. [`RolesGuard`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/guards/roles.guard.ts#L21-L24) falla cerrado si falta `@Roles`.
-* **CORS y `ValidationPipe` estrictos**: [`main.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/main.ts#L25-L97) configura orígenes explícitos, `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`, `etag: false` y `Cache-Control: no-store`. Todos los parámetros `:id` de ruta usan `ParseUUIDPipe`.
-* **Base SQL consolidada endurecida**: [`supabase/schema.sql`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/schema.sql#L354-L474) hardcodea `'user'` en `handle_new_user()` con `SET search_path = ''`, habilita RLS en las 19 tablas, revoca acceso de `anon`/`authenticated` e incluye índices únicos parciales críticos ([`L328-L342`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/schema.sql#L328-L342)).
+| ID | Área Auditada | Severidad | Impacto Operacional / Seguridad | Archivo(s) Principal(es) |
+| :--- | :--- | :--- | :--- | :--- |
+| **P0-1** | Inventario / DTOs | **Crítico** | Alteración arbitraria de stock vía `PATCH` sin Kardex ni Outbox | `apps/api/src/modules/inventory/dto/update-*.dto.ts` |
+| **P0-2** | Plataforma HTTP | **Alto** | Falta de headers de seguridad, rate limiting y CORS arrojando `500` | `apps/api/src/main.ts` |
+| **P0-3** | Seguridad / RBAC | **Alto** | Guards manuales por controlador sin `APP_GUARD` global *fail-closed* | `apps/api/src/app.module.ts`, `app.controller.ts` |
+| **P0-4** | Usuarios / RBAC | **Crítico** | Autodegradación o eliminación del último admin; uso de PostgREST | `apps/api/src/modules/users/users.service.ts` |
+| **P0-5** | PWA / Autenticación | **Crítico** | Pérdida total de sesión offline al recargar la PWA sin red | `apps/web/src/services/authService.ts` |
+| **P0-6** | Base de Datos | **Alto** | Funciones RPC con `EXECUTE` público e índices duplicados en Supabase | `supabase/migrations/` |
+| **P1-1** | Inventario / Costos | **Alto** | Productos elaborados valorizados en `$0` por falla de coalescencia `??` | `inventory-valuation.service.ts` |
+| **P1-2** | Contabilidad | **Alto** | Ventas nocturnas asignadas a mes incorrecto por desfase UTC vs Chile | `accounting-period.service.ts` |
+| **P1-3** | UI Contable | **Alto** | Descuadre visual en Balance General por omitir `otrosActivos`/`otrosPasivos` | `BalanceSheetSection.tsx` |
+| **P1-4** | UI Inventario | **Medio-Alto** | Botones de escritura de empaques visibles a panaderos (error `403`) | `PackagingView.tsx`, `AppLayout.tsx` |
+| **P1-5** | UI Inventario | **Medio** | Insumos agotados (`stock = 0`) listados en pestaña "Stock Bajo" | `GeneralSuppliesView.tsx` |
+| **P1-6** | Producción | **Medio** | Botón `-` bloquea tandas fraccionales menores a 1 | `ProduceRecipeModal.tsx` |
+| **P1-7** | PWA | **Medio** | Fuga de memoria por `setInterval` sin `clearInterval` en PWA | `PwaStatusOverlay.tsx` |
+| **P1-8** | PWA / Seguridad | **Medio-Alto** | Caché SW de usuario previo no se purga al iniciar sesión | `authService.ts` |
+| **P2-1** | POS / DTOs | **Medio** | Propiedades no permitidas `from`/`to` provocan `400 Bad Request` | `posShiftService.ts` |
+| **P2-2** | Arquitectura | **Medio** | Reglas de bolsas y modalidad de proveedores duplicadas en FE y BE | `posPrint.ts`, `supplierService.ts` |
+| **P2-3** | Inventario / DTOs | **Medio** | Ausencia de `@Type`, `@Max` y validación estricta de URLs en creación | `create-*.dto.ts` de inventario |
 
 ---
 
-## 3. Bypasses Front → Supabase, Seguridad HTTP, CORS, Auth/RBAC y RLS
+## 2. Prioridad P0: Crítico — Seguridad, RBAC, Integridad de Stock y Plataforma HTTP
 
-### 3.1. Bypasses Frontend → Supabase (`Cumple`)
-* Confirmado: no existen llamadas `.from(...)` ni `.rpc(...)` de dominio en `apps/web/src/services/**` ni en `apps/web/src/components/**`.
-* Los únicos `fetch()` nativos fuera de [`apiFetch`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/lib/api.ts#L53-L169) están justificados: [`authService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/authService.ts#L118) (`GET /api/auth/me` durante bootstrap para evitar dependencias circulares) y [`connectionStatus.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/lib/connectionStatus.ts#L125) (`GET /api/health`).
+### 2.1. Alteración Directa de Stock mediante PATCH en Inventario `[CRÍTICO]`
+* **Archivos afectados:**
+  * [`apps/api/src/modules/inventory/dto/update-product.dto.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/update-product.dto.ts)
+  * [`apps/api/src/modules/inventory/dto/update-ingredient.dto.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/update-ingredient.dto.ts)
+  * [`apps/api/src/modules/inventory/dto/update-packaging.dto.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/update-packaging.dto.ts)
+  * [`apps/api/src/modules/inventory/dto/update-general-supply.dto.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/update-general-supply.dto.ts)
+  * [`apps/api/src/modules/inventory/products/product.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/products/product.service.ts#L175)
+* **Causa raíz:** Los DTOs de actualización extienden directamente de `PartialType(Create*Dto)`, heredando el campo `stock`. En los servicios de inventario (por ejemplo `product.service.ts:175`), se ejecuta `...(dto.stock !== undefined && { stock: dto.stock })`.
+* **Impacto:** Cualquier usuario con permisos de edición puede enviar un `PATCH /api/inventory/products/:id` con `{ "stock": 500 }`. Esto sobreescribe el stock físico directamente en la base de datos sin ejecutar `adjustStock`, sin adquirir locks pesimistas, sin generar movimientos en Kardex y sin notificar al Transactional Outbox contable.
+* **Remediación:** Utilizar `PartialType(OmitType(Create*Dto, ['stock'] as const))` en todos los DTOs de actualización y eliminar la asignación de `stock` en los métodos `update()` de los servicios de inventario.
 
-### 3.2. Plataforma HTTP y Manejo Global de Errores `[ALTO]`
-* **Falta de `helmet`, `trust proxy` y rate limiting**: [`apps/api/package.json`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/package.json) y [`main.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/main.ts#L25-L97) no configuran cabeceras de seguridad (`helmet`), ni `@nestjs/throttler` para frenar ráfagas contra `/api/auth/me`, `/api/users` o `/api/pos/sales`, ni `app.set('trust proxy', 1)` detrás de balanceadores.
-* **Rechazo CORS devuelve HTTP `500`**: en [`main.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/main.ts#L86), el callback CORS invoca `callback(new Error(...))`, generando un `500 Internal Server Error` en vez de `403 Forbidden`.
-* **Sin `AllExceptionsFilter` global y mapeo ambiguo en `23514`**: las rutas de lectura (`GET`) no normalizan fallos de conexión/timeout de Prisma. Adicionalmente, [`rethrowPrismaError`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/utils/prisma-error.util.ts#L91-L98) convierte cualquier código PostgreSQL `23514` (`CHECK` constraint) en `409 ConflictException` y escribe con `console.error` en vez de usar `Logger` de NestJS.
+### 2.2. Seguridad HTTP: Ausencia de Helmet, Rate Limiting y CORS con Error 500 `[ALTO]`
+* **Archivos afectados:**
+  * [`apps/api/package.json`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/package.json)
+  * [`apps/api/src/main.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/main.ts#L66-L87)
+* **Causa raíz:** 
+  1. `main.ts` no incorpora `helmet()` para configurar cabeceras estándar de protección (CSP, HSTS, X-Content-Type-Options, etc.).
+  2. No existe rate limiting (`@nestjs/throttler`) para proteger rutas sensibles contra ataques de denegación de servicio o fuerza bruta (`/api/auth/me`, `/api/users`, `/api/pos/sales`).
+  3. No se configura `app.set('trust proxy', 1)`.
+  4. En la línea 86 de `main.ts`, el callback de CORS ejecuta `callback(new Error('Origin not allowed by CORS policy'), false)`. En NestJS/Express, esto genera una respuesta `500 Internal Server Error` no controlada en vez de un código limpio `403 Forbidden`.
+  5. Falta un filtro global de excepciones (`AllExceptionsFilter`).
+* **Remediación:** Instalar y configurar `helmet`, `@nestjs/throttler`, `trust proxy`, rechazar orígenes CORS no permitidos con `ForbiddenException` e implementar un filtro global de excepciones.
 
-### 3.3. Auth, RBAC y Gestión de Usuarios `[ALTO]`
-* **Aplicación manual de Guards**: [`AuthGuard`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/guards/auth.guard.ts#L135) y [`RolesGuard`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/guards/roles.guard.ts#L21) no están registrados como `APP_GUARD` globales en [`app.module.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/app.module.ts). Cualquier controlador nuevo sin decoradores queda abierto por defecto ([`AppController`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/app.controller.ts#L14-L49) ya expone `GET /api` sin `@Public()` explícito).
-* **Caché de sesión no distribuido y clave por token crudo**: `tokenProfileCache` ([`auth.guard.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/guards/auth.guard.ts#L22)) guarda el JWT completo como clave en memoria de un único proceso Node (`MAX_AUTH_CACHE_SIZE = 500`); [`syncUserCache`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.service.ts#L168) / [`invalidateUserCache`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.service.ts#L234) solo invalidan la réplica que recibió la petición.
-* **Riesgo de bloqueo total de administración y uso de PostgREST en `UsersService`**:
-  * [`UsersService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.service.ts#L27-L30) consulta/muta `public.profile` a través de PostgREST de Supabase ([`L85-94`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.service.ts#L85-L94), [`L134-139`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.service.ts#L134-L139), [`L191-195`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.service.ts#L191-L195), [`L221-224`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.service.ts#L221-L224)) en lugar de [`PrismaService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/database/prisma.service.ts).
-  * [`UsersController.update`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.controller.ts#L41-L48) y [`UsersService.update`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.service.ts#L118-L131) no reciben `@CurrentUser()`: un `admin` puede autodegradarse a `cashier`/`baker` o eliminar/degradar al último `admin` activo del sistema.
+### 2.3. Aplicación Manual de Guards y Falta de APP_GUARD Global `[ALTO]`
+* **Archivos afectados:**
+  * [`apps/api/src/app.module.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/app.module.ts)
+  * [`apps/api/src/app.controller.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/app.controller.ts)
+* **Causa raíz:** [`AuthGuard`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/guards/auth.guard.ts) y [`RolesGuard`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/guards/roles.guard.ts) se aplican manualmente con `@UseGuards(...)` en cada controlador.
+* **Impacto:** Si se crea un nuevo controlador y se olvida colocar el decorador, las rutas quedan expuestas públicamente. De hecho, [`AppController`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/app.controller.ts) expone `GET /api` sin protección ni anotación `@Public()`.
+* **Remediación:** Registrar `AuthGuard` y `RolesGuard` como proveedores `APP_GUARD` en `AppModule` para aplicar seguridad *fail-closed* por defecto en toda la aplicación, permitiendo acceso público únicamente a los métodos explícitamente decorados con `@Public()`.
 
-### 3.4. Drift de Esquema SQL ↔ Prisma y Seguridad RLS/RPC Verificada en Vivo `[ALTO]`
-1. **Tablas RLS cerradas en producción (`Cumple`)**: la inspección en vivo confirmó `rls_enabled: true` en las 19 tablas, `rls_policies: []` (se eliminaron las políticas permisivas `USING (true)` de `0007`–`0009`) y `table_grants` exclusivo para `service_role`.
-2. **Funciones `SECURITY DEFINER` expuestas e innecesarias `[ALTO]`**: `public.is_admin()` (huérfana sin políticas que la usen, `search_path=public`) y `public.handle_new_user()` conservan `EXECUTE` otorgado a `PUBLIC`, `anon` y `authenticated` vía `/rest/v1/rpc/*`. Además subsiste `public.create_pos_sale_transaction()` (legacy sin stock ni contabilidad).
-3. **Drift documental en `supabase/schema.sql` y faltantes en `schema.prisma`**: en vivo **sí existen** `pos_sale.created_by` (`idx_pos_sale_created_by`) y las restricciones `UNIQUE` (`category(name, type)`, `recipe_ingredient(recipe_id, ingredient_id)`, `supplier_ingredient(supplier_id, ingredient_id)`), pero están omitidas en [`supabase/schema.sql`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/schema.sql). A la inversa, [`schema.sql`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/schema.sql#L328-L342) contiene índices únicos parciales ausentes en [`schema.prisma`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/prisma/schema.prisma), mientras `Profile.role` tiene `@default("baker")` en Prisma ([`L13`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/prisma/schema.prisma#L13)) frente a `'user'` en BD.
-4. **Precisión `numeric`, triggers `updated_at` y `CHECK` faltantes**: en vivo, `accounting_entry_item.{debit, credit}`, `pos_sale` y `pos_sale_item` son `numeric` sin escala `(12, 2)` (en contraste con `@db.Decimal(12, 2)` en Prisma), no existen triggers SQL `updated_at` ni `CHECK` de partida doble por línea (`debit > 0 XOR credit > 0`), `yield_servings > 0` o precios `>= 0`. Tampoco existe `supabase_migrations.schema_migrations` (esquema gestionado por ejecución manual).
+### 2.4. Bypass de Prisma en UsersService y Riesgo de Eliminación del Último Admin `[CRÍTICO]`
+* **Archivos afectados:**
+  * [`apps/api/src/modules/users/users.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.service.ts#L85-L140)
+  * [`apps/api/src/modules/users/users.controller.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.controller.ts#L47-L52)
+* **Causa raíz:**
+  1. `UsersService` realiza operaciones CRUD sobre `public.profile` utilizando el cliente PostgREST de Supabase (`this.supabase.from('profile')`) en vez de [`PrismaService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/database/prisma.service.ts), perdiendo la coherencia transaccional del backend.
+  2. El método `update` en `UsersController` no inyecta `@CurrentUser()`.
+  3. Ni `update` ni `remove` comprueban si el usuario afectado es el último administrador activo del sistema, ni impiden que un administrador se autodegrade a `cashier` o `baker`.
+* **Impacto:** Un administrador descuidado o malicioso puede autodegradarse o eliminar al único administrador activo, dejando el ERP bloqueado sin capacidad de gestión de accesos.
+* **Remediación:** Migrar las lecturas y escrituras de `public.profile` a `this.prisma.profile`, inyectar el usuario autenticado en `UsersController.update` y agregar validación que impida la autodegradación o la reducción de administradores a 0.
 
----
+### 2.5. Wipe Incondicional de Sesión Offline al Recargar la PWA `[CRÍTICO]`
+* **Archivo afectado:**
+  * [`apps/web/src/services/authService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/authService.ts#L336-L350)
+* **Causa raíz:** En la inicialización del frontend (`ensureAuthReady`), se invoca `fetchAuthoritativeProfile`. Si la PWA se recarga en un dispositivo que perdió la conectividad a internet, la petición falla por error de red (`status === 0` o excepción en `fetch`). El bloque `else` y el bloque `catch` ejecutan inmediatamente:
+  ```ts
+  inMemoryAuthToken = null;
+  persistVerifiedUser(null);
+  ```
+* **Impacto:** La sesión local se borra por completo y el usuario es expulsado a la pantalla de inicio de sesión, impidiendo que el cajero o panadero consulte el catálogo o la lista de precios en modo offline.
+* **Remediación:** En `ensureAuthReady`, si el error es de red (`status === 0` o `TypeError: Failed to fetch`), preservar el usuario verificado almacenado en caché local y no limpiar el token si aún no ha expirado.
 
-## 4. Arquitectura de Monolito Modular y Principios SOLID / SRP
-
-### 4.1. Invasión de Frontera Contabilidad → POS `[CRÍTICO]`
-[`PosModule`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/pos.module.ts#L10-L16) importa [`AccountingModule`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting.module.ts#L18-L40) y tiene `exports: []`. Por su parte, `AccountingModule` solo importa [`InventoryModule`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/inventory.module.ts#L19-L45). Sin embargo, apoyándose en el `@Global()` de [`PrismaModule`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/app.module.ts#L30), **Contabilidad lee, bloquea y muta tablas exclusivas del dominio POS**:
-
-* [`EntryService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts): ejecuta `FOR UPDATE` sobre `pos_sale` ([`L335-L340`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L335-L340)), actualiza `posSale.accountingStatus` ([`L297-L300`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L297-L300), [`L347-L350`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L347-L350), [`L367-L379`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L367-L379), [`L476-L481`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L476-L481)), lee ventas pendientes ([`L445-L458`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L445-L458)) y bloquea `pos_shift` ([`L590-L595`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L590-L595)).
-* [`AccountingPeriodService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-period.service.ts#L247-L259) (`getYearOverview` y `closePeriod` [`L386-L394`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-period.service.ts#L386-L394)), [`AccountingSettingsService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-settings.service.ts#L67-L75) y [`AnnualClosingService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/annual-closing.service.ts#L73-L78) consultan directamente `posSale`.
-
-Este acoplamiento oculto genera una **dependencia circular lógica** sin declaración de módulos explícita y provocó asimetría: existen reintentos para `pos_sale` pendiente, pero un `pos_shift` con diferencia pendiente queda olvidado indefinidamente.
-
-### 4.2. Desconexión Inventario ↔ Contabilidad y Valorización `[MEDIO-ALTO]`
-* [`RecipeService.produce`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/recipe.service.ts#L345-L477) y `adjustStock` modifican existencias sin emitir movimientos o asientos contables hacia las cuentas `1105`/`1106`/`5101`, manteniendo el inventario contable desfasado frente al stock físico.
-* [`InventoryValuationService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/inventory-valuation.service.ts#L100) omite completamente `GeneralSupply` y aplica `costPrice ?? salePrice`: como en BD `costPrice` tiene default `0`, cualquier producto manufacturado sin costo asignado se valoriza en `$0`.
-
-### 4.3. Violaciones de SRP y Reglas Duplicadas entre Capas `[MEDIO-ALTO]`
-* **Reglas duplicadas FE/BE**:
-  * [`resolveSecondaryPackagingPrice`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/utils/money.util.ts#L20-L22) replicada en [`posPrint.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/pos/posPrint.ts#L45-L47).
-  * Heurística de modalidad en [`SupplierService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/supplier.service.ts#L34-L55) duplicada en [`supplierService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/supplierService.ts#L5-L27).
-  * Factor IVA `1.19` y tolerancia `0.01` repartidos entre [`EntryService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L142), [`AccountingEntryModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/AccountingEntryModal.tsx#L53) y [`AccountingView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/AccountingView.tsx#L253).
-* **God Services y Fat Components**:
-  * Servicios sobrecargados: [`EntryService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts) (~650 líneas mezclando libro diario manual, anulaciones, integración POS y ajustes de turno), [`AccountingPeriodService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-period.service.ts) (~522 L), [`RecipeService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/recipe.service.ts) (~521 L), [`PosShiftService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/pos-shift.service.ts) (~479 L) y [`authService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/authService.ts) (~658 L).
-  * Vistas frontend entre 400 y 910 líneas ([`PosView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/pos/PosView.tsx), [`AccountingPeriodsTab.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/AccountingPeriodsTab.tsx), [`ShoppingListView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/shopping/ShoppingListView.tsx), [`RecipesView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/recipes/RecipesView.tsx)) que mezclan fetching, cancelación, reglas de negocio y UI.
-
----
-
-## 5. Transacciones ACID, Concurrencia y Zona Horaria
-
-### 5.1. Roptura de Atomicidad en Dos Fases y Carreras de Concurrencia `[CRÍTICO]`
-1. **Dos transacciones separadas POS → Contabilidad**:
-   * [`PosSaleService.createSale`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/pos-sale.service.ts#L48-L149) descuenta inventario y crea venta en TX1, y contabiliza en TX2 ([`registerSaleIncome`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L289-L487)).
-   * [`PosShiftService.closeShift`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/pos-shift.service.ts#L185-L376) cierra turno en TX1, contabiliza diferencia en TX2 ([`registerShiftDifferenceAdjustment`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L589-L648)) y luego actualiza `posShift` fuera de transacción ([`L345-L352`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/pos-shift.service.ts#L345-L352)). **No hay mecanismo de reintento (`syncPendingShifts`) ni bloqueo de cierre mensual/anual ante turnos `'pending'`.**
-2. **Carrera de apertura/cierre de turno POS**: [`ensureActiveShiftInTx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/pos-shift.service.ts#L418-L425) lee `findFirst({ status: 'abierto' })` sin bloqueo antes de `INSERT ... ON CONFLICT DO NOTHING`; [`closeShift`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/pos-shift.service.ts#L186-L234) también lee el turno antes de bloquearlo con `FOR UPDATE` ([`L229-L234`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/pos-shift.service.ts#L229-L234)).
-3. **Aborto de transacción PostgreSQL (`25P02`) en `assertPeriodOpen`**:
-   * [`AccountingPeriodService.assertPeriodOpen`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-period.service.ts#L103-L127) ejecuta `db.accountingPeriod.upsert(...)` dentro del `$transaction` llamador (ej. [`EntryService.createEntry`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L149-L166)) capturando `P2002` en JavaScript **sin SQL `SAVEPOINT`**. Ante dos asientos simultáneos al inicio de un mes nuevo, la colisión aborta la transacción PostgreSQL completa (`current transaction is aborted`).
-   * Además verifica `closingYear: year` ([`L80`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-period.service.ts#L80)) en vez de `{ gte: year }`, desalineado respecto a [`AnnualClosingService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/annual-closing.service.ts#L63) (`{ gt: year }`).
-4. **Cierre mensual bloqueando 0 filas y Cierre Anual bajo `READ COMMITTED`**:
-   * [`closePeriod`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-period.service.ts#L369-L435) ejecuta `SELECT id ... FOR UPDATE` sobre `(year, month)`: si la fila aún no existía, bloquea **0 filas**, permitiendo que un asiento concurrente pase `assertPeriodOpen` antes del cierre.
-   * [`AnnualClosingService.executeAnnualClosing`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/annual-closing.service.ts#L242-L310) agrega cuentas nominales sin bloquear los períodos ni aislar en `SERIALIZABLE`.
-
-### 5.2. Bug de Zona Horaria (`UTC` vs `America/Santiago`) `[CRÍTICO]`
-* [`EntryService.registerSaleIncome`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L331) asigna `entryDate` con [`toChileBusinessDateString`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/utils/chile-time.util.ts#L1-L299) (`America/Santiago`).
-* En cambio, [`AccountingPeriodService.getYearOverview`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-period.service.ts#L221-L259), [`closePeriod`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-period.service.ts#L357-L394) y [`AccountingSettingsService.updateSettings`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-settings.service.ts#L70-L85) filtran `posSale.soldAt` usando límites UTC, y [`AccountingPeriodsTab.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/AccountingPeriodsTab.tsx#L33) usa `new Date().getFullYear()` del navegador. Las ventas entre `21:00` y `23:59` hora de Chile (incluido el 31 de diciembre) quedan clasificadas en el mes/año UTC siguiente al verificar pendientes de cierre.
-
----
-
-## 6. Idempotencia y Reintentos Seguros
-
-Deficiencias verificadas en [`IdempotencyInterceptor`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/interceptors/idempotency.interceptor.ts#L84-L178) y [`apiFetch`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/lib/api.ts#L80-L85) `[CRÍTICO]`:
-
-1. **Riesgo de doble ejecución tras commit**: el paso a `status: 'completed'` corre **fuera** de la `$transaction` del caso de uso y silencia errores con `.catch(console.warn)` ([`L161-L166`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/interceptors/idempotency.interceptor.ts#L161-L166)). Transcurrido `STALE_PROCESSING_MS = 300_000` ([`L251-L261`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/interceptors/idempotency.interceptor.ts#L251-L261)), un reintento volverá a ejecutar la mutación ya confirmada.
-2. **Código HTTP erróneo en Replay**: captura `res?.statusCode` ([`L156`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/interceptors/idempotency.interceptor.ts#L156)) dentro de RxJS `tap()` antes de que NestJS fije `201` por defecto en `@Post()`, guardando y devolviendo `200`.
-3. **Cobertura incompleta**: si falta el header `Idempotency-Key`, se omite en silencio ([`L85-L87`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/interceptors/idempotency.interceptor.ts#L85-L87)); la limpieza de expirados es solo por `actorId` ([`L116-L123`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/interceptors/idempotency.interceptor.ts#L116-L123)); y **falta `@UseInterceptors(IdempotencyInterceptor)` en todos los `PATCH`/`DELETE` de inventario y todas las mutaciones de [`UsersController`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.controller.ts)**.
-4. **Claves efímeras en cliente**: [`apiFetch`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/lib/api.ts#L80-L85) genera un UUID distinto en cada invocación (solo protege su retry interno `401`), sin conservar una clave persistente por intento de usuario en modales, POS, cierres o ajustes de caja.
+### 2.6. Funciones SECURITY DEFINER Expuestas e Índices Duplicados en Supabase `[ALTO]`
+* **Entorno afectado:** Base de datos PostgreSQL en Supabase.
+* **Causa raíz:**
+  1. `public.is_admin()` (`SECURITY DEFINER`, huérfana) y `public.handle_new_user()` conservan privilegios `EXECUTE` otorgados a `PUBLIC`, `anon` y `authenticated` a través de `/rest/v1/rpc/*`.
+  2. Existe la función legacy `public.create_pos_sale_transaction()` sin stock ni contabilidad.
+  3. Coexisten 5 índices duplicados en `pos_sale` y `pos_sale_item` (`idx_pos_sales_payment_method`, `idx_pos_sales_sold_at`, `idx_pos_sales_status`, `idx_pos_sale_items_product_id`, `idx_pos_sale_items_sale_id`).
+* **Remediación:** Crear y ejecutar la migración SQL de endurecimiento:
+  ```sql
+  REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+  DROP FUNCTION IF EXISTS public.is_admin();
+  DROP FUNCTION IF EXISTS public.create_pos_sale_transaction(text, text, numeric, numeric, numeric, jsonb);
+  DROP INDEX IF EXISTS public.idx_pos_sales_payment_method;
+  DROP INDEX IF EXISTS public.idx_pos_sales_sold_at;
+  DROP INDEX IF EXISTS public.idx_pos_sales_status;
+  DROP INDEX IF EXISTS public.idx_pos_sale_items_product_id;
+  DROP INDEX IF EXISTS public.idx_pos_sale_items_sale_id;
+  ```
 
 ---
 
-## 7. Integridad Contable, Clasificación y Rendimiento SQL
+## 3. Prioridad P1: Alto — Dominio, Valorización, UI y Zona Horaria
 
-* **Validación laxa en [`EntryService.createEntry`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L109-L166)** `[ALTO]`:
-  * No verifica `accountingAccount.isActive === true` (pese a que [`BalanceService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/balance.service.ts#L11), [`AccountService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/account.service.ts#L11) y [`FinancialReportService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/financial-report.service.ts#L85) filtran solo cuentas activas).
-  * Permite una línea con `debit > 0` y `credit > 0` al mismo tiempo.
-  * Admite un descuadre de hasta `0.01` ([`L142`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L142), copiado en [`AccountingEntryModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/AccountingEntryModal.tsx#L53) y [`AccountingView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/AccountingView.tsx#L253)).
-* **Anulación incoherente en [`EntryService.voidEntry`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L193-L287)** `[ALTO]`: permite anular asientos `origin: 'pos'` sin revertir `posSale.accountingStatus` / `posShift.accountingStatus` ni limpiar `posShift.closingEntryId`.
-* **Clasificador de Balance erróneo** `[MEDIO]`: [`balance-sheet-classifier.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/balance-sheet-classifier.ts#L31-L40) evalúa `/proveedor|por pagar/i` antes que `/iva|impuesto|retenc/i` → cuentas como `"IVA por Pagar"` caen en `obligaciones` en vez de `impuestos`.
-* **Secciones omitidas en UI del Balance** `[ALTO]`: [`BalanceSheetSection.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/BalanceSheetSection.tsx#L46-L128) no renderiza `activos.otrosActivos` ni `pasivos.otrosPasivos`, pero [`L42, L98`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/BalanceSheetSection.tsx#L42) sí los suman al total, rompiendo visualmente la ecuación contable.
-* **Escalabilidad de agregaciones y falta de paginación** `[MEDIO]`: [`BalanceService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/balance.service.ts#L10-L33), [`LedgerService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/ledger.service.ts#L50-L91), [`FinancialReportService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/financial-report.service.ts#L83-L295) y [`AnnualClosingService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/annual-closing.service.ts#L87-L165) traen todas las partidas a memoria Node en vez de usar `GROUP BY` en PostgreSQL; además los listados usan límites fijos sin paginación (`take: 20`, `take: 30`, `take: 100` y `findAll()` completo en inventario).
+### 3.1. Error de Coalescencia y Omisión de Insumos en Valorización de Bodega `[ALTO]`
+* **Archivo afectado:**
+  * [`apps/api/src/modules/inventory/valuation/inventory-valuation.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/valuation/inventory-valuation.service.ts#L95-L117)
+* **Causa raíz:**
+  1. En la línea 101: `unitCost: Number(prod.costPrice ?? prod.salePrice ?? 0)`. En PostgreSQL, la columna `cost_price` de `product` tiene un valor por defecto numérico `0`. En JavaScript, la expresión `0 ?? prod.salePrice` evalúa a `0` (el operador nullish coalescing no activa el fallback ante ceros). Como consecuencia, los productos elaborados sin costo unitario asignado se valorizan en `$0` en vez de usar su precio de venta de referencia.
+  2. La tabla `general_supply` no se incluye en el cálculo total del valor de bodega.
+* **Remediación:** Corregir la expresión a `prod.costPrice && Number(prod.costPrice) > 0 ? Number(prod.costPrice) : Number(prod.salePrice ?? 0)` e incorporar los insumos operativos (`GeneralSupply`) al consolidado de valorización.
 
----
+### 3.2. Desfase de Zona Horaria (UTC vs America/Santiago) en Cierres Contables `[ALTO]`
+* **Archivos afectados:**
+  * [`apps/api/src/modules/accounting/accounting-period.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-period.service.ts#L221-L259)
+  * [`apps/api/src/common/utils/chile-time.util.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/utils/chile-time.util.ts)
+* **Causa raíz:** En el Outbox y en ventas, las fechas se registran como marcas de tiempo UTC. Al verificar ventas pendientes para autorizar el cierre de un período mensual, `AccountingPeriodService` aplica límites de inicio y fin de mes basados en UTC (00:00:00Z a 23:59:59Z).
+* **Impacto:** Debido a que Chile opera en UTC-3 (o UTC-4 en invierno), cualquier venta realizada el último día del mes entre las 21:00 y las 23:59 hora local cae en el primer día del mes siguiente en horario UTC. Esto provoca discrepancias al validar si existen eventos pendientes antes de cerrar el período contable.
+* **Remediación:** Utilizar rangos de fecha calculados explícitamente en la zona horaria `America/Santiago` convertidos a límites UTC equivalentes (`getChileMonthDateRangeUtc()`).
 
-## 8. Diagnóstico PWA Offline, Ciclo de Sesión y Bugs de Frontend/Inventario
+### 3.3. Discrepancia Visual en Balance General por Cuentas No Renderizadas `[ALTO]`
+* **Archivo afectado:**
+  * [`apps/web/src/components/accounting/BalanceSheetSection.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/BalanceSheetSection.tsx#L46-L128)
+* **Causa raíz:** En la vista del Balance General, en la columna de Activos solo se renderizan las tarjetas de `disponible` e `inventarios`. En la columna de Pasivos, solo se renderiza `obligaciones`. Se omiten por completo los grupos `activos.otrosActivos` y `pasivos.otrosPasivos`. Sin embargo, las etiquetas de totales (`TOTAL ACTIVOS` y `TOTAL PASIVOS`) sí suman el valor de estos grupos omitidos.
+* **Impacto:** Si una cuenta contable clasifica bajo otros activos u otros pasivos, el total de la tarjeta general es superior a la suma de las cuentas listadas en pantalla, generando confusión en el contador.
+* **Remediación:** Agregar los bloques JSX correspondientes para renderizar las cuentas y subtotales de `otrosActivos` y `otrosPasivos` cuando contengan cuentas asociadas.
 
-### 8.1. Seguridad y Ciclo Offline PWA `[CRÍTICO]`
-1. **Fuga de datos cacheados entre usuarios**: [`vite.config.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/vite.config.ts#L88-L103) cachea 7 endpoints `GET` en `orion-api-catalog-reads`. [`authService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/authService.ts#L93) dispara `void clearPwaApiCaches()` ([`pwaCache.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/lib/pwaCache.ts#L7-L17)) sin `await` ni limpieza en `login()`: un usuario `baker` que ingresa tras un `admin` puede leer caché previa (como `/api/suppliers`) en fallback offline.
-2. **Wipe de sesión offline al recargar**: [`ensureAuthReady`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/authService.ts#L298-L367) limpia token y perfil local cuando `fetchAuthoritativeProfile` falla por ausencia de red (`status === 0`, [`L347-L350`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/authService.ts#L347-L350)), inutilizando el modo solo-lectura offline prometido en [`PwaStatusOverlay.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/pwa/PwaStatusOverlay.tsx#L111-L114) y [`AppLayout.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/layout/AppLayout.tsx#L363-L364).
-3. **Carrera concurrente en refresh `401`**: [`api.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/lib/api.ts#L115-L141) ejecuta `supabase.auth.refreshSession()` en paralelo ante múltiples peticiones concurrentes expiradas ([`AppLayout.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/layout/AppLayout.tsx#L128-L132), [`AccountingView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/AccountingView.tsx#L95-L99)) sin mutex single-flight; además escribe directo a `localStorage` ([`L122`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/lib/api.ts#L122)) y un `401` tras reintento no cierra sesión.
-4. **Fuga de temporizador y dependencias muertas**: [`PwaStatusOverlay.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/pwa/PwaStatusOverlay.tsx#L23-L27) crea un `window.setInterval` en `onRegisteredSW` sin cleanup; [`apps/web/package.json`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/package.json#L16-L17) mantiene `dexie` y `dexie-react-hooks` sin importar en ningún archivo.
+### 3.4. RBAC Desalineado en Vista de Empaques (PackagingView) `[MEDIO-ALTO]`
+* **Archivos afectados:**
+  * [`apps/web/src/components/layout/AppLayout.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/layout/AppLayout.tsx#L454)
+  * [`apps/web/src/components/inventory/packaging/PackagingView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/packaging/PackagingView.tsx#L20-L27, L167-L177)
+* **Causa raíz:** La interfaz `PackagingViewProps` no recibe la propiedad `user`. Por ende, el botón "Nuevo Empaque" y las acciones de edición y eliminación se renderizan incondicionalmente para todos los usuarios.
+* **Impacto:** En el backend, [`PackagingController`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/packaging.controller.ts) restringe `POST`, `PATCH` y `DELETE` exclusivamente al rol `admin`. Cuando un panadero o cajero intenta crear o editar un empaque, la operación es rechazada con un error `403 Forbidden`.
+* **Remediación:** Pasar el prop `user={user}` desde `AppLayout` a `PackagingView` y condicionar la visualización de los botones de mutación a `user?.role === 'admin'`.
 
-### 8.2. Bugs Funcionales de Dominio, Performance y UX `[ALTO / MEDIO]`
-* **RBAC desalineado en Empaques**: [`PackagingController`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/packaging.controller.ts#L42-L72) restringe `POST`/`PATCH`/`DELETE` a `admin`, pero [`AppLayout.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/layout/AppLayout.tsx#L454-L458) omite la prop `user` en `<PackagingView>` y [`PackagingView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/packaging/PackagingView.tsx#L158-L167) muestra acciones de escritura a `baker` (recibiendo `403`).
-* **`adjustStock` silencioso a `0` y `PATCH` inseguro**: [`PackagingService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/packaging.service.ts#L171), [`IngredientService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/ingredient.service.ts#L167), [`ProductService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/product.service.ts#L199) y [`GeneralSupplyService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/general-supply.service.ts#L193) usan `Math.max(0, ...)` enmascarando faltantes negativos en lugar de devolver `409 Conflict`; además `PartialType` permite sobrescribir `stock` por `PATCH` sin `FOR UPDATE`.
-* **Producción de recetas inconsistente**: [`RecipeService.produce`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/recipe.service.ts#L345-L477) no exige `productType === 'manufactured'`, acepta `dto.producedUnits` arbitrario y redondea después de validar `> 0`; [`ProduceRecipeModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/recipes/ProduceRecipeModal.tsx#L73-L75) compara disponibilidad sin convertir unidades y su botón `-` impide bajar de `1` pese a `min="0.01"` ([`L246`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/recipes/ProduceRecipeModal.tsx#L246)). Adicionalmente [`IngredientModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/ingredients/IngredientModal.tsx#L27) ofrece `'Bandejas'`, ausente en [`unit-converter.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/utils/unit-converter.ts#L8-L28).
-* **Proveedores y limpieza de campos opcionales**: [`SupplierService.update`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/supplier.service.ts#L169-L213) ignora `dto.supplyModality` y `mapSupplier` ([`L67`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/supplier.service.ts#L67)) lo sobreescribe heurísticamente; [`PackagingModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/packaging/PackagingModal.tsx#L91), [`ProductModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/products/ProductModal.tsx#L110-L111) y [`SupplierModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/suppliers/SupplierModal.tsx#L201-L207) envían `|| undefined` bloqueando el borrado de campos en edición.
-* **Errores silenciosos y filtros UI**:
-  * [`ShoppingListView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/shopping/ShoppingListView.tsx#L244-L250) captura errores de compra sin relanzar → [`PurchaseItemModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/shopping/PurchaseItemModal.tsx#L74-L75) se cierra aunque falle la API.
-  * [`GeneralSuppliesView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/general-supplies/GeneralSuppliesView.tsx#L91) excluye `stock <= 0` en `'low_stock'` contradiciendo su contador ([`L281`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/general-supplies/GeneralSuppliesView.tsx#L281)).
-* **Performance, Higiene React y A11y**: tormenta en `focus` sin cooldown ([`App.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/App.tsx#L155-L167)), doble fetch al montar [`AppLayout.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/layout/AppLayout.tsx#L128-L132), `useEffect` sin `AbortController`, falta de `isSubmitting`/Escape en [`RecipesView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/recipes/RecipesView.tsx#L133-L161), falta dark mode en [`AccountingEntryModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/AccountingEntryModal.tsx#L84) y `react-hooks/set-state-in-effect` en `'warn'` ([`eslint.config.js`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/eslint.config.js#L22)).
+### 3.5. Inconsistencia de Filtro en Pestaña Stock Bajo de Insumos Generales `[MEDIO]`
+* **Archivo afectado:**
+  * [`apps/web/src/components/inventory/general-supplies/GeneralSuppliesView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/general-supplies/GeneralSuppliesView.tsx#L78, L97)
+* **Causa raíz:** La métrica de la tarjeta calcula los insumos en stock bajo con la condición estricta: `stock > 0 && stock <= minStock`. En cambio, el filtro de la tabla para la pestaña `'low_stock'` evalúa: `item.stock > item.minStock ? false : true`. Esto incluye también a los elementos con `stock <= 0` (agotados).
+* **Impacto:** El contador de la pestaña muestra por ejemplo "2 ítems", pero al hacer clic en ella la tabla despliega 5 filas (incluyendo los 3 insumos con stock 0).
+* **Remediación:** Alinear el filtro de tabla para que `'low_stock'` filtre únicamente `item.stock > 0 && item.stock <= item.minStock`.
 
----
+### 3.6. Bloqueo de Tandas Decimales en Modal de Producción `[MEDIO]`
+* **Archivo afectado:**
+  * [`apps/web/src/components/inventory/recipes/ProduceRecipeModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/recipes/ProduceRecipeModal.tsx#L246)
+* **Causa raíz:** El botón `-` ejecuta: `setBatches((b) => Math.max(1, (Number(b) || 1) - 1))`.
+* **Impacto:** Aunque el input numérico soporta `min="0.01"` y `step="any"` para elaborar medias tandas (por ejemplo 0.5 recetas), el botón de decremento impide reducir el valor por debajo de 1.
+* **Remediación:** Ajustar la lógica del botón para permitir decrementar valores decimales respetando el límite mínimo de `0.01`.
 
-## 9. Consumo de API, DTOs y Contratos `@repo/types`
+### 3.7. Fuga de Temporizador setInterval en Componente PWA `[MEDIO]`
+* **Archivo afectado:**
+  * [`apps/web/src/components/pwa/PwaStatusOverlay.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/pwa/PwaStatusOverlay.tsx#L23-L27)
+* **Causa raíz:** En la función `onRegisteredSW`, se invoca `window.setInterval` para comprobar actualizaciones periódicas del Service Worker. El identificador del intervalo no se almacena ni se limpia mediante `clearInterval` al desmontar el componente.
+* **Impacto:** Fuga de recursos en memoria si el componente sufre remontajes o cambios de ciclo de vida.
+* **Remediación:** Almacenar la referencia del temporizador y asegurar su limpieza en el retorno del efecto de React.
 
-* **DTOs robustos**: [`CreateSaleDto`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/dto/create-sale.dto.ts) y [`CreateAccountingEntryDto`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/dto/create-accounting-entry.dto.ts) validan tipos anidados, UUIDs y rangos numéricos adecuadamente.
-* **DTOs débiles en Inventario (`apps/api/src/modules/inventory/dto/`)**: [`CreatePackagingDto`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/create-packaging.dto.ts), [`CreateIngredientDto`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/create-ingredient.dto.ts), [`CreateProductDto`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/create-product.dto.ts), [`CreateSupplierDto`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/create-supplier.dto.ts), [`CreateRecipeDto`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/create-recipe.dto.ts) y [`CreateGeneralSupplyDto`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/create-general-supply.dto.ts) omiten `@Type(() => Number)`, `@Max`, `@MaxLength`, trim + `@Matches(/\S/)`, `@IsUUID('4')`, `@ArrayMinSize(1)` en recetas y whitelist de protocolo `http(s):` en `imageUrl`, y sus `Update*Dto` exponen `stock` vía `PartialType`.
-* **Deriva con `@repo/types`**:
-  * [`SupplyModality`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/packages/types/src/inventory.ts#L90) acepta `'mixto'`, rechazado por [`CreateSupplierDto`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/create-supplier.dto.ts#L49).
-  * [`pos-totals.helper.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/pos-totals.helper.ts#L116-L130) retorna claves duplicadas `snake_case` y `camelCase` ausentes en [`PosSaleItem`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/packages/types/src/pos.ts#L11-L20).
-  * [`posShiftService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/posShiftService.ts#L18-L22) tipa `from?/to?` en `updateOpeningCash`, bloqueados por `forbidNonWhitelisted: true`.
-  * Los servicios de inventario en `apps/web/src/services/` reciben `Partial<T>` en vez de tipos `*Input` dedicados.
-
----
-
-## 10. Plan de Remediación Detallado (P0 → P3)
-
-> Detalle de carpetas, archivos y código a **crear**, **modificar** o **eliminar**.
-
-### Ola P0 — Seguridad, Esquema DB, ACID Crítico y PWA
-
-1. **Saneamiento SQL en Vivo, Sincronización SQL/Prisma y Auth Supabase**:
-   * **Crear** archivo `supabase/migrations/001X_db_hardening_and_accounts.sql`:
-     * Revocar RPC expuestos y limpiar legacy: `REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;`, `DROP FUNCTION IF EXISTS public.is_admin();`, `DROP FUNCTION IF EXISTS public.create_pos_sale_transaction(text, text, numeric, numeric, numeric, jsonb);`.
-     * Eliminar los 5 índices duplicados: `DROP INDEX IF EXISTS public.idx_pos_sales_payment_method, public.idx_pos_sales_sold_at, public.idx_pos_sales_status, public.idx_pos_sale_items_product_id, public.idx_pos_sale_items_sale_id;`.
-     * Corregir precisión y datos históricos: normalizar `ROUND(credit, 2)` / `ROUND(debit, 2)` en `accounting_entry_item` (corrige asientos `5, 7, 8`), tipar `accounting_entry_item.{debit, credit}` y montos de `pos_sale`/`pos_sale_item` a `numeric(12, 2)`, añadir `CHECK ((debit > 0 AND credit = 0) OR (credit > 0 AND debit = 0))`, `CHECK (yield_servings > 0)` en `recipe`, `CHECK (>= 0)` en precios de inventario y triggers `set_updated_at()`.
-     * Alinear catálogo de `accounting_account` en vivo (insertar `1103`, `1104`, `1105`, `1106`, `2101` faltantes o definir mapeo explícito hacia `1102`).
-   * **Panel Supabase → `Authentication → Sign In / Providers`**: deshabilitar **Allow new users to sign up**.
-   * **Modificar** [`supabase/schema.sql`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/schema.sql) (añadir `pos_sale.created_by`, las 3 únicas reales, el seed real sincronizado, `REVOKE` en `handle_new_user()` y `numeric(12, 2)`), [`apps/api/prisma/schema.prisma`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/prisma/schema.prisma) (`Profile.role @default("user")`, `onDelete: SetNull` en `posSale`) y [`PrismaService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/database/prisma.service.ts#L34-L62) (alinear timeout `onModuleInit` con `5000ms` y retirar logs obsoletos de `"Supabase REST"`).
-   * **Modificar** [`entry.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L304-L406): corregir `resolveSaleAccounts` para que `credito`/`transferencia` caigan primero en `1102` (Banco/Transbank) antes que `1101` (Caja) o exijan la cuenta bancaria activa, y serializar valores monetarios vía cadena decimal exacta (`.toFixed(2)` / `Prisma.Decimal`) para evitar fugas IEEE-754 de `@prisma/adapter-pg`.
-2. **Endurecimiento HTTP, Guards Globales y `UsersService`**:
-   * **Crear** carpeta `apps/api/src/common/decorators/` con `public.decorator.ts` (`@Public()`) y `current-user.decorator.ts` (`@CurrentUser()`), y carpeta `apps/api/src/common/filters/` con `all-exceptions.filter.ts` (`AllExceptionsFilter`).
-   * **Modificar** [`apps/api/package.json`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/package.json) (`helmet`, `@nestjs/throttler`), [`apps/api/src/main.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/main.ts) (`helmet()`, `trust proxy`, `ForbiddenException` en CORS y `AllExceptionsFilter`), [`apps/api/src/app.module.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/app.module.ts) (`ThrottlerModule` y `APP_GUARD`), [`apps/api/src/app.controller.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/app.controller.ts) (`@Public()`), [`prisma-error.util.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/utils/prisma-error.util.ts) (`Logger` y discriminación en `23514`), [`users.controller.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.controller.ts) y [`users.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.service.ts) (migrar lecturas/escrituras de `public.profile` a `PrismaService` e impedir autodegradación o baja del último `admin`).
-3. **ACID, Zona Horaria Chile e Idempotencia**:
-   * **Modificar** [`chile-time.util.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/utils/chile-time.util.ts): añadir `getChileMonthDateRangeUtc()` y `getChileYearDateRangeUtc()`.
-   * **Modificar** [`accounting-period.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-period.service.ts), [`accounting-settings.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-settings.service.ts) y [`AccountingPeriodsTab.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/AccountingPeriodsTab.tsx): reemplazar `upsert` dentro de TX por `INSERT ... ON CONFLICT DO NOTHING` + `FOR SHARE/UPDATE`, cambiar `closingYear: { gte: year }`, asegurar existencia de fila antes de `FOR UPDATE` en `closePeriod`, usar rangos Chile y validar turnos `pending`.
-   * **Modificar** [`annual-closing.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/annual-closing.service.ts): aislar en `Serializable` o bloquear períodos y exigir `posShift` pendientes `=== 0`.
-   * **Modificar** [`pos-shift.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/pos-shift.service.ts): tomar locks previos, incluir `posShift.update` en transacción y añadir `syncPendingShifts()`.
-   * **Modificar** [`idempotency.interceptor.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/interceptors/idempotency.interceptor.ts), controladores `inventory/*.controller.ts`, [`users.controller.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.controller.ts) y [`apps/web/src/lib/api.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/lib/api.ts): registrar completado dentro de la TX de negocio (vía `AsyncLocalStorage`), capturar status HTTP real (`201`/`200`), extender interceptor a `PATCH`/`DELETE` de inventario y `/users`, y aceptar `idempotencyKey` por acción en cliente.
-4. **Cierre de Fugas PWA y Refresh 401**:
-   * **Modificar** [`authService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/authService.ts) (`await clearPwaApiCaches()` en logout y login; preservar sesión offline `status === 0`), [`api.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/lib/api.ts) (mutex single-flight `refreshSessionPromise` y logout tras `401` definitivo) y [`PwaStatusOverlay.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/pwa/PwaStatusOverlay.tsx) (cleanup de `setInterval`).
-   * **Eliminar** de [`apps/web/package.json`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/package.json): `dexie` y `dexie-react-hooks`.
-
-### Ola P1 — Fronteras Modulares, Integridad Contable y Bugs de Dominio
-
-1. **Desacoplar Contabilidad ↔ POS**:
-   * **Crear** `apps/api/src/modules/pos/pos-accounting-port.service.ts` (o módulo compartido en `apps/api/src/modules/shared/`) para encapsular lecturas, bloqueos y cambios de `accountingStatus` en `pos_sale` y `pos_shift`.
-   * **Modificar** [`entry.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts), [`accounting-period.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-period.service.ts), [`accounting-settings.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/accounting-settings.service.ts) y [`annual-closing.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/annual-closing.service.ts) eliminando consultas directas a tablas POS.
-2. **Correcciones Contables y Valorización**:
-   * **Modificar** [`entry.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts) (exigir `isActive`, prohibir `debit > 0 && credit > 0` en una línea, tolerancia `0`, proteger `origin === 'pos'` en `voidEntry`), [`balance-sheet-classifier.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/balance-sheet-classifier.ts) (priorizar impuestos sobre `"por pagar"`), [`BalanceSheetSection.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/BalanceSheetSection.tsx) (mostrar `otrosActivos`/`otrosPasivos`) y [`inventory-valuation.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/inventory-valuation.service.ts) (incluir `GeneralSupply` y `costPrice > 0`).
-3. **Correcciones Inventario y UI**:
-   * **Modificar** [`AppLayout.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/layout/AppLayout.tsx) y [`PackagingView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/packaging/PackagingView.tsx) (prop `user` y control de botones CRUD).
-   * **Modificar** [`packaging.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/packaging.service.ts), [`ingredient.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/ingredient.service.ts), [`product.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/product.service.ts) y [`general-supply.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/general-supply.service.ts) (rechazar stock negativo en `adjustStock` con `ConflictException`).
-   * **Modificar** [`recipe.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/recipe.service.ts), [`unit-converter.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/utils/unit-converter.ts), [`ProduceRecipeModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/recipes/ProduceRecipeModal.tsx) e [`IngredientModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/ingredients/IngredientModal.tsx).
-   * **Modificar** [`supplier.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/supplier.service.ts), [`PackagingModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/packaging/PackagingModal.tsx), [`ProductModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/products/ProductModal.tsx), [`SupplierModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/suppliers/SupplierModal.tsx), [`ShoppingListView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/shopping/ShoppingListView.tsx) y [`GeneralSuppliesView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/general-supplies/GeneralSuppliesView.tsx).
-
-### Ola P2 — DTOs, `@repo/types` y Escalabilidad SQL
-
-1. **Validadores y DTOs**:
-   * **Crear** `apps/api/src/common/validators/safe-http-url.validator.ts` y `apps/api/src/common/transformers/trim.transformer.ts`.
-   * **Modificar** los DTOs en `apps/api/src/modules/inventory/dto/` (`@Type(() => Number)`, `@Max`, `@MaxLength`, `@Matches(/\S/)`, `@ArrayMinSize(1)`, `@IsSafeHttpUrl()`, y `OmitType(..., ['stock'])` en `Update*Dto`).
-2. **Contratos `@repo/types`**:
-   * **Modificar** [`packages/types/src/inventory.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/packages/types/src/inventory.ts) (alinear `SupplyModality` y crear tipos `*Input`) y [`packages/types/src/pos.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/packages/types/src/pos.ts).
-   * **Modificar** [`pos-totals.helper.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/pos-totals.helper.ts) y [`posShiftService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/posShiftService.ts) eliminando claves duplicadas `snake_case` y `from?/to?`.
-3. **Consultas SQL Agregadas y Paginación**:
-   * **Modificar** [`balance.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/balance.service.ts), [`ledger.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/ledger.service.ts), [`financial-report.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/financial-report.service.ts) y endpoints paginados de POS/Asientos.
-
-### Ola P3 — Refactorización SRP, Desduplicación y Calidad React/UX
-
-1. **Lógica de Dominio Compartida**:
-   * **Crear** carpeta `packages/types/src/domain/` (`pricing.ts`, `tax.ts`, `currency.ts`) eliminando copias locales en [`posPrint.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/pos/posPrint.ts#L45-L47), [`PurchaseItemModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/shopping/PurchaseItemModal.tsx#L50-L56) y [`supplierService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/supplierService.ts#L5-L27).
-2. **Descomposición SRP**:
-   * **Crear** `apps/api/src/modules/accounting/pos-accounting-integration.service.ts` separando la integración POS de [`EntryService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts).
-   * **Crear** carpeta `apps/web/src/hooks/` (`useAbortableFetch.ts`, `usePosWorkspace.ts`, `useAccountingPeriods.ts`, `useCatalogData.ts`) extrayendo estado HTTP de vistas monolíticas.
-3. **Rendimiento y Linter**:
-   * **Modificar** [`App.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/App.tsx) (cooldown de `focus`), [`AppLayout.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/layout/AppLayout.tsx) (quitar fetch duplicado), [`RecipesView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/recipes/RecipesView.tsx) (`isSubmitting` y tecla `Escape`), [`AccountingEntryModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/AccountingEntryModal.tsx) (`dark:`) y [`eslint.config.js`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/eslint.config.js) (restaurar `'error'` en `react-hooks/set-state-in-effect`).
+### 3.8. Fuga de Caché PWA entre Sesiones por Falta de Limpieza en Login `[MEDIO-ALTO]`
+* **Archivo afectado:**
+  * [`apps/web/src/services/authService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/authService.ts#L453-L510)
+* **Causa raíz:** `clearPwaApiCaches()` solo se ejecuta en `logout()`, y lo hace sin `await`. Durante el flujo de `login()`, no se ejecuta ninguna limpieza de las cachés de Service Worker (`orion-api-catalog-reads`).
+* **Impacto:** Si un panadero inicia sesión inmediatamente después de un administrador en el mismo dispositivo sin un cierre de sesión explícito previo, el nuevo usuario puede acceder a datos en caché de endpoints protegidos (como proveedores) mediante el fallback offline del Service Worker.
+* **Remediación:** Invocar `await clearPwaApiCaches()` al inicio del método `login()`.
 
 ---
 
-## 11. Auditoría Confirmada de la Base de Datos en Vivo (Supabase)
+## 4. Prioridad P2: Medio — DTOs, Contratos y Desduplicación de Reglas
 
-Los resultados obtenidos directamente desde los catálogos de PostgreSQL, Security/Performance Advisors y configuración de Supabase cierran la verificación empírica del estado real de producción/staging:
+### 4.1. Incompatibilidad de DTO en Actualización de Caja Inicial POS `[MEDIO]`
+* **Archivos afectados:**
+  * [`apps/web/src/services/posShiftService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/posShiftService.ts#L18-L22)
+  * [`apps/api/src/modules/pos/dto/pos-shift.dto.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/dto/pos-shift.dto.ts#L22-L32)
+* **Causa raíz:** El frontend define el tipo de payload como `{ openingCash: number; from?: string; to?: string; }`. El backend define [`UpdateOpeningCashDto`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/pos/dto/pos-shift.dto.ts#L22-L32) conteniendo exclusivamente la propiedad `openingCash`.
+* **Impacto:** Al tener habilitado `forbidNonWhitelisted: true` en el `ValidationPipe` global de NestJS, si el frontend envía los campos opcionales `from` o `to`, la petición es rechazada con un error HTTP `400 Bad Request`.
+* **Remediación:** Remover los campos `from` y `to` de la firma de `updateOpeningCash` en `posShiftService.ts`.
 
-### 11.1. Seguridad, RLS, Funciones RPC y Auth
-* **Tablas completamente cerradas (`Cumple`)**:
-  * Las **19 tablas** de `public` tienen `rls_enabled = true` y **`rls_policies: []`** (se removieron todas las políticas permisivas `USING (true)` de migraciones `0007`–`0009`).
-  * `role_table_grants` confirma que **únicamente `service_role`** posee privilegios sobre las tablas; `anon`, `authenticated` y `PUBLIC` tienen acceso nulo vía PostgREST.
-  * `storage.buckets` devuelve `[]` (sin buckets públicos expuestos en Supabase Storage).
-* **Funciones `SECURITY DEFINER` expuestas vía RPC `[ALTO]`** (Security Advisor `0028` / `0029`):
-  * `public.is_admin()` (`SECURITY DEFINER`, `SET search_path TO 'public'`): **sin uso** (0 políticas RLS la invocan), pero ejecutable por `PUBLIC`, `anon` y `authenticated` (`/rest/v1/rpc/is_admin`).
-  * `public.handle_new_user()` (`SECURITY DEFINER`, `SET search_path TO ''`): aunque su código interno hardcodea `role = 'user'` y está vinculado al trigger `on_auth_user_created` en `auth.users`, conserva privilegio `EXECUTE` para `PUBLIC`, `anon` y `authenticated`.
-  * `public.create_pos_sale_transaction(...)`: función RPC obsoleta (`service_role`) que registra ventas con `data_origin = 'demo'` sin descontar inventario ni generar asientos.
-* **Configuración de Auth `[ALTO]`**:
-  * **Allow new users to sign up está habilitado** pese a que las cuentas son creadas exclusivamente por un administrador: permite que terceros con `VITE_SUPABASE_ANON_KEY` creen cuentas `'user'` y consuman cuota de correos de confirmación (`Confirm email = ON`).
-  * **Leaked Password Protection** figura deshabilitado en Advisor (en Supabase suele estar restringido al plan Pro+).
+### 4.2. Lógica Comercial y Heurísticas Duplicadas entre Frontend y Backend `[MEDIO]`
+* **Archivos afectados:**
+  * [`apps/api/src/common/utils/money.util.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/utils/money.util.ts#L20-L22) y [`apps/web/src/components/pos/posPrint.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/pos/posPrint.ts#L45-L53) (`resolveSecondaryPackagingPrice`).
+  * [`apps/api/src/modules/inventory/suppliers/supplier.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/suppliers/supplier.service.ts#L34-L55) y [`apps/web/src/services/supplierService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/supplierService.ts#L5-L27) (`detectSupplyModality`).
+* **Causa raíz:** La regla legal de cobro de bolsas secundarias ($100 CLP) y la heurística de modalidad de proveedores están implementadas por duplicado en cliente y servidor con ligeras variaciones de código.
+* **Remediación:** Exportar estas funciones desde el paquete compartido [`@repo/types`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/packages/types) o unificar la fuente de verdad en el backend.
 
-### 11.2. Desfase Contable Real y Bug Activo de Precisión Flotante
-1. **Desvío de ventas con Crédito y Transferencia hacia `1101 Caja Efectivo` `[CRÍTICO]`**:
-   * El catálogo vivo en `public.accounting_account` contiene **11 cuentas**: `1101 Caja Efectivo`, `1102 Banco / Transbank`, `2105 IVA Débito Fiscal`, `3101`, `3102`, `4101`, `4102`, `5101`, `5201 Insumos Operativos`, `6102 Gastos Generales` y `6103`.
-   * **No existen en vivo** las cuentas `1103` (Banco / Tarjeta Crédito), `1104` (Banco / Transferencias), `1105`, `1106`, `2101` ni `6101` definidas en el seed de [`supabase/schema.sql`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/supabase/schema.sql#L388-L405).
-   * Como [`EntryService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L24-L29) mapea `credito → '1103'` y `transferencia → '1104'`, y [`resolveSaleAccounts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L388-L406) cae directo a `'1101'` cuando falta el código buscado, **toda venta con tarjeta de crédito o transferencia se contabiliza erróneamente como efectivo en `1101`**, saltándose `1102 Banco / Transbank`.
-2. **Contaminación decimal activa en `accounting_entry_item` (`8403.360000000001`) `[ALTO]`**:
-   * Las filas de los asientos POS `entry_number` **5** (`2026-11-06`), **7** y **8** (`2026-11-11 21:39:05+00` y `21:39:20+00` — posteriores a `roundMoney`) registraron:
-     * Debe: `"10000"` (`Ingreso venta efectivo`)
-     * Haber: **`"8403.360000000001"`** (`Venta neta productos`) + `"1596.64"` (`19% IVA Débito Fiscal`) → suma crédito `10000.000000000001` (`diff: -1e-12`).
-   * **Causa raíz confirmada:** en PostgreSQL en vivo, `accounting_entry_item.{debit, credit}` son `numeric` sin escala fija `(12, 2)` (pese a `@db.Decimal(12, 2)` en [`schema.prisma`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/prisma/schema.prisma#L300-L301)). Cuando [`EntryService.registerSaleIncome`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/accounting/entry.service.ts#L313-L320) entrega el `number` IEEE-754 `8403.36` (cuyo binario exacto es `8403.360000000000582...`) a través de `@prisma/adapter-pg` / `pg`, PostgreSQL almacena la representación `float8` redondeada a 16 dígitos significativos (`8403.360000000001`) en lugar de `8403.36`.
+### 4.3. Validación Laxa en DTOs Base de Inventario `[MEDIO]`
+* **Archivos afectados:**
+  * [`apps/api/src/modules/inventory/dto/create-product.dto.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/create-product.dto.ts)
+  * [`apps/api/src/modules/inventory/dto/create-ingredient.dto.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/create-ingredient.dto.ts)
+  * [`apps/api/src/modules/inventory/dto/create-packaging.dto.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/create-packaging.dto.ts)
+  * [`apps/api/src/modules/inventory/dto/create-general-supply.dto.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/dto/create-general-supply.dto.ts)
+* **Causa raíz:** Omiten el decorador `@Type(() => Number)` en propiedades numéricas enviadas como texto, no fijan límites superiores con `@Max`, omiten `@MaxLength` en nombres y no restringen el protocolo `http(s):` en el campo opcional `imageUrl`.
+* **Remediación:** Enriquecer las clases con decoradores de validación estrictos de `class-validator` y `class-transformer`.
 
-### 11.3. Estructura Física, Índices Duplicados, Conexión y Salud Operacional
-* **Columnas e índices reales vs código**:
-  * En vivo existen `pos_sale.created_by` (`idx_pos_sale_created_by`) y las restricciones `unique_category_name_type`, `unique_recipe_ingredient` y `supplier_ingredient_unique`.
-  * **5 índices duplicados activos** (Performance Advisor `0009_duplicate_index`): coexisten en `pos_sale` (`idx_pos_sales_payment_method`, `idx_pos_sales_sold_at`, `idx_pos_sales_status`) y en `pos_sale_item` (`idx_pos_sale_items_product_id`, `idx_pos_sale_items_sale_id`) junto a sus pares en singular.
-  * No existe `supabase_migrations.schema_migrations` (`42P01`), confirmando aplicación manual por SQL Editor.
-  * El único trigger en PostgreSQL es `on_auth_user_created`; faltan triggers SQL `updated_at`, `CHECK` por línea en `accounting_entry_item`, `CHECK (yield_servings > 0)` en `recipe` y `CHECK (>= 0)` en precios de `ingredient`, `product` y `packaging`.
-* **Conexión Pooler Puerto `6543` (Supavisor Transaction Mode, IPv4)**:
-  * [`PrismaService`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/database/prisma.service.ts#L15-L62) usa `@prisma/adapter-pg` + `pg.Pool` (`max: 10`), compatible en runtime con `6543` IPv4 (incluso con `FOR UPDATE` dentro de `$transaction`), pero presenta un timeout de arranque en [`onModuleInit`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/database/prisma.service.ts#L43-L47) (`3000ms`) menor que `connectionTimeoutMillis` (`5000ms`) y logs obsoletos de `"Supabase REST"`. Para CLI de Prisma (`prisma migrate`/`db push`) sobre IPv4 se debe usar el **Session Pooler puerto `5432`**.
-* **Estado saludable actual de datos**: volumen liviano (`pos_sale: 7`, `pos_shift: 2`, `accounting_entry: 7`, `profile: 4`, `idempotency_record: 0`), `auth_vs_profile` `4/4` sincronizados (`1 admin, 2 cashier, 1 baker`), `0` stock negativo, `0` partidas en cuentas inactivas, `0` ventas anuladas con asiento activo, `4` ventas históricas anteriores a turnos (`shift_id IS NULL`) y unidades (`Gramos`, `Litros`, `kg`, `Unidades`) compatibles con [`unit-converter.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/common/utils/unit-converter.ts#L8-L64).
+---
 
+## 5. Plan Detallado de Remediación (Archivos, Carpetas y Código)
 
+### Carpetas a Crear:
+1. `apps/api/src/common/filters/` (para `AllExceptionsFilter`).
+
+### Archivos a Crear:
+1. `apps/api/src/common/filters/all-exceptions.filter.ts`:
+   * Normalización centralizada de excepciones no controladas y errores de conexión a PostgreSQL.
+2. `supabase/migrations/0010_security_hardening.sql`:
+   * Revocación de permisos en funciones RPC expuestas y eliminación de los 5 índices duplicados.
+
+### Archivos a Modificar:
+
+#### Backend (`apps/api`):
+* [`apps/api/package.json`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/package.json):
+  * Agregar dependencias: `helmet`, `@nestjs/throttler`, `@types/helmet`.
+* [`apps/api/src/main.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/main.ts):
+  * Agregar `helmet()`, `expressApp.set('trust proxy', 1)`, cambiar callback CORS a `new ForbiddenException(...)` y registrar `AllExceptionsFilter`.
+* [`apps/api/src/app.module.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/app.module.ts):
+  * Configurar `ThrottlerModule` y registrar `AuthGuard` y `RolesGuard` como `APP_GUARD`.
+* [`apps/api/src/app.controller.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/app.controller.ts):
+  * Decorar `getHello()` y `checkHealth()` con `@Public()`.
+* DTOs de Inventario (`apps/api/src/modules/inventory/dto/`):
+  * Modificar `update-product.dto.ts`, `update-ingredient.dto.ts`, `update-packaging.dto.ts`, `update-general-supply.dto.ts` usando `OmitType(..., ['stock'])`.
+* Servicios de Inventario (`apps/api/src/modules/inventory/`):
+  * Remover `stock` de las mutaciones `update()` en `product.service.ts`, `ingredient.service.ts`, `packaging.service.ts` y `general-supply.service.ts`.
+* [`apps/api/src/modules/users/users.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.service.ts) y [`users.controller.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/users/users.controller.ts):
+  * Migrar mutaciones a `this.prisma.profile`, inyectar `@CurrentUser()`, y validar último administrador.
+* [`apps/api/src/modules/inventory/valuation/inventory-valuation.service.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/api/src/modules/inventory/valuation/inventory-valuation.service.ts):
+  * Corregir coalescencia de costo y sumar insumos generales.
+
+#### Frontend (`apps/web`):
+* [`apps/web/src/services/authService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/authService.ts):
+  * Preservar sesión local cuando `status === 0`, y ejecutar `await clearPwaApiCaches()` en `login()`.
+* [`apps/web/src/components/pwa/PwaStatusOverlay.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/pwa/PwaStatusOverlay.tsx):
+  * Limpiar el temporizador `setInterval` con `clearInterval` en la función de limpieza.
+* [`apps/web/src/components/layout/AppLayout.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/layout/AppLayout.tsx):
+  * Proveer `user={user}` a `<PackagingView>`.
+* [`apps/web/src/components/inventory/packaging/PackagingView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/packaging/PackagingView.tsx):
+  * Recibir `user` y condicionar visibilidad de botones CRUD a rol `admin`.
+* [`apps/web/src/components/inventory/general-supplies/GeneralSuppliesView.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/general-supplies/GeneralSuppliesView.tsx):
+  * Ajustar el filtro `'low_stock'` para excluir ítems con stock menor o igual a 0.
+* [`apps/web/src/components/inventory/recipes/ProduceRecipeModal.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/inventory/recipes/ProduceRecipeModal.tsx):
+  * Ajustar el decremento a `0.01` como cota inferior en vez de `1`.
+* [`apps/web/src/components/accounting/BalanceSheetSection.tsx`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/components/accounting/BalanceSheetSection.tsx):
+  * Renderizar los desgloses de `otrosActivos` y `otrosPasivos`.
+* [`apps/web/src/services/posShiftService.ts`](file:///c:/Users/PC/Desktop/erp-pasteleria_orion/apps/web/src/services/posShiftService.ts):
+  * Remover propiedades `from` y `to` en `updateOpeningCash`.

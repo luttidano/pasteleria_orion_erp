@@ -6,6 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
+import { PrismaService } from '../../database/prisma.service';
+import { Role } from '../../common/enums';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import {
@@ -17,32 +19,36 @@ import {
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   private get supabase() {
     return this.supabaseService.client;
   }
 
   async findAll() {
-    const { data, error } = await this.supabase
-      .from('profile')
-      .select('id, name, email, role, avatar_url, created_at, updated_at')
-      .order('created_at', { ascending: false });
+    try {
+      const data = await this.prisma.profile.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
 
-    if (error) {
-      this.logger.error(`Error listando usuarios: ${error.message}`);
+      return data.map((p) => ({
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        role: p.role,
+        avatarUrl: p.avatarUrl,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+      }));
+    } catch (error) {
+      this.logger.error(
+        `Error listando usuarios desde Prisma: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw new InternalServerErrorException('No se pudo obtener la lista de usuarios.');
     }
-
-    return (data || []).map((p) => ({
-      id: p.id,
-      name: p.name,
-      email: p.email,
-      role: p.role,
-      avatarUrl: p.avatar_url,
-      createdAt: p.created_at,
-      updatedAt: p.updated_at,
-    }));
   }
 
   async create(dto: CreateUserDto) {
@@ -81,19 +87,24 @@ export class UsersService {
       throw new InternalServerErrorException('No se pudo generar la cuenta en Supabase Auth.');
     }
 
-    // 2. Insertar / Actualizar perfil autoritativo en public.profile
-    const { data: profile, error: profError } = await this.supabase
-      .from('profile')
-      .upsert({
-        id: authData.user.id,
-        name: cleanName,
-        email: cleanEmail,
-        role: dto.role,
-      })
-      .select('id, name, email, role, created_at, updated_at')
-      .single();
-
-    if (profError) {
+    // 2. Insertar / Actualizar perfil autoritativo en public.profile vía Prisma
+    let profile: any;
+    try {
+      profile = await this.prisma.profile.upsert({
+        where: { id: authData.user.id },
+        create: {
+          id: authData.user.id,
+          name: cleanName,
+          email: cleanEmail,
+          role: dto.role,
+        },
+        update: {
+          name: cleanName,
+          email: cleanEmail,
+          role: dto.role,
+        },
+      });
+    } catch (profError: any) {
       this.logger.error(
         `Error creando public.profile para ${authData.user.id}, compensando en auth.users: ${profError.message}`,
       );
@@ -111,14 +122,31 @@ export class UsersService {
       name: profile?.name || cleanName,
       email: profile?.email || cleanEmail,
       role: profile?.role || dto.role,
-      createdAt: profile?.created_at || new Date().toISOString(),
+      createdAt: profile?.createdAt ? new Date(profile.createdAt).toISOString() : new Date().toISOString(),
     };
   }
 
-  async update(id: string, dto: UpdateUserDto) {
-    const payload: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
-    };
+  async update(id: string, dto: UpdateUserDto, currentAdminId?: string) {
+    // 1. Validar que un administrador no se autodegrade a otro rol
+    if (dto.role && dto.role !== Role.admin && id === currentAdminId) {
+      throw new BadRequestException('No puedes degradar tu propia cuenta de Administrador a otro rol.');
+    }
+
+    // 2. Validar que no se degrade al único administrador activo
+    if (dto.role && dto.role !== Role.admin) {
+      const targetUser = await this.prisma.profile.findUnique({ where: { id } });
+      if (!targetUser) {
+        throw new NotFoundException('Usuario no encontrado.');
+      }
+      if (targetUser.role === Role.admin) {
+        const adminCount = await this.prisma.profile.count({ where: { role: Role.admin } });
+        if (adminCount <= 1) {
+          throw new BadRequestException('No se puede degradar al único Administrador activo del sistema.');
+        }
+      }
+    }
+
+    const payload: { name?: string; role?: string } = {};
     if (dto.name !== undefined) {
       const cleanName = dto.name.trim();
       if (!cleanName) {
@@ -130,23 +158,21 @@ export class UsersService {
       payload.role = dto.role;
     }
 
-    // 1. Actualizar tabla autoritativa public.profile
-    const { data: profile, error } = await this.supabase
-      .from('profile')
-      .update(payload)
-      .eq('id', id)
-      .select('id, name, email, role, created_at, updated_at')
-      .single();
-
-    if (error || !profile) {
-      if (error?.code === 'PGRST116') {
+    let profile: any;
+    try {
+      profile = await this.prisma.profile.update({
+        where: { id },
+        data: payload,
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
         throw new NotFoundException('Usuario no encontrado.');
       }
-      this.logger.error(`Error actualizando usuario ${id}: ${error?.message || 'sin datos'}`);
+      this.logger.error(`Error actualizando usuario ${id}: ${error?.message || String(error)}`);
       throw new BadRequestException('No se pudo actualizar el perfil del usuario.');
     }
 
-    // 2. Sincronizar solo display name en metadatos de Auth (el rol vive exclusivamente en public.profile)
+    // 3. Sincronizar display name en metadatos de Auth si cambió el nombre
     if (dto.name !== undefined) {
       try {
         const { error: metaError } = await this.supabase.auth.admin.updateUserById(id, {
@@ -164,7 +190,7 @@ export class UsersService {
       }
     }
 
-    // 3. Sincronizar caché en caliente de AuthGuard
+    // 4. Sincronizar caché en caliente de AuthGuard
     syncUserCache(profile.id, {
       name: profile.name,
       role: profile.role,
@@ -176,8 +202,8 @@ export class UsersService {
       name: profile.name,
       email: profile.email,
       role: profile.role,
-      createdAt: profile.created_at,
-      updatedAt: profile.updated_at,
+      createdAt: profile.createdAt ? new Date(profile.createdAt).toISOString() : new Date().toISOString(),
+      updatedAt: profile.updatedAt ? new Date(profile.updatedAt).toISOString() : new Date().toISOString(),
     };
   }
 
@@ -188,15 +214,13 @@ export class UsersService {
       );
     }
 
-    const { data: existingProfile, error: lookupError } = await this.supabase
-      .from('profile')
-      .select('id')
-      .eq('id', id)
-      .maybeSingle();
+    const existingProfile = await this.prisma.profile.findUnique({ where: { id } });
 
-    if (lookupError) {
-      this.logger.error(`Error verificando usuario ${id}: ${lookupError.message}`);
-      throw new InternalServerErrorException('No se pudo verificar el usuario a eliminar.');
+    if (existingProfile?.role === Role.admin) {
+      const adminCount = await this.prisma.profile.count({ where: { role: Role.admin } });
+      if (adminCount <= 1) {
+        throw new BadRequestException('No se puede eliminar al único Administrador activo del sistema.');
+      }
     }
 
     // 1. Revocar primero en Supabase Auth (auth.users); cascade elimina public.profile
@@ -217,17 +241,16 @@ export class UsersService {
       this.logger.warn(`Usuario ${id} no existía en auth.users; limpiando perfil residual.`);
     }
 
-    // 2. Limpieza explícita/idempotente de public.profile
-    const { error: profError } = await this.supabase
-      .from('profile')
-      .delete()
-      .eq('id', id);
-
-    if (profError) {
-      this.logger.error(`Error eliminando public.profile(${id}): ${profError.message}`);
-      throw new InternalServerErrorException(
-        'No se pudo completar la eliminación del perfil en base de datos.',
-      );
+    // 2. Limpieza explícita/idempotente de public.profile vía Prisma
+    try {
+      await this.prisma.profile.delete({ where: { id } });
+    } catch (profError: any) {
+      if (profError?.code !== 'P2025') {
+        this.logger.error(`Error eliminando public.profile(${id}): ${profError.message}`);
+        throw new InternalServerErrorException(
+          'No se pudo completar la eliminación del perfil en base de datos.',
+        );
+      }
     }
 
     // 3. Invalidar de inmediato cualquier token cacheado del usuario eliminado

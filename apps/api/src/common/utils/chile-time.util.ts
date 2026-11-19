@@ -270,6 +270,22 @@ export function getMonthDateRangeUtc(
   };
 }
 
+/**
+ * Calcula el rango de fechas en UTC correspondiente al mes calendario en la zona horaria de la tienda (Chile).
+ * El inicio corresponde a las 00:00:00.000 locales del primer día del mes,
+ * y el fin a las 23:59:59.999 locales del último día del mes.
+ */
+export function getChileMonthDateRangeUtc(
+  year: number,
+  month: number,
+  timeZone = STORE_TIMEZONE,
+): { start: Date; end: Date } {
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const start = getZonedInstant(year, month, 1, 0, 0, 0, 0, timeZone);
+  const end = getZonedInstant(year, month, lastDay, 23, 59, 59, 999, timeZone);
+  return { start, end };
+}
+
 export function toUtcDateOnly(date: Date): Date {
   return new Date(
     Date.UTC(

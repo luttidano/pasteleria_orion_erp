@@ -144,7 +144,6 @@ export class PackagingService {
           ...(dto.name !== undefined && { name: dto.name }),
           ...(dto.packageType !== undefined && { packageType: dto.packageType }),
           ...(dto.category !== undefined && { category: dto.category }),
-          ...(dto.stock !== undefined && { stock: dto.stock }),
           ...(dto.minStock !== undefined && { minStock: dto.minStock }),
           ...(dto.unit !== undefined && { unit: dto.unit }),
           ...(dto.costPrice !== undefined && { costPrice: dto.costPrice }),

@@ -172,7 +172,6 @@ export class ProductService {
         data: {
           ...(dto.name !== undefined && { name: dto.name }),
           ...(dto.productType !== undefined && { productType: dto.productType }),
-          ...(dto.stock !== undefined && { stock: dto.stock }),
           ...(dto.minStock !== undefined && { minStock: dto.minStock }),
           ...(dto.unit !== undefined && { unit: dto.unit }),
           ...(dto.salePrice !== undefined && { salePrice: dto.salePrice }),

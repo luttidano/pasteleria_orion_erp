@@ -109,7 +109,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         productType,
         recipeId: productType === 'manufactured' ? recipeId || undefined : undefined,
         supplierId: productType === 'resale' ? supplierId || undefined : undefined,
-        stock: productType === 'manufactured' && !productToEdit ? 0 : Number(stock),
+        ...(productToEdit ? {} : { stock: productType === 'manufactured' ? 0 : Number(stock) }),
         minStock: Number(minStock) || 0,
         unit,
         salePrice: Number(salePrice),
@@ -290,20 +290,27 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <div>
               <label className="block text-[11px] font-bold text-[#4A382C] dark:text-[#D5C2B4] mb-1 flex items-center gap-1">
                 <span>Stock actual</span>
-                {productType === 'manufactured' && <Lock className="w-3 h-3 text-stone-400" />}
+                {(Boolean(productToEdit) || productType === 'manufactured') && (
+                  <Lock className="w-3 h-3 text-stone-400" />
+                )}
               </label>
               <input
                 type="number"
                 min="0"
-                disabled={productType === 'manufactured'}
+                disabled={Boolean(productToEdit) || productType === 'manufactured'}
                 value={stock}
                 onChange={(e) => setStock(e.target.value === '' ? '' : Number(e.target.value))}
                 className={`w-full px-3 py-2 rounded-xl border text-sm font-bold ${
-                  productType === 'manufactured'
+                  Boolean(productToEdit) || productType === 'manufactured'
                     ? 'bg-stone-200/60 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 border-stone-300 dark:border-stone-700 cursor-not-allowed select-none'
                     : 'border-[#DFCAA9] dark:border-[#3D2C24] bg-white dark:bg-[#19100D] text-[#1C120D] dark:text-[#FBF4EB] focus:outline-none focus:ring-2 focus:ring-[#8C1F25]'
                 }`}
               />
+              {Boolean(productToEdit) && (
+                <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1 leading-tight">
+                  Para merma, uso interno o conteo, usa el botón "Ajustar (+/-)" en la tabla.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-[11px] font-bold text-[#4A382C] dark:text-[#D5C2B4] mb-1">

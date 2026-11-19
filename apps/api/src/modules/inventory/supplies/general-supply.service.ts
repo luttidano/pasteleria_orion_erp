@@ -152,7 +152,6 @@ export class GeneralSupplyService {
         data: {
           ...(dto.name !== undefined && { name: dto.name.trim() }),
           ...(dto.category !== undefined && { category: dto.category.trim() }),
-          ...(dto.stock !== undefined && { stock: dto.stock }),
           ...(dto.minStock !== undefined && { minStock: dto.minStock }),
           ...(dto.unit !== undefined && { unit: dto.unit.trim() || 'un' }),
           ...(dto.costPrice !== undefined && { costPrice: dto.costPrice }),

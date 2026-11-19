@@ -36,9 +36,10 @@ export const productService = {
    * Actualiza los datos de un producto comercial vía API NestJS.
    */
   async update(id: string, data: Partial<CatalogProduct>): Promise<CatalogProduct> {
+    const { stock: _stock, ...updatePayload } = data;
     return await apiFetch<CatalogProduct>(`/products/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: JSON.stringify(updatePayload),
     });
   },
 

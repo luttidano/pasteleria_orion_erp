@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ForbiddenException, ValidationPipe } from '@nestjs/common';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 import * as path from 'path';
@@ -55,6 +56,13 @@ function buildAllowedCorsOrigins(): Set<string> {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Cabeceras de protección estándar (CSP, HSTS, no-sniff, etc.)
+  app.use(helmet());
+
+  // Confianza en proxies inversos (para Cloudflare / Nginx / Docker)
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', 1);
+
   // Prefijo global para las rutas: /api/inventory, etc.
   app.setGlobalPrefix('api');
 
@@ -83,7 +91,7 @@ async function bootstrap() {
         callback(null, true);
         return;
       }
-      callback(new Error('Origin not allowed by CORS policy'), false);
+      callback(new ForbiddenException('Origin not allowed by CORS policy'), false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -92,7 +100,6 @@ async function bootstrap() {
   });
 
   // Desactivar ETag para evitar respuestas 304 en llamadas de API de datos dinámicos
-  const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('etag', false);
 
   // Headers anti-caché y Logger para diagnóstico de peticiones entrantes

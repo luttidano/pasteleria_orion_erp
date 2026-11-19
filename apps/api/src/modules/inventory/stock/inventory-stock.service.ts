@@ -56,13 +56,13 @@ export class InventoryStockService {
         COALESCE(SUM(CASE WHEN stock <= 0 THEN 1 ELSE 0 END), 0)::int AS "outOfStockCount",
         COALESCE(SUM(CASE WHEN stock > 0 AND stock <= min_stock THEN 1 ELSE 0 END), 0)::int AS "restockCount"
       FROM (
-        SELECT stock, min_stock FROM ingredient WHERE is_active = true
+        SELECT stock, min_stock FROM ingredient
         UNION ALL
         SELECT stock, min_stock FROM product WHERE is_active = true AND product_type = 'resale'
         UNION ALL
         SELECT stock, min_stock FROM packaging WHERE is_active = true
         UNION ALL
-        SELECT stock, min_stock FROM general_supply WHERE is_active = true
+        SELECT stock, min_stock FROM general_supply
       ) AS inventory_alerts;
     `;
 

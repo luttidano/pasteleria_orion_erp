@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, Lock } from 'lucide-react';
 import type { GeneralSupply, Supplier } from '../../../types';
 import { supplierService } from '../../../services/supplierService';
 import type { SaveGeneralSupplyPayload } from '../../../services/generalSupplyService';
@@ -218,18 +218,29 @@ export const GeneralSupplyModal: React.FC<GeneralSupplyModalProps> = ({
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                Stock Actual <span className="text-[#8C1F25]">*</span>
+              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1 flex items-center gap-1">
+                <span>Stock Actual</span> <span className="text-[#8C1F25]">*</span>
+                {Boolean(itemToEdit) && <Lock className="w-3 h-3 text-stone-400" />}
               </label>
               <input
                 type="number"
                 min="0"
                 step="any"
                 required
+                disabled={Boolean(itemToEdit)}
                 value={stock}
                 onChange={(e) => setStock(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#150F0D] text-sm font-mono"
+                className={`w-full px-3 py-2 rounded-xl border text-sm font-mono ${
+                  Boolean(itemToEdit)
+                    ? 'bg-stone-200/60 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 border-stone-300 dark:border-stone-700 cursor-not-allowed select-none'
+                    : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-[#150F0D]'
+                }`}
               />
+              {Boolean(itemToEdit) && (
+                <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1 leading-tight">
+                  Para merma, uso interno o conteo, usa el botón "Ajustar (+/-)" en la tabla.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">

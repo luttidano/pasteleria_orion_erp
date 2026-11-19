@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   extractYearMonth,
+  getChileMonthDateRangeUtc,
   getTimeZoneDayBounds,
   parseStrictUtcBounds,
   toChileBusinessDateString,
@@ -17,6 +18,19 @@ describe('chile-time.util', () => {
       '2026-07-14',
     );
     expect(toChileBusinessDateString('2026-11-11')).toBe('2026-11-11');
+  });
+
+  it('debe calcular rango mensual alineado a la medianoche de Chile cubriendo ventas nocturnas', () => {
+    const range = getChileMonthDateRangeUtc(2026, 11);
+    // 2026-11-01 00:00 CLT -> 2026-11-01 03:00 UTC
+    expect(range.start.toISOString()).toBe('2026-11-01T03:00:00.000Z');
+    // 2026-11-30 23:59:59.999 CLT -> 2026-12-01 02:59:59.999 UTC
+    expect(range.end.toISOString()).toBe('2026-12-01T02:59:59.999Z');
+
+    // Venta nocturna del 30 de noviembre a las 22:30 CLT (2026-12-01 01:30 UTC)
+    const lateNightSaleUtc = new Date('2026-12-01T01:30:00.000Z');
+    expect(lateNightSaleUtc.getTime()).toBeGreaterThanOrEqual(range.start.getTime());
+    expect(lateNightSaleUtc.getTime()).toBeLessThanOrEqual(range.end.getTime());
   });
 
   it('debe extraer año y mes sin desplazamiento horario y rechazar fechas inválidas', () => {

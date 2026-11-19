@@ -397,6 +397,7 @@ VALUES
   ('2102', 'IVA Débito Fiscal', 'pasivo', true),
   ('3101', 'Capital Social Inicial', 'patrimonio', true),
   ('3102', 'Resultado del Ejercicio', 'patrimonio', true),
+  ('3103', 'Resultados Acumulados (Ejercicios Anteriores)', 'patrimonio', true),
   ('4101', 'Venta de Pastelería y Bollería', 'ingreso', true),
   ('4102', 'Sobrantes de Caja y Otros Ingresos', 'ingreso', true),
   ('5101', 'Costo de Materias Primas e Insumos', 'costo', true),

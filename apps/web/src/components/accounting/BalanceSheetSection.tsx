@@ -188,9 +188,20 @@ export const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ balanc
                     <span className="font-mono font-semibold">{formatMoney(acc.amount)}</span>
                   </div>
                 ))}
+                {balanceSheet.patrimonio.resultadosAcumulados?.accounts.map((acc) => (
+                  <div key={acc.id} className="px-4 py-2 flex items-center justify-between text-xs bg-amber-50/20 dark:bg-amber-950/10">
+                    <span className="text-stone-600 dark:text-stone-400 font-medium">
+                      <b className="font-mono text-amber-700 dark:text-amber-400 mr-2">{acc.code}</b>
+                      {acc.name}
+                    </span>
+                    <span className="font-mono font-semibold text-stone-800 dark:text-stone-200">
+                      {formatMoney(acc.amount)}
+                    </span>
+                  </div>
+                ))}
                 <div className="px-4 py-2.5 flex items-center justify-between text-xs bg-blue-50/40 dark:bg-blue-950/20">
                   <span className="font-semibold text-blue-900 dark:text-blue-300">
-                    Resultado Acumulado del Ejercicio
+                    Resultado del Ejercicio
                   </span>
                   <span className="font-mono font-bold text-blue-700 dark:text-blue-400">
                     {formatMoney(balanceSheet.patrimonio.resultadoEjercicio)}

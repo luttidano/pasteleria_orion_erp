@@ -644,9 +644,9 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100 dark:divide-[#281C17]">
-                    {preview.lines.map((line) => (
+                    {preview.lines.map((line, idx) => (
                       <tr
-                        key={`${line.accountId}-${line.accountType}`}
+                        key={`${line.accountId}-${idx}`}
                         className={
                           line.accountType === 'patrimonio'
                             ? 'bg-purple-50/40 dark:bg-purple-950/20 font-semibold'

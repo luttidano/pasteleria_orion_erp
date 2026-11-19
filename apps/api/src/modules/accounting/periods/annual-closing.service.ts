@@ -107,8 +107,80 @@ export class AnnualClosingService {
         select: { id: true, code: true, name: true },
       })) ?? equityAccount;
 
+    const exact3103 = await db.accountingAccount.findFirst({
+      where: { code: '3103', isActive: true, accountType: 'patrimonio' },
+      select: { id: true, code: true, name: true },
+    });
+    const retainedEarningsAccount =
+      exact3103 && exact3103.id !== exactEquity?.id ? exact3103 : null;
+
+    let prior3102Net = 0;
+    const yearStartUtc = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0));
+    if (exactEquity && typeof db.accountingEntryItem?.aggregate === 'function') {
+      const priorAgg = await db.accountingEntryItem.aggregate({
+        where: {
+          accountId: exactEquity.id,
+          entry: {
+            entryDate: { lt: yearStartUtc },
+            status: 'active',
+          },
+        },
+        _sum: { debit: true, credit: true },
+      });
+      const priorDebit = roundMoney(Number(priorAgg._sum.debit ?? 0));
+      const priorCredit = roundMoney(Number(priorAgg._sum.credit ?? 0));
+      prior3102Net = roundMoney(priorCredit - priorDebit);
+    }
+
     const openMonthsCount = Math.max(0, 12 - closedPeriodsCount);
     const lines: AnnualClosingLinePreview[] = [];
+
+    if (Math.abs(prior3102Net) >= 0.01 && retainedEarningsAccount && exactEquity) {
+      if (prior3102Net > 0) {
+        lines.push({
+          accountId: exactEquity.id,
+          accountCode: exactEquity.code,
+          accountName: exactEquity.name,
+          accountType: 'patrimonio',
+          currentBalance: prior3102Net,
+          debit: prior3102Net,
+          credit: 0,
+          description: `Traspaso saldo ejercicios anteriores a cuenta ${retainedEarningsAccount.code}`,
+        });
+        lines.push({
+          accountId: retainedEarningsAccount.id,
+          accountCode: retainedEarningsAccount.code,
+          accountName: retainedEarningsAccount.name,
+          accountType: 'patrimonio',
+          currentBalance: 0,
+          debit: 0,
+          credit: prior3102Net,
+          description: `Reclasificación utilidades acumuladas ejercicios anteriores`,
+        });
+      } else {
+        const absPrior = roundMoney(Math.abs(prior3102Net));
+        lines.push({
+          accountId: exactEquity.id,
+          accountCode: exactEquity.code,
+          accountName: exactEquity.name,
+          accountType: 'patrimonio',
+          currentBalance: prior3102Net,
+          debit: 0,
+          credit: absPrior,
+          description: `Traspaso saldo ejercicios anteriores a cuenta ${retainedEarningsAccount.code}`,
+        });
+        lines.push({
+          accountId: retainedEarningsAccount.id,
+          accountCode: retainedEarningsAccount.code,
+          accountName: retainedEarningsAccount.name,
+          accountType: 'patrimonio',
+          currentBalance: 0,
+          debit: absPrior,
+          credit: 0,
+          description: `Reclasificación pérdidas acumuladas ejercicios anteriores`,
+        });
+      }
+    }
 
     let totalIngresos = 0;
     let totalCostos = 0;
@@ -212,6 +284,9 @@ export class AnnualClosingService {
     } else if (!exactEquity) {
       blockingReason =
         'No existe una cuenta patrimonial activa (ej. 3102 Resultado del Ejercicio) para recibir la refundición.';
+    } else if (Math.abs(prior3102Net) >= 0.01 && !retainedEarningsAccount) {
+      blockingReason =
+        'No existe la cuenta patrimonial activa 3103 Resultados Acumulados (Ejercicios Anteriores) para recibir el traspaso de años anteriores.';
     } else if (lines.length === 0) {
       blockingReason = `No existen saldos pendientes en cuentas de ingresos, costos o gastos al ${closingDate}.`;
     }
@@ -227,6 +302,9 @@ export class AnnualClosingService {
       totalGastos,
       resultadoEjercicio,
       equityAccount: exactEquity,
+      retainedEarningsAccount,
+      priorEarningsTransferred:
+        Math.abs(prior3102Net) >= 0.01 ? prior3102Net : undefined,
       openMonthsCount,
       pendingSalesCount,
       canExecute: blockingReason === null,

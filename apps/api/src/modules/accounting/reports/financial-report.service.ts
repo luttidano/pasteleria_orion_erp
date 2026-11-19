@@ -11,6 +11,7 @@ import type {
   ReportAccountLine,
 } from '@repo/types';
 import { PrismaService } from '../../../database/prisma.service';
+import { AccountingEntryOrigin } from '../../../common/enums';
 import { InventoryValuationService } from '../../inventory/valuation/inventory-valuation.service';
 import {
   getZonedDateString,
@@ -217,8 +218,9 @@ export class FinancialReportService {
       const targetIso =
         asOfDate?.trim() || getZonedDateString(new Date(), STORE_TIMEZONE);
       const cutoffDate = parseStrictUtcBounds(targetIso, 'asOfDate').end;
+      const queryYear = cutoffDate.getUTCFullYear();
 
-      const [allAccounts, groupedItems, inventoryValuation] =
+      const [allAccounts, groupedItems, inventoryValuation, closedClosingEntry] =
         await Promise.all([
           this.prisma.accountingAccount.findMany({
             where: { isActive: true },
@@ -235,6 +237,17 @@ export class FinancialReportService {
             _sum: { debit: true, credit: true },
           }),
           this.inventoryValuationService.getValuationSummary(),
+          typeof this.prisma.accountingEntry?.findFirst === 'function'
+            ? this.prisma.accountingEntry.findFirst({
+                where: {
+                  origin: AccountingEntryOrigin.closing,
+                  closingYear: queryYear,
+                  status: 'active',
+                  entryDate: { lte: cutoffDate },
+                },
+                select: { id: true },
+              })
+            : Promise.resolve(null),
         ]);
 
       const totalsByAccount = new Map<
@@ -262,13 +275,18 @@ export class FinancialReportService {
         otrosPasivos: [],
       };
       const capitalAccounts: ReportAccountLine[] = [];
+      const retainedEarningsAccounts: ReportAccountLine[] = [];
 
       let totalActivos = 0;
       let totalPasivos = 0;
       let totalCapital = 0;
+      let totalRetainedEarnings = 0;
       let totalIngresosHist = 0;
       let totalCostosHist = 0;
       let totalGastosHist = 0;
+      let balance3102 = 0;
+      let account3102Info: { id: string; code: string; name: string } | null =
+        null;
 
       for (const acc of allAccounts) {
         const totals = totalsByAccount.get(acc.id) ?? {
@@ -300,13 +318,30 @@ export class FinancialReportService {
           });
         } else if (acc.accountType === 'patrimonio') {
           const balance = roundMoney(totalCredit - totalDebit);
-          capitalAccounts.push({
-            id: acc.id,
-            code: acc.code,
-            name: acc.name,
-            amount: balance,
-          });
-          totalCapital += balance;
+          if (
+            acc.code === '3103' ||
+            acc.name.toLowerCase().includes('acumulado') ||
+            acc.name.toLowerCase().includes('anterior')
+          ) {
+            retainedEarningsAccounts.push({
+              id: acc.id,
+              code: acc.code,
+              name: acc.name,
+              amount: balance,
+            });
+            totalRetainedEarnings += balance;
+          } else if (acc.code === '3102') {
+            balance3102 = balance;
+            account3102Info = { id: acc.id, code: acc.code, name: acc.name };
+          } else {
+            capitalAccounts.push({
+              id: acc.id,
+              code: acc.code,
+              name: acc.name,
+              amount: balance,
+            });
+            totalCapital += balance;
+          }
         } else if (acc.accountType === 'ingreso') {
           totalIngresosHist += totalCredit - totalDebit;
         } else if (acc.accountType === 'costo') {
@@ -316,10 +351,33 @@ export class FinancialReportService {
         }
       }
 
-      const resultadoEjercicio = roundMoney(
-        totalIngresosHist - totalCostosHist - totalGastosHist,
+      const isYearClosed = Boolean(closedClosingEntry);
+      let resultadoEjercicio = 0;
+
+      if (isYearClosed) {
+        resultadoEjercicio = balance3102;
+      } else {
+        resultadoEjercicio = roundMoney(
+          totalIngresosHist - totalCostosHist - totalGastosHist,
+        );
+        if (Math.abs(balance3102) >= 0.01 && account3102Info) {
+          retainedEarningsAccounts.push({
+            id: account3102Info.id,
+            code: account3102Info.code,
+            name: `${account3102Info.name} (Ejercicios Anteriores)`,
+            amount: balance3102,
+          });
+          totalRetainedEarnings += balance3102;
+        }
+      }
+
+      totalCapital = roundMoney(totalCapital);
+      totalRetainedEarnings = roundMoney(totalRetainedEarnings);
+      resultadoEjercicio = roundMoney(resultadoEjercicio);
+
+      const totalPatrimonio = roundMoney(
+        totalCapital + totalRetainedEarnings + resultadoEjercicio,
       );
-      const totalPatrimonio = roundMoney(totalCapital + resultadoEjercicio);
 
       totalActivos = roundMoney(totalActivos);
       totalPasivos = roundMoney(totalPasivos);
@@ -352,6 +410,10 @@ export class FinancialReportService {
           capital: {
             total: roundMoney(totalCapital),
             accounts: capitalAccounts,
+          },
+          resultadosAcumulados: {
+            total: roundMoney(totalRetainedEarnings),
+            accounts: retainedEarningsAccounts,
           },
           resultadoEjercicio,
         },

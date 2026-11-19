@@ -48,6 +48,12 @@ export const AnnualClosingModal: React.FC<AnnualClosingModalProps> = ({
           <p className="font-bold">Se generará el asiento de refundición al 31-12-{selectedYear}:</p>
           <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
             <li>Todas las cuentas de ingresos, costos y gastos quedarán saldadas en $0.</li>
+            {preview.priorEarningsTransferred && Math.abs(preview.priorEarningsTransferred) >= 0.01 && (
+              <li>
+                El saldo histórico anterior (<b>{formatMoney(preview.priorEarningsTransferred)}</b>) de la cuenta 3102 se traspasará a{' '}
+                <b>{preview.retainedEarningsAccount?.code ?? '3103'} {preview.retainedEarningsAccount?.name ?? 'Resultados Acumulados'}</b>.
+              </li>
+            )}
             <li>
               El resultado neto (<b>{formatMoney(preview.resultadoEjercicio)}</b>) se traspasará a{' '}
               <b>{preview.equityAccount?.code} {preview.equityAccount?.name}</b>.

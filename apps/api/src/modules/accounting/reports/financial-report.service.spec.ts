@@ -15,6 +15,9 @@ describe('FinancialReportService', () => {
       accountingEntryItem: {
         groupBy: jest.fn().mockResolvedValue([]),
       },
+      accountingEntry: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       ingredient: {
         findMany: jest.fn(),
       },
@@ -213,6 +216,81 @@ describe('FinancialReportService', () => {
       // Torta: 15 * 8000 = 120.000
       expect(balanceSheet.inventoryValuation.finishedProductsValue).toBe(120000);
       expect(balanceSheet.inventoryValuation.totalWarehouseValue).toBe(360000);
+    });
+
+    it('debe distinguir entre Capital (3101), Resultados Acumulados (3103) y Resultado del Ejercicio en el Balance General', async () => {
+      const mockAccounts = [
+        {
+          id: 'acc-1101',
+          code: '1101',
+          name: 'Caja General Efectivo',
+          accountType: 'activo',
+        },
+        {
+          id: 'acc-3101',
+          code: '3101',
+          name: 'Capital Social Inicial',
+          accountType: 'patrimonio',
+        },
+        {
+          id: 'acc-3103',
+          code: '3103',
+          name: 'Resultados Acumulados (Ejercicios Anteriores)',
+          accountType: 'patrimonio',
+        },
+        {
+          id: 'acc-4101',
+          code: '4101',
+          name: 'Ventas de Pastelería',
+          accountType: 'ingreso',
+        },
+        {
+          id: 'acc-6101',
+          code: '6101',
+          name: 'Gastos Operativos',
+          accountType: 'gasto',
+        },
+      ];
+
+      prisma.accountingAccount.findMany.mockResolvedValue(mockAccounts);
+      prisma.accountingEntryItem.groupBy.mockResolvedValue([
+        { accountId: 'acc-1101', _sum: { debit: 1500000, credit: 0 } },
+        { accountId: 'acc-3101', _sum: { debit: 0, credit: 800000 } },
+        { accountId: 'acc-3103', _sum: { debit: 0, credit: 400000 } },
+        { accountId: 'acc-4101', _sum: { debit: 0, credit: 500000 } },
+        { accountId: 'acc-6101', _sum: { debit: 200000, credit: 0 } },
+      ]);
+      prisma.ingredient.findMany.mockResolvedValue([]);
+      prisma.packaging.findMany.mockResolvedValue([]);
+      prisma.product.findMany.mockResolvedValue([]);
+
+      const balanceSheet = await service.getBalanceSheet('2026-11-30');
+
+      // Activos: $1.500.000
+      expect(balanceSheet.activos.total).toBe(1500000);
+
+      // Pasivos: $0
+      expect(balanceSheet.pasivos.total).toBe(0);
+
+      // Capital (3101): $800.000
+      expect(balanceSheet.patrimonio.capital.total).toBe(800000);
+      expect(balanceSheet.patrimonio.capital.accounts).toHaveLength(1);
+      expect(balanceSheet.patrimonio.capital.accounts[0].code).toBe('3101');
+
+      // Resultados Acumulados (3103): $400.000
+      expect(balanceSheet.patrimonio.resultadosAcumulados?.total).toBe(400000);
+      expect(balanceSheet.patrimonio.resultadosAcumulados?.accounts).toHaveLength(1);
+      expect(balanceSheet.patrimonio.resultadosAcumulados?.accounts[0].code).toBe('3103');
+
+      // Resultado del Ejercicio (Ingresos 500.000 - Gastos 200.000): $300.000
+      expect(balanceSheet.patrimonio.resultadoEjercicio).toBe(300000);
+
+      // Total Patrimonio: 800.000 + 400.000 + 300.000 = $1.500.000
+      expect(balanceSheet.patrimonio.total).toBe(1500000);
+
+      // Ecuación Contable: Activos ($1.500.000) = Pasivos ($0) + Patrimonio ($1.500.000)
+      expect(balanceSheet.isBalanced).toBe(true);
+      expect(balanceSheet.difference).toBe(0);
     });
   });
 });

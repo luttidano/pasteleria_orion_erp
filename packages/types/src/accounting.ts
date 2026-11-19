@@ -175,6 +175,12 @@ export interface AnnualClosingPreview {
     code: string;
     name: string;
   } | null;
+  retainedEarningsAccount?: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
+  priorEarningsTransferred?: number;
   openMonthsCount: number;
   pendingSalesCount: number;
   canExecute: boolean;
@@ -295,6 +301,10 @@ export interface BalanceSheetReport {
   patrimonio: {
     total: number;
     capital: {
+      total: number;
+      accounts: ReportAccountLine[];
+    };
+    resultadosAcumulados?: {
       total: number;
       accounts: ReportAccountLine[];
     };

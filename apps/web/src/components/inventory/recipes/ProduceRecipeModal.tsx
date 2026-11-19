@@ -243,7 +243,11 @@ const ProduceRecipeModalContent: React.FC<ProduceRecipeModalContentProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setBatches((b) => Math.max(1, (Number(b) || 1) - 1));
+                  setBatches((b) => {
+                    const current = Number(b) || 1;
+                    const next = current > 1 ? current - 1 : Math.round((current - 0.1) * 100) / 100;
+                    return Math.max(0.01, next);
+                  });
                   setCustomUnits('');
                 }}
                 className="w-10 h-10 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-[#201612] font-bold text-base hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"

@@ -17,8 +17,6 @@ export const posShiftService = {
 
   async updateOpeningCash(payload: {
     openingCash: number;
-    from?: string;
-    to?: string;
   }): Promise<PosActiveShiftOverview> {
     return apiFetch<PosActiveShiftOverview>('/pos/shifts/active/opening-cash', {
       method: 'PUT',

@@ -94,7 +94,7 @@ export const GeneralSuppliesView: React.FC<GeneralSuppliesViewProps> = ({
       if (statusFilter === 'sufficient' && item.stock <= item.minStock) {
         return false;
       }
-      if (statusFilter === 'low_stock' && item.stock > item.minStock) {
+      if (statusFilter === 'low_stock' && (item.stock > item.minStock || item.stock <= 0)) {
         return false;
       }
       if (statusFilter === 'out' && item.stock > 0) {

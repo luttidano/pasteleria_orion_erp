@@ -412,6 +412,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
           {activeSection === 'empaques' && (
             <PackagingView
+              user={user}
               addToast={addToast}
               onInventoryChange={() => void refreshStockAlerts()}
             />

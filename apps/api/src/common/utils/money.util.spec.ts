@@ -11,9 +11,11 @@ describe('money.util & stock-status.util', () => {
     expect(roundQuantity(1.23456)).toBe(1.235);
   });
 
-  it('debe aplicar la regla de cobro de bolsas ($100) vs otros empaques ($0)', () => {
+  it('debe aplicar la regla de cobro de bolsas ($100) vs otros empaques ($0) respetando salePrice explícito', () => {
     expect(resolveSecondaryPackagingPrice('Bolsa Kraft Grande')).toBe(100);
     expect(resolveSecondaryPackagingPrice('Caja Torta Kraft 26cm')).toBe(0);
+    expect(resolveSecondaryPackagingPrice('Bolsa Kraft Especial', 150)).toBe(150);
+    expect(resolveSecondaryPackagingPrice('Caja Torta Kraft 26cm', 250)).toBe(250);
   });
 
   it('debe calcular correctamente el estado de stock', () => {

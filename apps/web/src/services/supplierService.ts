@@ -1,29 +1,9 @@
 import type { Supplier, SupplyModality } from '../types';
 import { apiFetch } from '../lib/api';
 
-/* Detecta modo de abastecimiento */
+/* Obtiene la modalidad de abastecimiento persistida en base de datos */
 export function getSupplyModality(supplier: Supplier): SupplyModality {
-  if (supplier.supplyModality) return supplier.supplyModality;
-  const schedule = (supplier.deliverySchedule || '').toLowerCase();
-  const notes = (supplier.notes || '').toLowerCase();
-  const name = (supplier.name || '').toLowerCase();
-  if (
-    schedule.includes('presencial') ||
-    schedule.includes('retiro') ||
-    schedule.includes('local') ||
-    schedule.includes('mayorista') ||
-    notes.includes('presencial') ||
-    notes.includes('local') ||
-    notes.includes('mayorista') ||
-    name.includes('mayorista') ||
-    name.includes('vega') ||
-    supplier.icon === '🏬' ||
-    supplier.icon === '🏪' ||
-    supplier.icon === '🛒'
-  ) {
-    return 'presencial';
-  }
-  return 'despacho';
+  return supplier.supplyModality || 'despacho';
 }
 
 export function isPhoneRegistered(phone?: string | null): boolean {

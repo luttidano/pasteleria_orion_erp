@@ -9,7 +9,7 @@ import {
   PlusCircle,
   MinusCircle,
 } from 'lucide-react';
-import type { AdjustStockPayload, Packaging, ToastMessage } from '../../../types';
+import type { AdjustStockPayload, Packaging, ToastMessage, User } from '../../../types';
 import { packagingService } from '../../../services/packagingService';
 import { formatMoney } from '../../../utils/formatters';
 import { PackagingModal } from './PackagingModal';
@@ -17,14 +17,17 @@ import { StockAdjustmentModal, type StockAdjustmentTarget } from '../StockAdjust
 import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
 
 interface PackagingViewProps {
+  user?: User | null;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   onInventoryChange?: () => void;
 }
 
 export const PackagingView: React.FC<PackagingViewProps> = ({
+  user,
   addToast,
   onInventoryChange,
 }) => {
+  const isAdmin = user?.role === 'admin';
   const [items, setItems] = useState<Packaging[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -164,16 +167,18 @@ export const PackagingView: React.FC<PackagingViewProps> = ({
             Control de cajas, bolsas kraft, domos y bases (aislados del recetario culinario).
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setEditingItem(null);
-            setIsModalOpen(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8C1F25] text-white font-bold text-sm shadow-md hover:bg-[#73191E] transition-all cursor-pointer"
-        >
-          <Plus className="w-4 h-4" /> Nuevo Empaque
-        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => {
+              setEditingItem(null);
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8C1F25] text-white font-bold text-sm shadow-md hover:bg-[#73191E] transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Nuevo Empaque
+          </button>
+        )}
       </div>
 
       {/* Metric Cards */}
@@ -376,25 +381,29 @@ export const PackagingView: React.FC<PackagingViewProps> = ({
                       )}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingItem(item);
-                            setIsModalOpen(true);
-                          }}
-                          className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeletingItem(item)}
-                          className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {isAdmin ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingItem(item);
+                              setIsModalOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingItem(item)}
+                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-stone-400 italic">Solo lectura</span>
+                      )}
                     </td>
                   </tr>
                 ))

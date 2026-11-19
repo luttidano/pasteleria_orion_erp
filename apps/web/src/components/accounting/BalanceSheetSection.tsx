@@ -82,6 +82,29 @@ export const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ balanc
                 ))}
               </div>
             </div>
+
+            {/* Grupo Otros Activos */}
+            {balanceSheet.activos.otrosActivos.accounts.length > 0 && (
+              <div className="rounded-2xl border border-stone-200/80 dark:border-[#2C1F1A] overflow-hidden">
+                <div className="bg-stone-50 dark:bg-[#1C1411] px-4 py-2.5 flex items-center justify-between text-xs font-bold text-stone-700 dark:text-stone-300">
+                  <span>Otros Activos (Crédito Fiscal y Otros)</span>
+                  <span className="font-mono">
+                    {formatMoney(balanceSheet.activos.otrosActivos.total)}
+                  </span>
+                </div>
+                <div className="divide-y divide-stone-100 dark:divide-[#281C17] bg-white dark:bg-[#16100E]">
+                  {balanceSheet.activos.otrosActivos.accounts.map((acc) => (
+                    <div key={acc.id} className="px-4 py-2 flex items-center justify-between text-xs">
+                      <span className="text-stone-600 dark:text-stone-400 font-medium">
+                        <b className="font-mono text-stone-400 mr-2">{acc.code}</b>
+                        {acc.name}
+                      </span>
+                      <span className="font-mono font-semibold">{formatMoney(acc.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* LADO DERECHO: PASIVOS Y PATRIMONIO */}
@@ -102,7 +125,7 @@ export const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ balanc
             {/* Desglose Pasivos */}
             <div className="rounded-2xl border border-stone-200/80 dark:border-[#2C1F1A] overflow-hidden">
               <div className="bg-stone-50 dark:bg-[#1C1411] px-4 py-2.5 flex items-center justify-between text-xs font-bold text-stone-700 dark:text-stone-300">
-                <span>Obligaciones con Proveedores e Impuestos</span>
+                <span>Obligaciones, Impuestos y Otros Pasivos</span>
                 <span className="font-mono">{formatMoney(balanceSheet.pasivos.total)}</span>
               </div>
               <div className="divide-y divide-stone-100 dark:divide-[#281C17] bg-white dark:bg-[#16100E]">
@@ -116,6 +139,15 @@ export const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ balanc
                   </div>
                 ))}
                 {balanceSheet.pasivos.impuestos.accounts.map((acc) => (
+                  <div key={acc.id} className="px-4 py-2 flex items-center justify-between text-xs">
+                    <span className="text-stone-600 dark:text-stone-400 font-medium">
+                      <b className="font-mono text-stone-400 mr-2">{acc.code}</b>
+                      {acc.name}
+                    </span>
+                    <span className="font-mono font-semibold">{formatMoney(acc.amount)}</span>
+                  </div>
+                ))}
+                {balanceSheet.pasivos.otrosPasivos.accounts.map((acc) => (
                   <div key={acc.id} className="px-4 py-2 flex items-center justify-between text-xs">
                     <span className="text-stone-600 dark:text-stone-400 font-medium">
                       <b className="font-mono text-stone-400 mr-2">{acc.code}</b>

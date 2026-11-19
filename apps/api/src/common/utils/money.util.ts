@@ -14,9 +14,16 @@ export function roundPercentage(value: number): number {
 }
 
 /**
- * Regla comercial/legal (Ley de Bolsas):
- * bolsas secundarias de despacho se cobran a $100 CLP; otros empaques secundarios son cortesía ($0).
+ * Regla comercial/legal (Ley de Bolsas y Precio de Venta):
+ * Si el empaque tiene salePrice configurado >= 0 se respeta dicho valor;
+ * de lo contrario, las bolsas secundarias de despacho se cobran a $100 CLP y otros empaques a $0.
  */
-export function resolveSecondaryPackagingPrice(packagingName: string): number {
+export function resolveSecondaryPackagingPrice(
+  packagingName: string,
+  salePrice?: number | null,
+): number {
+  if (typeof salePrice === 'number' && Number.isFinite(salePrice) && salePrice >= 0) {
+    return Math.round(salePrice);
+  }
   return packagingName.toLowerCase().includes('bolsa') ? 100 : 0;
 }

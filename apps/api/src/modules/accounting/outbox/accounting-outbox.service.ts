@@ -10,6 +10,7 @@ import type {
   PosSaleCogsRequestedPayload,
   SaleIncomeRequestedPayload,
   ShiftDifferenceRequestedPayload,
+  SupplierPaymentRequestedPayload,
 } from './accounting-outbox.types';
 
 @Injectable()
@@ -274,6 +275,61 @@ export class AccountingOutboxService {
         aggregateId,
         businessDate: occurredAtDate,
         referenceCode: `Ajuste ${params.itemName}`,
+        payload: payload as unknown as Prisma.InputJsonValue,
+        status: 'pending',
+      },
+      update: {},
+      select: { id: true },
+    });
+
+    return { id: record.id };
+  }
+
+  async enqueueSupplierPaymentInTx(
+    tx: Prisma.TransactionClient,
+    params: {
+      paymentId: string;
+      invoiceId: string;
+      invoiceNumber: string;
+      supplierId: string;
+      supplierName: string;
+      amount: number;
+      paymentMethod: string;
+      paymentDate?: Date | string;
+      reference?: string;
+      notes?: string;
+    },
+  ): Promise<{ id: string }> {
+    const paymentDate = params.paymentDate
+      ? params.paymentDate instanceof Date
+        ? params.paymentDate
+        : new Date(params.paymentDate)
+      : new Date();
+    const payload: SupplierPaymentRequestedPayload = {
+      paymentId: params.paymentId,
+      invoiceId: params.invoiceId,
+      invoiceNumber: params.invoiceNumber,
+      supplierId: params.supplierId,
+      supplierName: params.supplierName,
+      amount: roundMoney(Number(params.amount)),
+      paymentMethod: params.paymentMethod,
+      paymentDate: paymentDate.toISOString(),
+      ...(params.reference ? { reference: params.reference } : {}),
+      ...(params.notes ? { notes: params.notes } : {}),
+    };
+
+    const record = await tx.accountingOutbox.upsert({
+      where: {
+        aggregateType_aggregateId: {
+          aggregateType: 'supplier_payment',
+          aggregateId: params.paymentId,
+        },
+      },
+      create: {
+        aggregateType: 'supplier_payment',
+        aggregateId: params.paymentId,
+        businessDate: paymentDate,
+        referenceCode: `Pago FAC #${params.invoiceNumber}`,
         payload: payload as unknown as Prisma.InputJsonValue,
         status: 'pending',
       },

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Supplier, ToastMessage } from '../../../types';
+import { Building2, CreditCard } from 'lucide-react';
+import type { Supplier, ToastMessage, User } from '../../../types';
 import {
   supplierService,
   getWhatsAppUrl,
@@ -16,12 +17,15 @@ import {
 } from './SupplierFiltersHeader';
 import { SupplierListColumn } from './SupplierListColumn';
 import { SupplierDetailCard } from './SupplierDetailCard';
+import { AccountsPayableTab } from '../purchases/AccountsPayableTab';
 
 interface SuppliersViewProps {
+  user?: User;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
 }
 
-export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
+export const SuppliersView: React.FC<SuppliersViewProps> = ({ user, addToast }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'payables'>('directory');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -261,88 +265,128 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ addToast }) => {
 
   return (
     <div className="space-y-5 animate-fade-in max-w-7xl mx-auto pb-10">
-      <SupplierFiltersHeader
-        totalSuppliers={suppliers.length}
-        counts={counts}
-        modalityFilter={modalityFilter}
-        onModalityChange={setModalityFilter}
-        typeFilter={typeFilter}
-        onTypeChange={setTypeFilter}
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        categoriesList={categoriesList}
-        selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
-        onAddSupplier={() => {
-          setSupplierToEdit(null);
-          setIsModalOpen(true);
-        }}
-      />
+      {/* Selector de sub-sección: Directorio vs Cuentas por Pagar */}
+      <div className="flex items-center gap-2 border-b border-stone-200 dark:border-[#35251F] pb-3">
+        <button
+          onClick={() => setActiveSubTab('directory')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+            activeSubTab === 'directory'
+              ? 'bg-[#8C1F25] text-white shadow-xs'
+              : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200/70'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          <span>Directorio de Proveedores</span>
+          <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-black/15 font-mono">
+            {suppliers.length}
+          </span>
+        </button>
 
-      {isLoading && suppliers.length === 0 ? (
-        <div className="bg-white dark:bg-[#16100E] rounded-3xl p-12 text-center border border-stone-200/80 dark:border-[#35251F] shadow-xs">
-          <div className="w-8 h-8 border-3 border-[#8C1F25]/20 border-t-[#8C1F25] rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-xs text-stone-500 font-medium">
-            Cargando proveedores desde la base de datos...
-          </p>
-        </div>
-      ) : filteredSuppliers.length === 0 ? (
-        <div className="bg-white dark:bg-[#16100E] rounded-3xl p-12 text-center border border-stone-200/80 dark:border-[#35251F] shadow-xs">
-          <div className="w-16 h-16 rounded-3xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 mx-auto flex items-center justify-center text-3xl mb-3">
-            🚚
-          </div>
-          <h3 className="text-lg font-bold text-stone-800 dark:text-stone-200 font-serif">
-            No hay proveedores que coincidan
-          </h3>
-          <p className="text-xs text-stone-500 max-w-sm mx-auto mt-1">
-            Revisa los términos de búsqueda o agrega un nuevo contacto al directorio.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setSearchTerm('');
-              setSelectedCategory('Todas');
-              setModalityFilter('all');
-              setTypeFilter('all');
-            }}
-            className="mt-4 px-4 py-2 rounded-xl text-xs font-semibold bg-stone-100 dark:bg-[#201612] hover:bg-stone-200 text-stone-700 dark:text-stone-300 cursor-pointer"
-          >
-            Limpiar filtros
-          </button>
-        </div>
+        <button
+          onClick={() => setActiveSubTab('payables')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+            activeSubTab === 'payables'
+              ? 'bg-[#8C1F25] text-white shadow-xs'
+              : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200/70'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>Cuentas por Pagar (CxP)</span>
+        </button>
+      </div>
+
+      {activeSubTab === 'payables' ? (
+        <AccountsPayableTab
+          user={user || ({ id: 'current', role: 'admin' } as User)}
+          suppliers={suppliers}
+          onToast={addToast}
+        />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          <SupplierListColumn
-            suppliers={filteredSuppliers}
-            selectedSupplierId={selectedSupplier?.id}
-            isHiddenOnMobile={mobileTab === 'detail'}
-            onSelectSupplier={(supplierId) => {
-              setSelectedSupplierId(supplierId);
-              setMobileTab('detail');
+        <>
+          <SupplierFiltersHeader
+            totalSuppliers={suppliers.length}
+            counts={counts}
+            modalityFilter={modalityFilter}
+            onModalityChange={setModalityFilter}
+            typeFilter={typeFilter}
+            onTypeChange={setTypeFilter}
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            categoriesList={categoriesList}
+            selectedCategory={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+            onAddSupplier={() => {
+              setSupplierToEdit(null);
+              setIsModalOpen(true);
             }}
-            onWhatsApp={(supplier, e) => handleDirectWhatsApp(supplier, undefined, e)}
-            onCall={handleDirectCall}
           />
 
-          {selectedSupplier && (
-            <SupplierDetailCard
-              supplier={selectedSupplier}
-              customOrderNote={customOrderNote}
-              onCustomOrderNoteChange={setCustomOrderNote}
-              copiedPhone={copiedPhone}
-              onCopyPhone={(phone) => void handleCopyPhone(phone)}
-              onWhatsApp={(supplier, customMsg) => handleDirectWhatsApp(supplier, customMsg)}
-              onCall={handleDirectCall}
-              onEdit={(supplier) => {
-                setSupplierToEdit(supplier);
-                setIsModalOpen(true);
-              }}
-              onDelete={setSupplierToDelete}
-              isHiddenOnMobile={mobileTab === 'list'}
-              onBackToList={() => setMobileTab('list')}
-            />
+          {isLoading && suppliers.length === 0 ? (
+            <div className="bg-white dark:bg-[#16100E] rounded-3xl p-12 text-center border border-stone-200/80 dark:border-[#35251F] shadow-xs">
+              <div className="w-8 h-8 border-3 border-[#8C1F25]/20 border-t-[#8C1F25] rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-xs text-stone-500 font-medium">
+                Cargando proveedores desde la base de datos...
+              </p>
+            </div>
+          ) : filteredSuppliers.length === 0 ? (
+            <div className="bg-white dark:bg-[#16100E] rounded-3xl p-12 text-center border border-stone-200/80 dark:border-[#35251F] shadow-xs">
+              <div className="w-16 h-16 rounded-3xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 mx-auto flex items-center justify-center text-3xl mb-3">
+                🚚
+              </div>
+              <h3 className="text-lg font-bold text-stone-800 dark:text-stone-200 font-serif">
+                No hay proveedores que coincidan
+              </h3>
+              <p className="text-xs text-stone-500 max-w-sm mx-auto mt-1">
+                Revisa los términos de búsqueda o agrega un nuevo contacto al directorio.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedCategory('Todas');
+                  setModalityFilter('all');
+                  setTypeFilter('all');
+                }}
+                className="mt-4 px-4 py-2 rounded-xl text-xs font-semibold bg-stone-100 dark:bg-[#201612] hover:bg-stone-200 text-stone-700 dark:text-stone-300 cursor-pointer"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              <SupplierListColumn
+                suppliers={filteredSuppliers}
+                selectedSupplierId={selectedSupplier?.id}
+                isHiddenOnMobile={mobileTab === 'detail'}
+                onSelectSupplier={(supplierId) => {
+                  setSelectedSupplierId(supplierId);
+                  setMobileTab('detail');
+                }}
+                onWhatsApp={(supplier, e) => handleDirectWhatsApp(supplier, undefined, e)}
+                onCall={handleDirectCall}
+              />
+
+              {selectedSupplier && (
+                <SupplierDetailCard
+                  supplier={selectedSupplier}
+                  customOrderNote={customOrderNote}
+                  onCustomOrderNoteChange={setCustomOrderNote}
+                  copiedPhone={copiedPhone}
+                  onCopyPhone={(phone) => void handleCopyPhone(phone)}
+                  onWhatsApp={(supplier, customMsg) => handleDirectWhatsApp(supplier, customMsg)}
+                  onCall={handleDirectCall}
+                  onEdit={(supplier) => {
+                    setSupplierToEdit(supplier);
+                    setIsModalOpen(true);
+                  }}
+                  onDelete={setSupplierToDelete}
+                  isHiddenOnMobile={mobileTab === 'list'}
+                  onBackToList={() => setMobileTab('list')}
+                />
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
 
       <SupplierModal

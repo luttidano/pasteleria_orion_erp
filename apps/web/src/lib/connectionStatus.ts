@@ -118,7 +118,7 @@ export async function checkServerHealth(options?: {
 
   inFlightCheck = (async () => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
     const start = performance.now();
 
     try {

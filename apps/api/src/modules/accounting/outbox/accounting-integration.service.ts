@@ -17,12 +17,16 @@ import type {
   PosSaleCogsRequestedPayload,
   RecoveredSaleItemCost,
   SaleCogsEntryCreatedResult,
+  SupplierPaymentRequestedPayload,
 } from './accounting-outbox.types';
 import {
   isUniqueViolation,
   rethrowPrismaError,
 } from '../../../common/utils/prisma-error.util';
-import { toChileBusinessDateString } from '../../../common/utils/chile-time.util';
+import {
+  toChileBusinessDateString,
+  parseStrictUtcBounds,
+} from '../../../common/utils/chile-time.util';
 import { roundMoney } from '../../../common/utils/money.util';
 
 const PAYMENT_ASSET_ACCOUNT_MAP: Record<string, string> = {
@@ -97,7 +101,7 @@ export class AccountingIntegrationService {
 
     try {
       return await this.runInTransaction(tx, async (activeTx) => {
-        await activeTx.$queryRaw`
+        await activeTx.$executeRaw`
           SELECT pg_advisory_xact_lock(hashtext(${lockKey}::text)::bigint)
         `;
 
@@ -316,7 +320,7 @@ export class AccountingIntegrationService {
 
     try {
       return await this.runInTransaction(tx, async (activeTx) => {
-        await activeTx.$queryRaw`
+        await activeTx.$executeRaw`
           SELECT pg_advisory_xact_lock(hashtext(${lockKey}::text)::bigint)
         `;
 
@@ -436,7 +440,7 @@ export class AccountingIntegrationService {
 
     try {
       return await this.runInTransaction(tx, async (activeTx) => {
-        await activeTx.$queryRaw`
+        await activeTx.$executeRaw`
           SELECT pg_advisory_xact_lock(hashtext(${lockKey}::text)::bigint)
         `;
 
@@ -602,7 +606,7 @@ export class AccountingIntegrationService {
 
     try {
       return await this.runInTransaction(tx, async (activeTx) => {
-        await activeTx.$queryRaw`
+        await activeTx.$executeRaw`
           SELECT pg_advisory_xact_lock(hashtext(${lockKey}::text)::bigint)
         `;
 
@@ -724,7 +728,7 @@ export class AccountingIntegrationService {
 
     try {
       return await this.runInTransaction(tx, async (activeTx) => {
-        await activeTx.$queryRaw`
+        await activeTx.$executeRaw`
           SELECT pg_advisory_xact_lock(hashtext(${lockKey}::text)::bigint)
         `;
 
@@ -889,7 +893,7 @@ export class AccountingIntegrationService {
 
     try {
       return await this.runInTransaction(tx, async (activeTx) => {
-        await activeTx.$queryRaw`
+        await activeTx.$executeRaw`
           SELECT pg_advisory_xact_lock(hashtext(${lockKey}::text)::bigint)
         `;
 
@@ -1055,6 +1059,145 @@ export class AccountingIntegrationService {
       }
       rethrowPrismaError(error, {
         fallback: 'No se pudo generar el asiento contable de costo de venta POS.',
+      });
+    }
+  }
+
+  async registerSupplierPayment(
+    outboxId: string,
+    payload: SupplierPaymentRequestedPayload,
+    tx?: Prisma.TransactionClient,
+  ): Promise<AccountingEntryCreatedResult | null> {
+    const amount = roundMoney(Number(payload.amount));
+    if (amount <= 0) {
+      throw new BadRequestException(
+        'No se puede contabilizar el pago a proveedor por monto $0.',
+      );
+    }
+
+    const entryDateStr = toChileBusinessDateString(payload.paymentDate);
+    const lockKey = `accounting:outbox:${outboxId}`;
+
+    try {
+      return await this.runInTransaction(tx, async (activeTx) => {
+        await activeTx.$executeRaw`
+          SELECT pg_advisory_xact_lock(hashtext(${lockKey}::text)::bigint)
+        `;
+
+        const existing = await this.findExistingByOutboxId(activeTx, outboxId);
+        if (existing) {
+          return existing;
+        }
+
+        // Cuenta DEBE: 2101 Proveedores por Pagar (disminuye la obligación)
+        const debitAccount = await this.findActiveAccountByCode(
+          activeTx,
+          ['2101'],
+          { accountType: 'pasivo' },
+        );
+
+        if (!debitAccount) {
+          throw new InternalServerErrorException(
+            'Falta la cuenta contable 2101 (Proveedores por Pagar) para liquidar el pago.',
+          );
+        }
+
+        // Cuenta HABER: 1102 (Banco) o 1101 (Caja) según método de pago
+        let creditCodes: string[];
+        let creditFallback: Prisma.AccountingAccountWhereInput | undefined;
+        switch (payload.paymentMethod) {
+          case 'transferencia':
+          case 'banco':
+            creditCodes = ['1102', '1104', '1101'];
+            creditFallback = {
+              accountType: 'activo',
+              code: { notIn: ['1105', '1106', '1108'] },
+            };
+            break;
+          case 'efectivo':
+          default:
+            creditCodes = ['1101'];
+            creditFallback = {
+              accountType: 'activo',
+              code: { notIn: ['1105', '1106', '1108'] },
+            };
+            break;
+        }
+
+        const creditAccount = await this.findActiveAccountByCode(
+          activeTx,
+          creditCodes,
+          creditFallback,
+        );
+
+        if (!creditAccount) {
+          throw new InternalServerErrorException(
+            'Falta la cuenta contable de tesorería (Caja o Banco) para registrar la salida del pago a proveedor.',
+          );
+        }
+
+        await this.periodService.assertPeriodOpen(entryDateStr, activeTx);
+
+        const itemsToCreate = [
+          {
+            accountId: debitAccount.id,
+            debit: amount,
+            credit: 0,
+            description: `Abono/Pago Fac #${payload.invoiceNumber} - ${payload.supplierName}`,
+          },
+          {
+            accountId: creditAccount.id,
+            debit: 0,
+            credit: amount,
+            description: `Salida de tesorería pago proveedor (${payload.paymentMethod})`,
+          },
+        ];
+
+        const entry = await activeTx.accountingEntry.create({
+          data: {
+            entryDate: parseStrictUtcBounds(entryDateStr, 'entryDate').start,
+            concept: `Pago a Proveedor: ${payload.supplierName} (Factura #${payload.invoiceNumber})`,
+            origin: AccountingEntryOrigin.inventory,
+            status: 'active',
+            outboxId,
+            items: {
+              create: itemsToCreate,
+            },
+          },
+          select: {
+            id: true,
+            entryNumber: true,
+            entryDate: true,
+            concept: true,
+          },
+        });
+
+        if (payload.paymentId) {
+          await activeTx.supplierPayment.updateMany({
+            where: { id: payload.paymentId, accountingEntryId: null },
+            data: { accountingEntryId: entry.id },
+          });
+        }
+
+        return {
+          entryId: entry.id,
+          entryNumber: Number(entry.entryNumber),
+          entryDate: entry.entryDate.toISOString().slice(0, 10),
+          concept: entry.concept,
+        };
+      });
+    } catch (error) {
+      if (!tx && isUniqueViolation(error)) {
+        const existing = await this.findExistingByOutboxId(
+          this.prisma,
+          outboxId,
+        ).catch(() => null);
+        if (existing) {
+          return existing;
+        }
+      }
+      rethrowPrismaError(error, {
+        fallback: `No se pudo contabilizar el pago a proveedor ${payload.supplierName}.`,
       });
     }
   }

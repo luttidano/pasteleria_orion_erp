@@ -21,6 +21,7 @@ import type {
   InventoryPurchaseRequestedPayload,
   PosSaleCogsRequestedPayload,
   SaleCogsEntryCreatedResult,
+  SupplierPaymentRequestedPayload,
 } from '../outbox/accounting-outbox.types';
 import { rethrowPrismaError } from '../../../common/utils/prisma-error.util';
 import { extractYearMonth } from '../../../common/utils/chile-time.util';
@@ -273,5 +274,17 @@ export class EntryService {
     tx?: Prisma.TransactionClient,
   ): Promise<SaleCogsEntryCreatedResult | null> {
     return this.getIntegrationService().registerSaleCogs(outboxId, payload, tx);
+  }
+
+  async registerSupplierPayment(
+    outboxId: string,
+    payload: SupplierPaymentRequestedPayload,
+    tx?: Prisma.TransactionClient,
+  ): Promise<AccountingEntryCreatedResult | null> {
+    return this.getIntegrationService().registerSupplierPayment(
+      outboxId,
+      payload,
+      tx,
+    );
   }
 }

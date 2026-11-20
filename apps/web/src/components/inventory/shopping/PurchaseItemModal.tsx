@@ -384,6 +384,12 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
               </div>
             </div>
 
+            {paymentMethod === 'credito_proveedor' && (
+              <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-[11px] text-amber-900 dark:text-amber-200">
+                <span>💡 Se creará una obligación en <b>2101 Proveedores por Pagar</b> visible en la sección de <b>Cuentas por Pagar (CxP)</b> de Proveedores.</span>
+              </div>
+            )}
+
             <div className="flex items-center gap-2 pt-1">
               <button
                 type="button"

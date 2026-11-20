@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './database/prisma.module';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { PurchasesModule } from './modules/purchases/purchases.module';
 import { PosModule } from './modules/pos/pos.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
 import { PosAccountingSyncModule } from './modules/integrations/pos-accounting-sync.module';
@@ -35,6 +36,7 @@ import * as path from 'path';
     PrismaModule,
     SupabaseModule,
     InventoryModule,
+    PurchasesModule,
     PosModule,
     AccountingModule,
     PosAccountingSyncModule,

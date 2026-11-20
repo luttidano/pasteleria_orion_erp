@@ -23,6 +23,8 @@ model Profile {
   openedShifts              PosShift[]           @relation("ShiftOpenedBy")
   closedShifts              PosShift[]           @relation("ShiftClosedBy")
   stockMovements            StockMovement[]      @relation("StockMovementCreatedBy")
+  createdInvoices           SupplierInvoice[]    @relation("InvoiceCreatedBy")
+  supplierPayments          SupplierPayment[]    @relation("PaymentCreatedBy")
 
   @@map("profile")
 }
@@ -117,6 +119,7 @@ model Supplier {
   resaleProducts      Product[]
   packagings          Packaging[]
   generalSupplies     GeneralSupply[]
+  invoices            SupplierInvoice[]
 
   @@map("supplier")
 }
@@ -297,6 +300,7 @@ model AccountingEntry {
   reversalEntries AccountingEntry[]     @relation("EntryReversal")
   closingPeriods  AccountingPeriod[]    @relation("PeriodClosingEntry")
   posShifts       PosShift[]            @relation("ShiftClosingEntry")
+  supplierPayments SupplierPayment[]    @relation("PaymentAccountingEntry")
   items           AccountingEntryItem[]
 
   @@index([posSaleId], map: "idx_accounting_entry_pos_sale")
@@ -462,5 +466,52 @@ model StockMovement {
   @@index([movementType, createdAt], map: "idx_stock_movement_type_date")
   @@index([referenceType, referenceId], map: "idx_stock_movement_reference")
   @@map("stock_movement")
+}
+
+model SupplierInvoice {
+  id            String            @id @default(uuid()) @db.Uuid
+  supplierId    String            @map("supplier_id") @db.Uuid
+  invoiceNumber String            @map("invoice_number") @db.VarChar(100)
+  issueDate     DateTime          @default(now()) @map("issue_date") @db.Date
+  dueDate       DateTime          @map("due_date") @db.Date
+  totalAmount   Decimal           @map("total_amount") @db.Decimal(12, 2)
+  paidAmount    Decimal           @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  status        String            @default("pending") @db.VarChar(20)
+  hasInvoice    Boolean           @default(true) @map("has_invoice")
+  notes         String?
+  createdById   String?           @map("created_by_id") @db.Uuid
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  supplier      Supplier          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdBy     Profile?          @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  payments      SupplierPayment[]
+
+  @@unique([supplierId, invoiceNumber], map: "uq_supplier_invoice_number")
+  @@index([supplierId], map: "idx_supplier_invoice_supplier")
+  @@index([status], map: "idx_supplier_invoice_status")
+  @@index([dueDate], map: "idx_supplier_invoice_due_date")
+  @@map("supplier_invoice")
+}
+
+model SupplierPayment {
+  id                String           @id @default(uuid()) @db.Uuid
+  invoiceId         String           @map("invoice_id") @db.Uuid
+  paymentDate       DateTime         @default(now()) @map("payment_date") @db.Date
+  amount            Decimal          @map("amount") @db.Decimal(12, 2)
+  paymentMethod     String           @map("payment_method") @db.VarChar(50)
+  reference         String?          @db.VarChar(150)
+  notes             String?
+  accountingEntryId String?          @map("accounting_entry_id") @db.Uuid
+  createdById       String?          @map("created_by_id") @db.Uuid
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  invoice           SupplierInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  accountingEntry   AccountingEntry? @relation("PaymentAccountingEntry", fields: [accountingEntryId], references: [id], onDelete: SetNull)
+  createdBy         Profile?         @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId], map: "idx_supplier_payment_invoice")
+  @@index([paymentDate], map: "idx_supplier_payment_date")
+  @@map("supplier_payment")
 }
 

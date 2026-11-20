@@ -17,6 +17,7 @@ import type {
   RecoveredSaleItemCost,
   SaleIncomeRequestedPayload,
   ShiftDifferenceRequestedPayload,
+  SupplierPaymentRequestedPayload,
   SyncedSaleRef,
   SyncedShiftRef,
 } from './accounting-outbox.types';
@@ -136,6 +137,14 @@ export class AccountingOutboxProcessorService {
           );
           createdEntry = cogsResult;
           recoveredItemCosts = cogsResult?.recoveredItemCosts;
+        } else if (aggregateType === 'supplier_payment') {
+          const payload =
+            event.payload as unknown as SupplierPaymentRequestedPayload;
+          createdEntry = await this.entryService.registerSupplierPayment(
+            event.id,
+            payload,
+            tx,
+          );
         } else {
           throw new InternalServerErrorException(
             `Tipo de agregado no soportado en accounting_outbox: "${String(event.aggregateType)}".`,

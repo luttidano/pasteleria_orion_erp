@@ -75,6 +75,7 @@ describe('EntryService', () => {
         findFirst: createAccountFinder(DEFAULT_ACCOUNTS),
       },
       $queryRaw: jest.fn().mockResolvedValue([]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
       $transaction: jest.fn(async (cb: (tx: any) => Promise<any>) => cb(prisma)),
     };
 
@@ -232,7 +233,7 @@ describe('EntryService', () => {
         cashDifference: -500,
       });
 
-      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
       expect(periodService.assertPeriodOpen).toHaveBeenCalledWith('2026-07-14', prisma);
       expect(prisma.accountingEntry.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -308,7 +309,7 @@ describe('EntryService', () => {
       });
 
       expect(res).toEqual({ entryId: 'existing-sale-entry', entryNumber: 55 });
-      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
       expect(prisma.accountingEntry.create).not.toHaveBeenCalled();
     });
   });

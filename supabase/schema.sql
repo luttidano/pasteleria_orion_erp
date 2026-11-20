@@ -306,6 +306,40 @@ CREATE TABLE IF NOT EXISTS public.idempotency_record (
 );
 
 -- =============================================================================
+-- 5C. CUENTAS POR PAGAR (CxP) Y FACTURAS DE PROVEEDORES
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.supplier_invoice (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  supplier_id uuid NOT NULL REFERENCES public.supplier(id) ON DELETE RESTRICT,
+  invoice_number varchar(100) NOT NULL,
+  issue_date date NOT NULL DEFAULT CURRENT_DATE,
+  due_date date NOT NULL,
+  total_amount numeric(12, 2) NOT NULL CHECK (total_amount > 0),
+  paid_amount numeric(12, 2) NOT NULL DEFAULT 0 CHECK (paid_amount >= 0 AND paid_amount <= total_amount),
+  status varchar(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'partial', 'paid', 'voided')),
+  has_invoice boolean NOT NULL DEFAULT true,
+  notes text,
+  created_by_id uuid REFERENCES public.profile(id) ON DELETE SET NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT uq_supplier_invoice_number UNIQUE (supplier_id, invoice_number)
+);
+
+CREATE TABLE IF NOT EXISTS public.supplier_payment (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_id uuid NOT NULL REFERENCES public.supplier_invoice(id) ON DELETE RESTRICT,
+  payment_date date NOT NULL DEFAULT CURRENT_DATE,
+  amount numeric(12, 2) NOT NULL CHECK (amount > 0),
+  payment_method varchar(50) NOT NULL CHECK (payment_method IN ('transferencia', 'efectivo', 'banco')),
+  reference varchar(150),
+  notes text,
+  accounting_entry_id uuid REFERENCES public.accounting_entry(id) ON DELETE SET NULL,
+  created_by_id uuid REFERENCES public.profile(id) ON DELETE SET NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+-- =============================================================================
 -- 6. ÍNDICES DE RENDIMIENTO
 -- =============================================================================
 

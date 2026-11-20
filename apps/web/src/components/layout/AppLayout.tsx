@@ -427,7 +427,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           )}
 
           {activeSection === 'proveedores' && (
-            <SuppliersView addToast={addToast} />
+            <SuppliersView user={user} addToast={addToast} />
           )}
 
           {/* MÓDULO 2: PUNTO DE VENTA (POS) */}

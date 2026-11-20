@@ -4,7 +4,8 @@ export type OutboxAggregateType =
   | 'inventory_purchase'
   | 'inventory_production'
   | 'inventory_adjustment'
-  | 'pos_sale_cogs';
+  | 'pos_sale_cogs'
+  | 'supplier_payment';
 
 export type InventoryOutboxItemType =
   | 'ingredient'
@@ -126,4 +127,17 @@ export interface OutboxSyncBatchResult {
   syncedSales: SyncedSaleRef[];
   syncedShifts: SyncedShiftRef[];
   recoveredItemCosts: RecoveredSaleItemCost[];
+}
+
+export interface SupplierPaymentRequestedPayload {
+  paymentId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  supplierId: string;
+  supplierName: string;
+  amount: number;
+  paymentMethod: string;
+  paymentDate: string;
+  reference?: string;
+  notes?: string;
 }

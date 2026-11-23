@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.category (
 CREATE TABLE IF NOT EXISTS public.supplier (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
+  rut varchar(20),
   phone text NOT NULL,
   delivery_schedule text NOT NULL,
   category text NOT NULL,

@@ -67,7 +67,7 @@ export const SupplierListColumn: React.FC<SupplierListColumnProps> = ({
                       {supplier.name}
                     </h4>
                     <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 truncate">
-                      {supplier.category}
+                      {supplier.rut ? `${supplier.rut} • ` : ''}{supplier.category}
                     </p>
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       {isPresencial ? (

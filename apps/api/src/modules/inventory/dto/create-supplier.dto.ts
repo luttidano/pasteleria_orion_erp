@@ -5,6 +5,10 @@ export class CreateSupplierDto {
   @IsNotEmpty({ message: 'El nombre del proveedor o establecimiento es obligatorio.' })
   name: string;
 
+  @IsOptional()
+  @IsString()
+  rut?: string;
+
   // Opcional: En compras presenciales/mayoristas muchas veces no se cuenta con teléfono directo
   @IsOptional()
   @IsString()

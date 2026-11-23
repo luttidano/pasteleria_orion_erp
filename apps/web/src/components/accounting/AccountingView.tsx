@@ -27,6 +27,7 @@ import {
 import { VoidEntryModal } from './VoidEntryModal';
 import { FinancialReportsTab } from './FinancialReportsTab';
 import { AccountingPeriodsTab } from './AccountingPeriodsTab';
+import { TaxControlTab } from './TaxControlTab';
 
 interface AccountingViewProps {
   section:
@@ -34,7 +35,8 @@ interface AccountingViewProps {
     | 'contabilidad-mayor'
     | 'contabilidad-balances'
     | 'contabilidad-reportes'
-    | 'contabilidad-periodos';
+    | 'contabilidad-periodos'
+    | 'contabilidad-impuestos';
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
 }
 
@@ -85,7 +87,11 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
   }, [entryDate, concept, formLines, showModal]);
 
   const loadData = useCallback(async () => {
-    if (section === 'contabilidad-periodos' || section === 'contabilidad-reportes') {
+    if (
+      section === 'contabilidad-periodos' ||
+      section === 'contabilidad-reportes' ||
+      section === 'contabilidad-impuestos'
+    ) {
       setLoading(false);
       return;
     }
@@ -399,6 +405,8 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
       {section === 'contabilidad-reportes' && <FinancialReportsTab addToast={addToast} />}
 
       {section === 'contabilidad-periodos' && <AccountingPeriodsTab addToast={addToast} />}
+
+      {section === 'contabilidad-impuestos' && <TaxControlTab addToast={addToast} />}
 
       <AccountingEntryModal
         isOpen={showModal}

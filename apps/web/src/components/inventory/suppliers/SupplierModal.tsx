@@ -67,6 +67,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   supplierToEdit,
 }) => {
   const [name, setName] = useState('');
+  const [rut, setRut] = useState('');
   const [phone, setPhone] = useState('');
   const [deliverySchedule, setDeliverySchedule] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -85,6 +86,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   useEffect(() => {
     if (supplierToEdit) {
       setName(supplierToEdit.name || '');
+      setRut(supplierToEdit.rut || '');
       setPhone(
         supplierToEdit.phone && supplierToEdit.phone !== 'Sin registrar'
           ? supplierToEdit.phone
@@ -114,6 +116,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
       setAddress(supplierToEdit.address || '');
     } else {
       setName('');
+      setRut('');
       setPhone('');
       setDeliverySchedule('');
       setSelectedCategories([]);
@@ -190,6 +193,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
     try {
       await onSave({
         name: name.trim(),
+        rut: rut.trim() || undefined,
         phone: phone.trim() || 'Sin registrar',
         deliverySchedule:
           deliverySchedule.trim() ||
@@ -435,6 +439,26 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                     : "Ej: Molino Central Harinas, Lácteos del Sur, Soprole..."
                 }
                 className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-[#201612] border border-[#DFCAA9] dark:border-[#35251F] text-sm text-[#1C120D] dark:text-[#FBF4EB] placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-[#8C1F25]/40"
+              />
+            </div>
+          </div>
+
+          {/* RUT del Proveedor (Opcional pero fundamental para facturas y F29) */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-[#4A3B32] dark:text-[#C4B2A5]">
+                RUT del Proveedor <span className="text-stone-400 font-normal">(Opcional / SII)</span>
+              </label>
+              <span className="text-[10px] text-stone-500">Para facturas, CxP y Libro de Compras</span>
+            </div>
+            <div className="relative">
+              <FileText className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={rut}
+                onChange={(e) => setRut(e.target.value)}
+                placeholder="Ej: 76.123.456-7"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-[#201612] border border-[#DFCAA9] dark:border-[#35251F] text-sm font-mono text-[#1C120D] dark:text-[#FBF4EB] placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-[#8C1F25]/40"
               />
             </div>
           </div>

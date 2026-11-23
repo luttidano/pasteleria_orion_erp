@@ -348,9 +348,19 @@ export const AccountsPayableTab: React.FC<AccountsPayableTabProps> = ({
                               <span className="font-bold text-stone-900 dark:text-white block">
                                 {inv.supplier?.name}
                               </span>
-                              <span className="text-[11px] text-stone-400">
-                                {inv.supplier?.contactPerson || inv.supplier?.phone || 'Sin contacto'}
-                              </span>
+                              <div className="flex items-center gap-1.5 text-[11px] text-stone-400">
+                                {inv.supplier?.rut ? (
+                                  <span className="font-mono text-stone-600 dark:text-stone-300 font-medium">
+                                    {inv.supplier.rut}
+                                  </span>
+                                ) : (
+                                  <span className="italic text-stone-400">Sin RUT</span>
+                                )}
+                                <span>•</span>
+                                <span className="truncate max-w-[140px]">
+                                  {inv.supplier?.contactPerson || inv.supplier?.phone || 'Sin contacto'}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </td>

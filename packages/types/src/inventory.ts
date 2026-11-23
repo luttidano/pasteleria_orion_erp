@@ -93,6 +93,7 @@ export type SupplyModality = 'despacho' | 'presencial' | 'mixto';
 export interface SupplierSummary {
   id: string;
   name: string;
+  rut?: string | null;
   phone: string;
   deliverySchedule: string;
   category: string;

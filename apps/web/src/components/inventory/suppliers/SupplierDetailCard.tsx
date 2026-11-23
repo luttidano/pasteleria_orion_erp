@@ -98,6 +98,12 @@ export const SupplierDetailCard: React.FC<SupplierDetailCardProps> = ({
                   <h3 className="text-xl sm:text-2xl font-bold text-[#1C120D] dark:text-[#FBF4EB] font-serif">
                     {supplier.name}
                   </h3>
+                  {supplier.rut && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-stone-700 dark:text-stone-300 bg-stone-100 dark:bg-[#201612] px-2 py-0.5 rounded-md border border-stone-200 dark:border-[#35251F]">
+                      <FileText className="w-3 h-3 text-stone-500" />
+                      <span>RUT: {supplier.rut}</span>
+                    </span>
+                  )}
                   {isPresencial ? (
                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 px-2.5 py-0.5 rounded-full border border-blue-200/80 dark:border-blue-900/60">
                       <Store className="w-3 h-3" />

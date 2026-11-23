@@ -19,6 +19,8 @@ import { BalanceController } from './reports/balance.controller';
 import { BalanceService } from './reports/balance.service';
 import { FinancialReportController } from './reports/financial-report.controller';
 import { FinancialReportService } from './reports/financial-report.service';
+import { TaxController } from './tax/tax.controller';
+import { TaxService } from './tax/tax.service';
 
 @Module({
   imports: [InventoryValuationModule],
@@ -29,6 +31,7 @@ import { FinancialReportService } from './reports/financial-report.service';
     LedgerController,
     BalanceController,
     FinancialReportController,
+    TaxController,
   ],
   providers: [
     AccountService,
@@ -44,6 +47,7 @@ import { FinancialReportService } from './reports/financial-report.service';
     LedgerService,
     BalanceService,
     FinancialReportService,
+    TaxService,
   ],
   exports: [
     AccountingPeriodService,
@@ -53,6 +57,7 @@ import { FinancialReportService } from './reports/financial-report.service';
     AccountingIntegrationService,
     AccountingOutboxService,
     AccountingOutboxProcessorService,
+    TaxService,
   ],
 })
 export class AccountingModule {}

@@ -101,6 +101,7 @@ model RecipeIngredient {
 model Supplier {
   id                String   @id @default(uuid()) @db.Uuid
   name              String
+  rut               String?  @db.VarChar(20)
   phone             String
   deliverySchedule  String   @map("delivery_schedule")
   category          String
@@ -121,6 +122,7 @@ model Supplier {
   generalSupplies     GeneralSupply[]
   invoices            SupplierInvoice[]
 
+  @@index([rut], map: "idx_supplier_rut")
   @@map("supplier")
 }
 

@@ -154,7 +154,7 @@ const CreateInvoiceModalContent: React.FC<ContentProps> = ({
                   </option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.icon || '🚚'} {s.name} ({s.category})
+                      {s.icon || '🚚'} {s.name} {s.rut ? `(RUT: ${s.rut})` : `(${s.category})`}
                     </option>
                   ))}
                 </select>

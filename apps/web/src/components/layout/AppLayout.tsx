@@ -58,6 +58,7 @@ const ALLOWED_SECTIONS_BY_ROLE: Record<string, AdminSection[]> = {
     'contabilidad-balances',
     'contabilidad-reportes',
     'contabilidad-periodos',
+    'contabilidad-impuestos',
     'ajustes',
   ],
   baker: ['despensa', 'recetas', 'productos', 'empaques', 'insumos-generales'],
@@ -174,6 +175,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         return 'Informes y Reportes Financieros';
       case 'contabilidad-periodos':
         return 'Cierre de Períodos & Ejercicio Anual';
+      case 'contabilidad-impuestos':
+        return 'Control Tributario / IVA y F29';
       case 'ajustes':
         return 'Configuración del Sistema ERP';
       default:
@@ -442,7 +445,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             activeSection === 'contabilidad-balances' ||
             activeSection === 'contabilidad-mayor' ||
             activeSection === 'contabilidad-reportes' ||
-            activeSection === 'contabilidad-periodos') && (
+            activeSection === 'contabilidad-periodos' ||
+            activeSection === 'contabilidad-impuestos') && (
             <AccountingView section={activeSection} addToast={addToast} />
           )}
 

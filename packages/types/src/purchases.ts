@@ -33,6 +33,7 @@ export interface SupplierInvoice {
   supplier?: {
     id: string;
     name: string;
+    rut?: string | null;
     phone?: string | null;
     email?: string | null;
     contactPerson?: string | null;

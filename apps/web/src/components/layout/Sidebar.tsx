@@ -43,6 +43,7 @@ export type AdminSection =
   | 'contabilidad-balances'
   | 'contabilidad-reportes'
   | 'contabilidad-periodos'
+  | 'contabilidad-impuestos'
   // Configuración general
   | 'ajustes';
 
@@ -227,6 +228,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: Lock,
           allowedRoles: ['admin'],
         },
+        {
+          id: 'contabilidad-impuestos',
+          label: 'Control Tributario / IVA',
+          description: 'Libros compras/ventas y F29',
+          icon: Receipt,
+          allowedRoles: ['admin'],
+        },
       ],
     },
   ];
@@ -271,7 +279,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       'contabilidad-mayor', 
       'contabilidad-balances', 
       'contabilidad-reportes',
-      'contabilidad-periodos']
+      'contabilidad-periodos',
+      'contabilidad-impuestos']
       .includes(activeSection),
   }));
 
@@ -281,7 +290,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setOpenDropdowns((prev) => ({ ...prev, inventario: true }));
     } else if (['pos-caja', 'pos-historial', 'pos-cierre'].includes(activeSection)) {
       setOpenDropdowns((prev) => ({ ...prev, pos: true }));
-    } else if (['contabilidad-diario', 'contabilidad-mayor', 'contabilidad-balances', 'contabilidad-reportes', 'contabilidad-periodos'].includes(activeSection)) {
+    } else if (['contabilidad-diario', 'contabilidad-mayor', 'contabilidad-balances', 'contabilidad-reportes', 'contabilidad-periodos', 'contabilidad-impuestos'].includes(activeSection)) {
       setOpenDropdowns((prev) => ({ ...prev, contabilidad: true }));
     }
   }, [activeSection]);

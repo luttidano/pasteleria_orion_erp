@@ -59,6 +59,7 @@ export class SupplierService {
     return {
       id: item.id,
       name: item.name,
+      rut: item.rut || null,
       phone: item.phone,
       supplierTypes:
         supplierTypes && supplierTypes.length > 0
@@ -144,6 +145,7 @@ export class SupplierService {
       const created = await this.prisma.supplier.create({
         data: {
           name: dto.name.trim(),
+          rut: dto.rut?.trim() || null,
           phone,
           deliverySchedule,
           category,
@@ -179,6 +181,7 @@ export class SupplierService {
         where: { id },
         data: {
           ...(dto.name !== undefined && { name: dto.name.trim() }),
+          ...(dto.rut !== undefined && { rut: dto.rut?.trim() || null }),
           ...(dto.phone !== undefined && {
             phone: dto.phone.trim() || 'Sin registrar',
           }),

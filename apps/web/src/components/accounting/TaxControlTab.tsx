@@ -389,8 +389,8 @@ export const TaxControlTab: React.FC<TaxControlTabProps> = ({ addToast }) => {
             </span>
           </div>
           <div className="flex items-center gap-4 text-[11px] font-mono">
-            <span>Cta 2102 Débito: {formatMoney(summaryData.accountingReconciliation.accountVatDebitBalance)}</span>
-            <span>Cta 1108 Crédito: {formatMoney(summaryData.accountingReconciliation.accountVatCreditBalance)}</span>
+            <span>Cta 2.1.02.01 Débito: {formatMoney(summaryData.accountingReconciliation.accountVatDebitBalance)}</span>
+            <span>Cta 1.1.03.01 Crédito: {formatMoney(summaryData.accountingReconciliation.accountVatCreditBalance)}</span>
           </div>
         </div>
       )}

@@ -68,7 +68,7 @@ describe('AnnualClosingService', () => {
 
       const equityAcc = {
         id: 'acc-3102',
-        code: '3102',
+        code: '3.1.02.01',
         name: 'Resultado del Ejercicio',
       };
       prisma.accountingAccount.findFirst.mockResolvedValue(equityAcc);
@@ -76,19 +76,19 @@ describe('AnnualClosingService', () => {
       prisma.accountingAccount.findMany.mockResolvedValue([
         {
           id: 'acc-4101',
-          code: '4101',
+          code: '4.1.01.01',
           name: 'Ventas de Pastelería y Cafetería',
           accountType: 'ingreso',
         },
         {
           id: 'acc-5101',
-          code: '5101',
+          code: '5.1.01.01',
           name: 'Costo Materia Prima',
           accountType: 'costo',
         },
         {
           id: 'acc-6102',
-          code: '6102',
+          code: '6.1.01.01',
           name: 'Gastos Generales',
           accountType: 'gasto',
         },
@@ -113,7 +113,7 @@ describe('AnnualClosingService', () => {
       expect(totalDebe).toBe(1000000);
       expect(totalHaber).toBe(1000000);
 
-      const equityLine = preview.lines.find((l) => l.accountCode === '3102');
+      const equityLine = preview.lines.find((l) => l.accountCode === '3.1.02.01');
       expect(equityLine).toBeDefined();
       expect(equityLine?.credit).toBe(400000);
       expect(equityLine?.debit).toBe(0);
@@ -127,19 +127,19 @@ describe('AnnualClosingService', () => {
       prisma.accountingOutbox.count.mockResolvedValue(0);
       prisma.accountingAccount.findFirst.mockResolvedValue({
         id: 'acc-3102',
-        code: '3102',
+        code: '3.1.02.01',
         name: 'Resultado del Ejercicio',
       });
       prisma.accountingAccount.findMany.mockResolvedValue([
         {
           id: 'acc-4101',
-          code: '4101',
+          code: '4.1.01.01',
           name: 'Ventas',
           accountType: 'ingreso',
         },
         {
           id: 'acc-6102',
-          code: '6102',
+          code: '6.1.01.01',
           name: 'Gastos',
           accountType: 'gasto',
         },
@@ -187,17 +187,20 @@ describe('AnnualClosingService', () => {
 
       prisma.accountingAccount.findFirst.mockImplementation(
         async (args?: any) => {
-          if (args?.where?.code === '3102') {
+          const code = args?.where?.code;
+          const codeMatch = (target: string) =>
+            code === target || (code?.in && code.in.includes(target));
+          if (codeMatch('3.1.02.01')) {
             return {
               id: 'acc-3102',
-              code: '3102',
+              code: '3.1.02.01',
               name: 'Resultado del Ejercicio',
             };
           }
-          if (args?.where?.code === '3103') {
+          if (codeMatch('3.1.02.02')) {
             return {
               id: 'acc-3103',
-              code: '3103',
+              code: '3.1.02.02',
               name: 'Resultados Acumulados',
             };
           }
@@ -205,7 +208,7 @@ describe('AnnualClosingService', () => {
         },
       );
 
-      // Saldo previo acumulado en 3102 de años anteriores: $500.000 crédito (utilidad)
+      // Saldo previo acumulado en 3.1.02.01 de años anteriores: $500.000 crédito (utilidad)
       prisma.accountingEntryItem.aggregate.mockResolvedValueOnce({
         _sum: { debit: 0, credit: 500000 },
       });
@@ -213,13 +216,13 @@ describe('AnnualClosingService', () => {
       prisma.accountingAccount.findMany.mockResolvedValue([
         {
           id: 'acc-4101',
-          code: '4101',
+          code: '4.1.01.01',
           name: 'Ventas',
           accountType: 'ingreso',
         },
         {
           id: 'acc-6101',
-          code: '6101',
+          code: '6.1.01.01',
           name: 'Costos y Gastos',
           accountType: 'gasto',
         },
@@ -236,21 +239,21 @@ describe('AnnualClosingService', () => {
       expect(preview.canExecute).toBe(true);
       expect(preview.resultadoEjercicio).toBe(200000);
       expect(preview.priorEarningsTransferred).toBe(500000);
-      expect(preview.retainedEarningsAccount?.code).toBe('3103');
+      expect(preview.retainedEarningsAccount?.code).toBe('3.1.02.02');
 
-      // Líneas de transferencia entre 3102 y 3103
+      // Líneas de transferencia entre 3.1.02.01 y 3.1.02.02
       const transferDebit3102 = preview.lines.find(
-        (l) => l.accountCode === '3102' && l.debit === 500000,
+        (l) => l.accountCode === '3.1.02.01' && l.debit === 500000,
       );
       const transferCredit3103 = preview.lines.find(
-        (l) => l.accountCode === '3103' && l.credit === 500000,
+        (l) => l.accountCode === '3.1.02.02' && l.credit === 500000,
       );
       expect(transferDebit3102).toBeDefined();
       expect(transferCredit3103).toBeDefined();
 
-      // Línea final de resultado 2026 en 3102
+      // Línea final de resultado 2026 en 3.1.02.01
       const currentYearLine = preview.lines.find(
-        (l) => l.accountCode === '3102' && l.credit === 200000,
+        (l) => l.accountCode === '3.1.02.01' && l.credit === 200000,
       );
       expect(currentYearLine).toBeDefined();
 

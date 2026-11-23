@@ -15,4 +15,10 @@ export class AccountController {
   findAccounts() {
     return this.accountService.findAccounts();
   }
+
+  @Get('accounts/tree')
+  @Roles(Role.admin, Role.cashier)
+  getAccountTree() {
+    return this.accountService.getAccountTree();
+  }
 }

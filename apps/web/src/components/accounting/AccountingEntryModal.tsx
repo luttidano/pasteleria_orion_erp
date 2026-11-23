@@ -132,11 +132,34 @@ export const AccountingEntryModal: React.FC<AccountingEntryModalProps> = ({
                   required
                 >
                   <option value="">Selecciona cuenta...</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.code} - {a.name}
-                    </option>
-                  ))}
+                  {accounts.map((a) => {
+                    const level = a.level ?? 1;
+                    const isGroup = a.isGroup;
+
+                    // Prefijo visual de árbol con espacios no separables para evitar colapso en HTML
+                    const indent =
+                      level === 1
+                        ? ''
+                        : level === 2
+                          ? '\u00A0\u00A0└── '
+                          : level === 3
+                            ? '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0├── '
+                            : '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0└── ';
+                    const icon = isGroup ? '📁 ' : '📄 ';
+
+                    return (
+                      <option
+                        key={a.id}
+                        value={a.id}
+                        disabled={isGroup}
+                        className={isGroup ? 'font-bold bg-stone-100 text-stone-500' : ''}
+                      >
+                        {indent}
+                        {icon}
+                        [{a.code}] {a.name} {isGroup ? '(Totalizadora)' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
                 <input
                   type="number"

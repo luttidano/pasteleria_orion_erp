@@ -13,11 +13,11 @@ import {
 
 describe('BalanceSheetClassifier (OCP)', () => {
   describe('classifyAssetBucket (reglas por defecto)', () => {
-    it('debe clasificar códigos 1101 a 1104 como disponible', () => {
-      expect(classifyAssetBucket('1101', 'Caja')).toBe('disponible');
-      expect(classifyAssetBucket('1102', 'Banco Santander')).toBe('disponible');
-      expect(classifyAssetBucket('1103', 'Transbank')).toBe('disponible');
-      expect(classifyAssetBucket('1104', 'Transferencias')).toBe('disponible');
+    it('debe clasificar códigos 1.1.01.01 a 1.1.01.04 como disponible', () => {
+      expect(classifyAssetBucket('1.1.01.01', 'Caja')).toBe('disponible');
+      expect(classifyAssetBucket('1.1.01.02', 'Banco Santander')).toBe('disponible');
+      expect(classifyAssetBucket('1.1.01.03', 'Transbank')).toBe('disponible');
+      expect(classifyAssetBucket('1.1.01.04', 'Transferencias')).toBe('disponible');
     });
 
     it('debe clasificar nombres con banco/caja/transbank como disponible por regex', () => {
@@ -25,9 +25,9 @@ describe('BalanceSheetClassifier (OCP)', () => {
       expect(classifyAssetBucket('9998', 'Caja Chica Sucursal')).toBe('disponible');
     });
 
-    it('debe clasificar códigos 1105 y 1106 como inventarios', () => {
-      expect(classifyAssetBucket('1105', 'Materias Primas')).toBe('inventarios');
-      expect(classifyAssetBucket('1106', 'Productos Terminados')).toBe('inventarios');
+    it('debe clasificar códigos 1.1.02.01 y 1.1.02.02 como inventarios', () => {
+      expect(classifyAssetBucket('1.1.02.01', 'Materias Primas')).toBe('inventarios');
+      expect(classifyAssetBucket('1.1.02.02', 'Productos Terminados')).toBe('inventarios');
     });
 
     it('debe clasificar nombres de inventario/materia prima como inventarios por regex', () => {
@@ -42,13 +42,13 @@ describe('BalanceSheetClassifier (OCP)', () => {
   });
 
   describe('classifyLiabilityBucket (reglas por defecto)', () => {
-    it('debe clasificar códigos 2102 y 2105 como impuestos', () => {
-      expect(classifyLiabilityBucket('2102', 'IVA Débito Fiscal')).toBe('impuestos');
-      expect(classifyLiabilityBucket('2105', 'PPM por Pagar')).toBe('impuestos');
+    it('debe clasificar códigos 2.1.02.01 y 2.1.02.02 como impuestos', () => {
+      expect(classifyLiabilityBucket('2.1.02.01', 'IVA Débito Fiscal')).toBe('impuestos');
+      expect(classifyLiabilityBucket('2.1.02.02', 'PPM por Pagar')).toBe('impuestos');
     });
 
-    it('debe clasificar código 2101 como obligaciones', () => {
-      expect(classifyLiabilityBucket('2101', 'Proveedores')).toBe('obligaciones');
+    it('debe clasificar código 2.1.01.01 como obligaciones', () => {
+      expect(classifyLiabilityBucket('2.1.01.01', 'Proveedores')).toBe('obligaciones');
     });
 
     it('debe priorizar impuestos sobre obligaciones ante nombres como "IVA por Pagar"', () => {

@@ -8,12 +8,24 @@ export type AccountingAccountType =
   | 'costo'
   | 'gasto';
 
+export type NormalBalanceType = 'debit' | 'credit';
+
 export interface AccountingAccount {
   id: string;
   code: string;
   name: string;
   accountType: AccountingAccountType | string;
+  parentId?: string | null;
+  path?: string;
+  level?: number;
+  isGroup?: boolean;
+  normalBalance?: NormalBalanceType | string;
   isActive: boolean;
+  createdAt?: string;
+}
+
+export interface AccountTreeNode extends AccountingAccount {
+  children?: AccountTreeNode[];
 }
 
 export type AccountingPeriodStatus = 'abierto' | 'cerrado';
@@ -73,6 +85,8 @@ export interface BalanceRow {
   code: string;
   name: string;
   accountType: AccountingAccountType | string;
+  level?: number;
+  isGroup?: boolean;
   totalDebit: number;
   totalCredit: number;
   debitBalance: number;

@@ -231,7 +231,7 @@ const RecordPaymentModalContent: React.FC<ContentProps> = ({
                   <Building2 className="w-4 h-4 shrink-0 text-emerald-600" />
                   <div>
                     <span className="text-xs block">Banco / Transferencia</span>
-                    <span className="text-[10px] text-stone-400 font-mono">Cuenta 1102</span>
+                    <span className="text-[10px] text-stone-400 font-mono">Cuenta 1.1.01.02</span>
                   </div>
                 </button>
                 <button
@@ -246,7 +246,7 @@ const RecordPaymentModalContent: React.FC<ContentProps> = ({
                   <CreditCard className="w-4 h-4 shrink-0 text-emerald-600" />
                   <div>
                     <span className="text-xs block">Caja General Efectivo</span>
-                    <span className="text-[10px] text-stone-400 font-mono">Cuenta 1101</span>
+                    <span className="text-[10px] text-stone-400 font-mono">Cuenta 1.1.01.01</span>
                   </div>
                 </button>
               </div>
@@ -303,7 +303,7 @@ const RecordPaymentModalContent: React.FC<ContentProps> = ({
         <div className="p-4 border-t border-stone-200 dark:border-[#35251F] bg-stone-50/50 dark:bg-[#16100E] flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs text-stone-500">
             <FileCheck className="w-4 h-4 text-emerald-600" />
-            <span>Generará asiento contable (Debe 2101 / Haber {paymentMethod === 'efectivo' ? '1101' : '1102'})</span>
+            <span>Generará asiento contable (Debe 2.1.01.01 / Haber {paymentMethod === 'efectivo' ? '1.1.01.01' : '1.1.01.02'})</span>
           </div>
           <div className="flex items-center gap-2">
             <button

@@ -614,7 +614,7 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
               </div>
               <div className="p-3.5 rounded-2xl bg-[#FAF5ED] dark:bg-[#231814] border border-[#EADBCE] dark:border-[#42312A]">
                 <span className="text-[10px] font-bold uppercase text-[#8C1F25] dark:text-[#D4A373] block">
-                  Resultado del Ejercicio (3102)
+                  Resultado del Ejercicio (3.1.02.01)
                 </span>
                 <span
                   className={`text-lg font-mono font-bold ${

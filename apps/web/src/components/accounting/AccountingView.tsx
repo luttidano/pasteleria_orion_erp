@@ -9,6 +9,7 @@ import type {
   PeriodCheckResult,
   ToastMessage,
 } from '../../types';
+import { SYSTEM_ACCOUNT_CODES } from '../../constants/accounting';
 import { createIdempotencyKey } from '../../lib/api';
 import { accountingService } from '../../services/accountingService';
 import { accountingPeriodService } from '../../services/accountingPeriodService';
@@ -127,7 +128,14 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ section, addToas
 
       setSelectedLedgerAccountId((prev) => {
         if (prev || loadedAccounts.length === 0) return prev;
-        const defaultAcc = loadedAccounts.find((a) => a.code === '1101') || loadedAccounts[0];
+        const defaultAcc =
+          loadedAccounts.find(
+            (a) =>
+              !a.isGroup &&
+              a.code === SYSTEM_ACCOUNT_CODES.CASH,
+          ) ||
+          loadedAccounts.find((a) => !a.isGroup) ||
+          loadedAccounts[0];
         return defaultAcc.id;
       });
 

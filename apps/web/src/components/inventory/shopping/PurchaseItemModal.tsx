@@ -36,10 +36,10 @@ const PAYMENT_METHOD_OPTIONS: Array<{
   value: InventoryPurchasePaymentMethod;
   label: string;
 }> = [
-  { value: 'efectivo', label: 'Efectivo (Caja 1101)' },
-  { value: 'banco', label: 'Tarjeta / POS Mercado Pago (1102)' },
-  { value: 'transferencia', label: 'Transferencia / Mercado Pago (1102)' },
-  { value: 'credito_proveedor', label: 'Crédito / Por Pagar Proveedor (2101)' },
+  { value: 'efectivo', label: 'Efectivo (Caja 1.1.01.01)' },
+  { value: 'banco', label: 'Tarjeta / POS Mercado Pago (1.1.01.02)' },
+  { value: 'transferencia', label: 'Transferencia / Mercado Pago (1.1.01.02)' },
+  { value: 'credito_proveedor', label: 'Crédito / Por Pagar Proveedor (2.1.01.01)' },
 ];
 
 export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
@@ -386,7 +386,7 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
 
             {paymentMethod === 'credito_proveedor' && (
               <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-[11px] text-amber-900 dark:text-amber-200">
-                <span>💡 Se creará una obligación en <b>2101 Proveedores por Pagar</b> visible en la sección de <b>Cuentas por Pagar (CxP)</b> de Proveedores.</span>
+                <span>💡 Se creará una obligación en <b>2.1.01.01 Proveedores por Pagar</b> visible en la sección de <b>Cuentas por Pagar (CxP)</b> de Proveedores.</span>
               </div>
             )}
 
@@ -426,10 +426,10 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
                 <div className="flex justify-between">
                   <span>
                     {item.kind === 'general_supply'
-                      ? 'Gasto operativo (6101):'
+                      ? 'Gasto operativo (6.1.01.01):'
                       : item.kind === 'resale'
-                      ? 'Inventario prod. terminados (1106):'
-                      : 'Inventario materias primas / empaques (1105):'}
+                      ? 'Inventario prod. terminados (1.1.02.02):'
+                      : 'Inventario materias primas / empaques (1.1.02.01):'}
                   </span>
                   <span className="font-mono font-bold text-stone-900 dark:text-white">
                     {formatCurrency(netAmount)}
@@ -437,7 +437,7 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
                 </div>
                 {hasInvoice && (
                   <div className="flex justify-between">
-                    <span>IVA Crédito Fiscal (1108):</span>
+                    <span>IVA Crédito Fiscal (1.1.03.01):</span>
                     <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
                       {formatCurrency(vatAmount)}
                     </span>

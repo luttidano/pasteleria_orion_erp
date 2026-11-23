@@ -21,13 +21,15 @@ export const DEFAULT_ASSET_CLASSIFICATION_RULES: ReadonlyArray<
 > = [
   {
     bucket: 'disponible',
-    codes: new Set(['1101', '1102', '1103', '1104']),
+    codes: new Set(['1.1.01.01', '1.1.01.02', '1.1.01.03', '1.1.01.04']),
+    codePrefixes: ['1.1.01'],
     namePattern: /caja|banco|transbank|transferencia/i,
   },
   {
     bucket: 'inventarios',
-    codes: new Set(['1105', '1106']),
-    namePattern: /inventario|materia|terminado/i,
+    codes: new Set(['1.1.02.01', '1.1.02.02', '1.1.02.03']),
+    codePrefixes: ['1.1.02'],
+    namePattern: /inventario|materia|terminado|empaque/i,
   },
 ];
 
@@ -40,12 +42,14 @@ export const DEFAULT_LIABILITY_CLASSIFICATION_RULES: ReadonlyArray<
 > = [
   {
     bucket: 'impuestos',
-    codes: new Set(['2102', '2105']),
+    codes: new Set(['2.1.02.01', '2.1.02.02']),
+    codePrefixes: ['2.1.02'],
     namePattern: /iva|impuesto|retenc|ppm|f29/i,
   },
   {
     bucket: 'obligaciones',
-    codes: new Set(['2101']),
+    codes: new Set(['2.1.01.01']),
+    codePrefixes: ['2.1.01'],
     namePattern: /proveedor|por pagar|acreedor/i,
   },
 ];

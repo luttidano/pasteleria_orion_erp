@@ -33,10 +33,41 @@ export class BalanceService {
         });
       }
 
+      const leafBalances = new Map<string, { totalDebit: number; totalCredit: number }>();
+      for (const acc of accounts) {
+        if (!acc.isGroup) {
+          const totals = totalsByAccount.get(acc.id) ?? { totalDebit: 0, totalCredit: 0 };
+          leafBalances.set(acc.id, {
+            totalDebit: totals.totalDebit,
+            totalCredit: totals.totalCredit,
+          });
+        }
+      }
+
       return accounts.map((acc) => {
-        const totals = totalsByAccount.get(acc.id) ?? { totalDebit: 0, totalCredit: 0 };
-        const totalDebit = totals.totalDebit;
-        const totalCredit = totals.totalCredit;
+        let totalDebit = 0;
+        let totalCredit = 0;
+
+        if (acc.isGroup) {
+          const prefix = `${acc.code}.`;
+          for (const leaf of accounts) {
+            if (
+              !leaf.isGroup &&
+              (leaf.code.startsWith(prefix) ||
+                (leaf.path && acc.path && leaf.path.startsWith(`${acc.path}.`)))
+            ) {
+              const leafTot = leafBalances.get(leaf.id);
+              if (leafTot) {
+                totalDebit = roundMoney(totalDebit + leafTot.totalDebit);
+                totalCredit = roundMoney(totalCredit + leafTot.totalCredit);
+              }
+            }
+          }
+        } else {
+          const totals = totalsByAccount.get(acc.id) ?? { totalDebit: 0, totalCredit: 0 };
+          totalDebit = totals.totalDebit;
+          totalCredit = totals.totalCredit;
+        }
 
         const debitBalance = totalDebit > totalCredit ? roundMoney(totalDebit - totalCredit) : 0;
         const creditBalance = totalCredit > totalDebit ? roundMoney(totalCredit - totalDebit) : 0;
@@ -46,6 +77,8 @@ export class BalanceService {
           code: acc.code,
           name: acc.name,
           accountType: acc.accountType,
+          level: acc.level,
+          isGroup: acc.isGroup,
           totalDebit,
           totalCredit,
           debitBalance,

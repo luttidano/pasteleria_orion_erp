@@ -6,6 +6,7 @@ import type {
   SalesBookResponse,
   VatSummaryResponse,
 } from '@repo/types';
+import { SYSTEM_ACCOUNT_CODES } from '../accounting.constants';
 import { PrismaService } from '../../../database/prisma.service';
 import {
   getChileMonthDateRangeUtc,
@@ -141,7 +142,7 @@ export class TaxService {
       };
     });
 
-    // Detectar compras directas registradas contablemente en 1108 sin registro previo en CxP
+    // Detectar compras directas registradas contablemente en 1.1.03.01 (IVA Crédito Fiscal) sin registro previo en CxP
     const existingDocNumbers = new Set(
       entries.map((e) => e.documentNumber.toLowerCase().trim()),
     );
@@ -152,7 +153,7 @@ export class TaxService {
         entryDate: { gte: utcMonthStart, lte: utcMonthEnd },
         items: {
           some: {
-            account: { code: '1108' },
+            account: { code: SYSTEM_ACCOUNT_CODES.VAT_CREDIT },
             debit: { gt: 0 },
           },
         },
@@ -177,12 +178,15 @@ export class TaxService {
 
       if (!isAlreadyTracked) {
         const vatItem = entry.items.find(
-          (i) => i.account.code === '1108' && Number(i.debit) > 0,
+          (i) =>
+            i.account.code === SYSTEM_ACCOUNT_CODES.VAT_CREDIT &&
+            Number(i.debit) > 0,
         );
         const vatAmount = roundMoney(Number(vatItem?.debit ?? 0));
         const netItem = entry.items.find(
           (i) =>
-            (i.account.code === '1105' || i.account.code === '6101') &&
+            (i.account.code === SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY ||
+              i.account.code === SYSTEM_ACCOUNT_CODES.OPERATING_EXPENSES) &&
             Number(i.debit) > 0,
         );
         const netAmount = roundMoney(
@@ -234,7 +238,7 @@ export class TaxService {
   /**
    * Calcula el Balance Mensual de IVA y genera el borrador para el Formulario 29 (F29).
    * Determina: IVA Débito - (IVA Crédito + Remanente) => IVA a Pagar o Nuevo Remanente a Favor.
-   * Realiza además la cuadratura contable contra las cuentas 2102 y 1108 del Libro Mayor.
+   * Realiza además la cuadratura contable contra las cuentas 2.1.02.01 y 1.1.03.01 del Libro Mayor.
    */
   async getVatSummary(dto: TaxPeriodQueryDto): Promise<VatSummaryResponse> {
     const salesBook = await this.getSalesBook(dto);
@@ -260,7 +264,7 @@ export class TaxService {
     );
     const totalTaxToPay = roundMoney(netVatPayable + ppmAmount);
 
-    // Conciliación con las cuentas del Libro Mayor 2102 y 1108
+    // Conciliación con las cuentas del Libro Mayor 2.1.02.01 y 1.1.01.04
     const { start: utcMonthStart, end: utcMonthEnd } = getMonthDateRangeUtc(
       dto.year,
       dto.month,
@@ -268,7 +272,9 @@ export class TaxService {
 
     const vatDebitItems = await this.prisma.accountingEntryItem.findMany({
       where: {
-        account: { code: '2102' },
+        account: {
+          code: SYSTEM_ACCOUNT_CODES.VAT_DEBIT,
+        },
         entry: {
           status: 'active',
           entryDate: { gte: utcMonthStart, lte: utcMonthEnd },
@@ -279,7 +285,9 @@ export class TaxService {
 
     const vatCreditItems = await this.prisma.accountingEntryItem.findMany({
       where: {
-        account: { code: '1108' },
+        account: {
+          code: SYSTEM_ACCOUNT_CODES.VAT_CREDIT,
+        },
         entry: {
           status: 'active',
           entryDate: { gte: utcMonthStart, lte: utcMonthEnd },

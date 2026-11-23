@@ -159,6 +159,22 @@ export class EntryService {
       const entry = await this.prisma.$transaction(async (tx) => {
         await this.periodService.assertPeriodOpen(dto.entryDate, tx);
 
+        const accountIds = normalizedItems.map((it) => it.accountId);
+        const groupAccounts = await tx.accountingAccount.findMany({
+          where: {
+            id: { in: accountIds },
+            isGroup: true,
+          },
+          select: { code: true, name: true },
+        });
+
+        if (groupAccounts.length > 0) {
+          const names = groupAccounts.map((a) => `[${a.code}] ${a.name}`).join(', ');
+          throw new BadRequestException(
+            `No se pueden registrar asientos en cuentas totalizadoras o agrupadoras: ${names}. Selecciona subcuentas imputables de detalle.`,
+          );
+        }
+
         return tx.accountingEntry.create({
           data: {
             entryDate: new Date(`${dto.entryDate}T00:00:00.000Z`),

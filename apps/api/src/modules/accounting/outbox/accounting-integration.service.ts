@@ -28,12 +28,13 @@ import {
   parseStrictUtcBounds,
 } from '../../../common/utils/chile-time.util';
 import { roundMoney } from '../../../common/utils/money.util';
+import { SYSTEM_ACCOUNT_CODES } from '../accounting.constants';
 
 const PAYMENT_ASSET_ACCOUNT_MAP: Record<string, string> = {
-  efectivo: '1101',
-  debito: '1102',
-  credito: '1102',
-  transferencia: '1102',
+  efectivo: SYSTEM_ACCOUNT_CODES.CASH,
+  debito: SYSTEM_ACCOUNT_CODES.BANK_CARD,
+  credito: SYSTEM_ACCOUNT_CODES.BANK_CARD,
+  transferencia: SYSTEM_ACCOUNT_CODES.BANK_TRANSFER,
 };
 
 @Injectable()
@@ -69,7 +70,9 @@ export class AccountingIntegrationService {
       return null;
     }
 
-    const targetAssetCode = PAYMENT_ASSET_ACCOUNT_MAP[sale.paymentMethod] ?? '1101';
+    const targetAssetCode =
+      PAYMENT_ASSET_ACCOUNT_MAP[sale.paymentMethod] ??
+      SYSTEM_ACCOUNT_CODES.CASH;
     const { assetAccount, salesAccount, vatAccount } =
       await this.resolveSaleAccounts(targetAssetCode);
 
@@ -160,44 +163,48 @@ export class AccountingIntegrationService {
     const [assetAccount, salesAccount, vatAccount] = await Promise.all([
       (async () =>
         (await this.prisma.accountingAccount.findFirst({
-          where: { isActive: true, code: targetAssetCode },
+          where: { isActive: true, isGroup: false, code: targetAssetCode },
         })) ??
-        (targetAssetCode !== '1101' && targetAssetCode !== '1102'
-          ? await this.prisma.accountingAccount.findFirst({
-              where: { isActive: true, code: '1102' },
-            })
-          : null) ??
-        (targetAssetCode !== '1101'
-          ? await this.prisma.accountingAccount.findFirst({
-              where: { isActive: true, code: '1101' },
-            })
-          : null) ??
         (await this.prisma.accountingAccount.findFirst({
           where: {
             isActive: true,
+            isGroup: false,
             accountType: 'activo',
-            code: { notIn: ['1105', '1106', '1108'] },
+            code: {
+              notIn: [
+                SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+                SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY,
+                SYSTEM_ACCOUNT_CODES.PACKAGING_INVENTORY,
+                SYSTEM_ACCOUNT_CODES.VAT_CREDIT,
+              ],
+            },
           },
           orderBy: { code: 'asc' },
         })))(),
       (async () =>
         (await this.prisma.accountingAccount.findFirst({
-          where: { isActive: true, code: '4101' },
+          where: {
+            isActive: true,
+            isGroup: false,
+            code: SYSTEM_ACCOUNT_CODES.SALES_REVENUE,
+          },
         })) ??
         (await this.prisma.accountingAccount.findFirst({
-          where: { isActive: true, accountType: 'ingreso' },
+          where: { isActive: true, isGroup: false, accountType: 'ingreso' },
           orderBy: { code: 'asc' },
         })))(),
       (async () =>
         (await this.prisma.accountingAccount.findFirst({
-          where: { isActive: true, code: '2102' },
-        })) ??
-        (await this.prisma.accountingAccount.findFirst({
-          where: { isActive: true, code: '2105' },
+          where: {
+            isActive: true,
+            isGroup: false,
+            code: SYSTEM_ACCOUNT_CODES.VAT_DEBIT,
+          },
         })) ??
         (await this.prisma.accountingAccount.findFirst({
           where: {
             isActive: true,
+            isGroup: false,
             accountType: 'pasivo',
             name: { contains: 'IVA', mode: 'insensitive' },
           },
@@ -231,20 +238,32 @@ export class AccountingIntegrationService {
 
     const cashAccount =
       (await this.prisma.accountingAccount.findFirst({
-        where: { isActive: true, code: '1101' },
+        where: {
+          isActive: true,
+          isGroup: false,
+          code: SYSTEM_ACCOUNT_CODES.CASH,
+        },
       })) ??
       (await this.prisma.accountingAccount.findFirst({
         where: {
           isActive: true,
+          isGroup: false,
           accountType: 'activo',
-          code: { notIn: ['1105', '1106', '1108'] },
+          code: {
+            notIn: [
+              SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+              SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY,
+              SYSTEM_ACCOUNT_CODES.PACKAGING_INVENTORY,
+              SYSTEM_ACCOUNT_CODES.VAT_CREDIT,
+            ],
+          },
         },
         orderBy: { code: 'asc' },
       }));
 
     if (!cashAccount) {
       throw new InternalServerErrorException(
-        'Falta la cuenta contable de Caja Efectivo (1101) para registrar diferencias de arqueo.',
+        'Falta la cuenta contable de Caja Efectivo (1.1.01.01) para registrar diferencias de arqueo.',
       );
     }
 
@@ -258,22 +277,27 @@ export class AccountingIntegrationService {
     if (isOverage) {
       counterAccount =
         (await this.prisma.accountingAccount.findFirst({
-          where: { isActive: true, code: '4102' },
+          where: {
+            isActive: true,
+            isGroup: false,
+            code: SYSTEM_ACCOUNT_CODES.OTHER_INCOME_SURPLUS,
+          },
         })) ??
         (await this.prisma.accountingAccount.findFirst({
-          where: { isActive: true, accountType: 'ingreso' },
+          where: { isActive: true, isGroup: false, accountType: 'ingreso' },
           orderBy: { code: 'asc' },
         }));
     } else {
       counterAccount =
         (await this.prisma.accountingAccount.findFirst({
-          where: { isActive: true, code: '6103' },
+          where: {
+            isActive: true,
+            isGroup: false,
+            code: SYSTEM_ACCOUNT_CODES.CASH_SHORTAGE,
+          },
         })) ??
         (await this.prisma.accountingAccount.findFirst({
-          where: { isActive: true, code: '6102' },
-        })) ??
-        (await this.prisma.accountingAccount.findFirst({
-          where: { isActive: true, accountType: 'gasto' },
+          where: { isActive: true, isGroup: false, accountType: 'gasto' },
           orderBy: { code: 'asc' },
         }));
     }
@@ -281,8 +305,8 @@ export class AccountingIntegrationService {
     if (!counterAccount) {
       throw new InternalServerErrorException(
         isOverage
-          ? 'Falta una cuenta de Ingresos / Sobrantes de Caja (4102) para ajustar el arqueo.'
-          : 'Falta una cuenta de Gastos / Faltantes de Caja (6103) para ajustar el arqueo.',
+          ? 'Falta una cuenta de Ingresos / Sobrantes de Caja (4.1.02.01) para ajustar el arqueo.'
+          : 'Falta una cuenta de Gastos / Faltantes de Caja (6.1.02.01) para ajustar el arqueo.',
       );
     }
 
@@ -386,7 +410,7 @@ export class AccountingIntegrationService {
   ) {
     for (const code of codes) {
       const account = await db.accountingAccount.findFirst({
-        where: { isActive: true, code },
+        where: { isActive: true, isGroup: false, code },
       });
       if (account) {
         return account;
@@ -395,7 +419,7 @@ export class AccountingIntegrationService {
 
     if (fallbackWhere) {
       return db.accountingAccount.findFirst({
-        where: { isActive: true, ...fallbackWhere },
+        where: { isActive: true, isGroup: false, ...fallbackWhere },
         orderBy: { code: 'asc' },
       });
     }
@@ -451,27 +475,37 @@ export class AccountingIntegrationService {
 
         const debitAccount =
           payload.itemType === 'general_supply'
-            ? await this.findActiveAccountByCode(activeTx, ['6101'], {
-                accountType: 'gasto',
-              })
+            ? await this.findActiveAccountByCode(
+                activeTx,
+                [SYSTEM_ACCOUNT_CODES.OPERATING_EXPENSES],
+                { accountType: 'gasto' },
+              )
             : payload.itemType === 'product'
-              ? await this.findActiveAccountByCode(activeTx, ['1106', '1105'])
-              : await this.findActiveAccountByCode(activeTx, ['1105']);
+              ? await this.findActiveAccountByCode(activeTx, [
+                  SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+                ])
+              : await this.findActiveAccountByCode(activeTx, [
+                  SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+                ]);
 
         if (!debitAccount) {
           throw new InternalServerErrorException(
             payload.itemType === 'general_supply'
-              ? 'Falta la cuenta de Gastos Operativos (6101) para registrar la compra.'
-              : 'Faltan las cuentas de Inventario (1105 / 1106) para registrar la compra.',
+              ? 'Falta la cuenta de Gastos Operacionales (6.1.01.01) para registrar la compra.'
+              : 'Faltan las cuentas de Inventario (1.1.02.01 / 1.1.02.02) para registrar la compra.',
           );
         }
 
         const vatCreditAccount =
           vatCredit > 0
-            ? (await this.findActiveAccountByCode(activeTx, ['1108'])) ??
+            ? (await this.findActiveAccountByCode(activeTx, [
+                SYSTEM_ACCOUNT_CODES.VAT_CREDIT,
+              ])) ??
               (await activeTx.accountingAccount.findFirst({
                 where: {
                   isActive: true,
+                  isGroup: false,
                   accountType: 'activo',
                   name: { contains: 'IVA Cr', mode: 'insensitive' },
                 },
@@ -481,7 +515,7 @@ export class AccountingIntegrationService {
 
         if (vatCredit > 0 && !vatCreditAccount) {
           throw new InternalServerErrorException(
-            'Falta la cuenta contable 1108 (IVA Crédito Fiscal) para registrar compras con factura.',
+            'Falta la cuenta contable 1.1.03.01 (IVA Crédito Fiscal) para registrar compras con factura.',
           );
         }
 
@@ -489,30 +523,61 @@ export class AccountingIntegrationService {
         let creditFallback: Prisma.AccountingAccountWhereInput | undefined;
         switch (payload.paymentMethod) {
           case 'credito_proveedor':
-            creditCodes = ['2101'];
+            creditCodes = [SYSTEM_ACCOUNT_CODES.SUPPLIERS_PAYABLE];
             creditFallback = { accountType: 'pasivo' };
             break;
           case 'transferencia':
-            creditCodes = ['1102', '1104', '1101'];
+            creditCodes = [
+              SYSTEM_ACCOUNT_CODES.BANK_TRANSFER,
+              SYSTEM_ACCOUNT_CODES.CASH,
+            ];
             creditFallback = {
               accountType: 'activo',
-              code: { notIn: ['1105', '1106', '1108'] },
+              isGroup: false,
+              code: {
+                notIn: [
+                  SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.PACKAGING_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.VAT_CREDIT,
+                ],
+              },
             };
             break;
           case 'banco':
           case 'debito':
-            creditCodes = ['1102', '1101'];
+            creditCodes = [
+              SYSTEM_ACCOUNT_CODES.BANK_CARD,
+              SYSTEM_ACCOUNT_CODES.BANK_TRANSFER,
+              SYSTEM_ACCOUNT_CODES.CASH,
+            ];
             creditFallback = {
               accountType: 'activo',
-              code: { notIn: ['1105', '1106', '1108'] },
+              isGroup: false,
+              code: {
+                notIn: [
+                  SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.PACKAGING_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.VAT_CREDIT,
+                ],
+              },
             };
             break;
           case 'efectivo':
           default:
-            creditCodes = ['1101'];
+            creditCodes = [SYSTEM_ACCOUNT_CODES.CASH];
             creditFallback = {
               accountType: 'activo',
-              code: { notIn: ['1105', '1106', '1108'] },
+              isGroup: false,
+              code: {
+                notIn: [
+                  SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.PACKAGING_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.VAT_CREDIT,
+                ],
+              },
             };
             break;
         }
@@ -659,13 +724,13 @@ export class AccountingIntegrationService {
         }
 
         const [rawMaterialAccount, finishedGoodsAccount] = await Promise.all([
-          this.findActiveAccountByCode(activeTx, ['1105']),
-          this.findActiveAccountByCode(activeTx, ['1106']),
+          this.findActiveAccountByCode(activeTx, [SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY]),
+          this.findActiveAccountByCode(activeTx, [SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY]),
         ]);
 
         if (!rawMaterialAccount || !finishedGoodsAccount) {
           throw new InternalServerErrorException(
-            'Faltan las cuentas 1105 (Inventario Materias Primas) y 1106 (Inventario Productos Terminados) para contabilizar la producción.',
+            'Faltan las cuentas 1.1.02.01 (Inventario Materias Primas) y 1.1.02.02 (Inventario Productos Terminados) para contabilizar la producción.',
           );
         }
 
@@ -760,12 +825,17 @@ export class AccountingIntegrationService {
 
         const inventoryAccount =
           payload.itemType === 'product'
-            ? await this.findActiveAccountByCode(activeTx, ['1106', '1105'])
-            : await this.findActiveAccountByCode(activeTx, ['1105']);
+            ? await this.findActiveAccountByCode(activeTx, [
+                SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY,
+                SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+              ])
+            : await this.findActiveAccountByCode(activeTx, [
+                SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+              ]);
 
         if (!inventoryAccount) {
           throw new InternalServerErrorException(
-            'Faltan las cuentas de Inventario (1105 / 1106) para registrar el ajuste.',
+            'Faltan las cuentas de Inventario (1.1.02.01 / 1.1.02.02) para registrar el ajuste.',
           );
         }
 
@@ -781,12 +851,12 @@ export class AccountingIntegrationService {
         if (isSurplus) {
           const surplusAccount = await this.findActiveAccountByCode(
             activeTx,
-            ['4102'],
+            [SYSTEM_ACCOUNT_CODES.OTHER_INCOME_SURPLUS],
             { accountType: 'ingreso' },
           );
           if (!surplusAccount) {
             throw new InternalServerErrorException(
-              'Falta cuenta de Sobrantes / Otros Ingresos (4102) para ajustar inventario.',
+              'Falta cuenta de Sobrantes / Otros Ingresos (4.1.02.01) para ajustar inventario.',
             );
           }
           conceptPrefix = 'Sobrante Inventario';
@@ -807,16 +877,23 @@ export class AccountingIntegrationService {
         } else {
           const isInternalUse = payload.reasonType === 'internal_use';
           const counterAccount = isInternalUse
-            ? await this.findActiveAccountByCode(activeTx, ['6101'], {
-                accountType: 'gasto',
-              })
-            : await this.findActiveAccountByCode(activeTx, ['6104', '5101'], {
-                accountType: 'gasto',
-              });
+            ? await this.findActiveAccountByCode(
+                activeTx,
+                [SYSTEM_ACCOUNT_CODES.OPERATING_EXPENSES],
+                { accountType: 'gasto' },
+              )
+            : await this.findActiveAccountByCode(
+                activeTx,
+                [
+                  SYSTEM_ACCOUNT_CODES.WASTE_SHORTAGE,
+                  SYSTEM_ACCOUNT_CODES.COGS_FOOD,
+                ],
+                { accountType: 'gasto' },
+              );
 
           if (!counterAccount) {
             throw new InternalServerErrorException(
-              'Falta cuenta de Merma / Gasto (6104 / 6101 / 5101) para registrar la salida de inventario.',
+              'Falta cuenta de Merma / Gasto (6.1.02.02 / 6.1.01.01) para registrar la salida de inventario.',
             );
           }
 
@@ -969,30 +1046,38 @@ export class AccountingIntegrationService {
 
         const [cogsAccount, finishedGoodsAccount, rawMaterialsAccount] =
           await Promise.all([
-            this.findActiveAccountByCode(activeTx, ['5101'], {
-              accountType: 'costo',
-            }),
+            this.findActiveAccountByCode(
+              activeTx,
+              [SYSTEM_ACCOUNT_CODES.COGS_FOOD],
+              { accountType: 'costo' },
+            ),
             productCostTotal > 0
-              ? this.findActiveAccountByCode(activeTx, ['1106', '1105'])
+              ? this.findActiveAccountByCode(activeTx, [
+                  SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+                ])
               : Promise.resolve(null),
             packagingCostTotal > 0
-              ? this.findActiveAccountByCode(activeTx, ['1105', '1106'])
+              ? this.findActiveAccountByCode(activeTx, [
+                  SYSTEM_ACCOUNT_CODES.PACKAGING_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+                ])
               : Promise.resolve(null),
           ]);
 
         if (!cogsAccount) {
           throw new InternalServerErrorException(
-            'Falta la cuenta 5101 (Costo de Materias Primas / Ventas) para contabilizar el costo de venta.',
+            'Falta la cuenta 5.1.01.01 (Costo de Materias Primas / Ventas) para contabilizar el costo de venta.',
           );
         }
         if (productCostTotal > 0 && !finishedGoodsAccount) {
           throw new InternalServerErrorException(
-            'Falta la cuenta 1106 (Inventario Productos Terminados) para descargar el costo de venta.',
+            'Falta la cuenta 1.1.02.02 (Inventario Productos Terminados) para descargar el costo de venta.',
           );
         }
         if (packagingCostTotal > 0 && !rawMaterialsAccount) {
           throw new InternalServerErrorException(
-            'Falta la cuenta 1105 (Inventario Materias Primas / Empaques) para descargar el costo de empaques vendidos.',
+            'Falta la cuenta 1.1.02.03 / 1.1.02.01 (Inventario Materias Primas / Empaques) para descargar el costo de empaques vendidos.',
           );
         }
 
@@ -1089,37 +1174,57 @@ export class AccountingIntegrationService {
           return existing;
         }
 
-        // Cuenta DEBE: 2101 Proveedores por Pagar (disminuye la obligación)
+        // Cuenta DEBE: 2.1.01.01 Proveedores por Pagar (disminuye la obligación)
         const debitAccount = await this.findActiveAccountByCode(
           activeTx,
-          ['2101'],
+          [SYSTEM_ACCOUNT_CODES.SUPPLIERS_PAYABLE],
           { accountType: 'pasivo' },
         );
 
         if (!debitAccount) {
           throw new InternalServerErrorException(
-            'Falta la cuenta contable 2101 (Proveedores por Pagar) para liquidar el pago.',
+            'Falta la cuenta contable 2.1.01.01 (Proveedores por Pagar) para liquidar el pago.',
           );
         }
 
-        // Cuenta HABER: 1102 (Banco) o 1101 (Caja) según método de pago
+        // Cuenta HABER: Banco o Caja según método de pago
         let creditCodes: string[];
         let creditFallback: Prisma.AccountingAccountWhereInput | undefined;
         switch (payload.paymentMethod) {
           case 'transferencia':
           case 'banco':
-            creditCodes = ['1102', '1104', '1101'];
+            creditCodes = [
+              SYSTEM_ACCOUNT_CODES.BANK_TRANSFER,
+              SYSTEM_ACCOUNT_CODES.BANK_CARD,
+              SYSTEM_ACCOUNT_CODES.CASH,
+            ];
             creditFallback = {
               accountType: 'activo',
-              code: { notIn: ['1105', '1106', '1108'] },
+              isGroup: false,
+              code: {
+                notIn: [
+                  SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.PACKAGING_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.VAT_CREDIT,
+                ],
+              },
             };
             break;
           case 'efectivo':
           default:
-            creditCodes = ['1101'];
+            creditCodes = [SYSTEM_ACCOUNT_CODES.CASH];
             creditFallback = {
               accountType: 'activo',
-              code: { notIn: ['1105', '1106', '1108'] },
+              isGroup: false,
+              code: {
+                notIn: [
+                  SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.PACKAGING_INVENTORY,
+                  SYSTEM_ACCOUNT_CODES.VAT_CREDIT,
+                ],
+              },
             };
             break;
         }

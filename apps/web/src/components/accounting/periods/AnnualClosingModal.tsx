@@ -50,8 +50,8 @@ export const AnnualClosingModal: React.FC<AnnualClosingModalProps> = ({
             <li>Todas las cuentas de ingresos, costos y gastos quedarán saldadas en $0.</li>
             {preview.priorEarningsTransferred && Math.abs(preview.priorEarningsTransferred) >= 0.01 && (
               <li>
-                El saldo histórico anterior (<b>{formatMoney(preview.priorEarningsTransferred)}</b>) de la cuenta 3102 se traspasará a{' '}
-                <b>{preview.retainedEarningsAccount?.code ?? '3103'} {preview.retainedEarningsAccount?.name ?? 'Resultados Acumulados'}</b>.
+                El saldo histórico anterior (<b>{formatMoney(preview.priorEarningsTransferred)}</b>) de la cuenta 3.1.02.01 se traspasará a{' '}
+                <b>{preview.retainedEarningsAccount?.code ?? '3.1.02.02'} {preview.retainedEarningsAccount?.name ?? 'Resultados Acumulados'}</b>.
               </li>
             )}
             <li>

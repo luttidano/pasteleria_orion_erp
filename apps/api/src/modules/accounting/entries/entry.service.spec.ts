@@ -8,6 +8,7 @@ import { AccountingPeriodService } from '../periods/accounting-period.service';
 import { InventoryValuationService } from '../../inventory/valuation/inventory-valuation.service';
 import { AccountingEntryOrigin } from '../../../common/enums';
 import { CreateAccountingEntryDto } from '../dto/create-accounting-entry.dto';
+import { SYSTEM_ACCOUNT_CODES } from '../accounting.constants';
 
 interface SeedAccount {
   id: string;
@@ -15,31 +16,34 @@ interface SeedAccount {
   name: string;
   accountType: string;
   isActive: boolean;
+  isGroup?: boolean;
 }
 
 const DEFAULT_ACCOUNTS: SeedAccount[] = [
-  { id: 'acc-1101', code: '1101', name: 'Caja General Efectivo', accountType: 'activo', isActive: true },
-  { id: 'acc-1102', code: '1102', name: 'Banco / Transbank Débito', accountType: 'activo', isActive: true },
-  { id: 'acc-1103', code: '1103', name: 'Banco / Tarjeta Crédito', accountType: 'activo', isActive: true },
-  { id: 'acc-1104', code: '1104', name: 'Banco / Transferencias', accountType: 'activo', isActive: true },
-  { id: 'acc-1105', code: '1105', name: 'Inventario Materias Primas', accountType: 'activo', isActive: true },
-  { id: 'acc-1106', code: '1106', name: 'Inventario Productos Terminados', accountType: 'activo', isActive: true },
-  { id: 'acc-1108', code: '1108', name: 'IVA Crédito Fiscal', accountType: 'activo', isActive: true },
-  { id: 'acc-2101', code: '2101', name: 'Proveedores por Pagar', accountType: 'pasivo', isActive: true },
-  { id: 'acc-2102', code: '2102', name: 'IVA Débito Fiscal', accountType: 'pasivo', isActive: true },
-  { id: 'acc-4101', code: '4101', name: 'Venta de Pastelería y Bollería', accountType: 'ingreso', isActive: true },
-  { id: 'acc-4102', code: '4102', name: 'Otros Ingresos / Sobrantes de Caja', accountType: 'ingreso', isActive: true },
-  { id: 'acc-5101', code: '5101', name: 'Costo de Ventas / Materias Primas', accountType: 'costo', isActive: true },
-  { id: 'acc-6101', code: '6101', name: 'Gastos Operativos y Suministros', accountType: 'gasto', isActive: true },
-  { id: 'acc-6103', code: '6103', name: 'Faltantes de Caja', accountType: 'gasto', isActive: true },
-  { id: 'acc-6104', code: '6104', name: 'Pérdidas por Merma y Ajustes', accountType: 'gasto', isActive: true },
+  { id: 'acc-1101', code: SYSTEM_ACCOUNT_CODES.CASH, name: 'Caja General Efectivo', accountType: 'activo', isActive: true, isGroup: false },
+  { id: 'acc-1102', code: SYSTEM_ACCOUNT_CODES.BANK_TRANSFER, name: 'Banco / Transferencias', accountType: 'activo', isActive: true, isGroup: false },
+  { id: 'acc-1103', code: SYSTEM_ACCOUNT_CODES.BANK_CARD, name: 'Banco / Tarjeta Transbank', accountType: 'activo', isActive: true, isGroup: false },
+  { id: 'acc-1104', code: SYSTEM_ACCOUNT_CODES.DIGITAL_WALLET, name: 'Billetera Digital', accountType: 'activo', isActive: true, isGroup: false },
+  { id: 'acc-1105', code: SYSTEM_ACCOUNT_CODES.RAW_MATERIALS_INVENTORY, name: 'Inventario Materias Primas', accountType: 'activo', isActive: true, isGroup: false },
+  { id: 'acc-1106', code: SYSTEM_ACCOUNT_CODES.FINISHED_GOODS_INVENTORY, name: 'Inventario Productos Terminados', accountType: 'activo', isActive: true, isGroup: false },
+  { id: 'acc-1108', code: SYSTEM_ACCOUNT_CODES.VAT_CREDIT, name: 'IVA Crédito Fiscal', accountType: 'activo', isActive: true, isGroup: false },
+  { id: 'acc-2101', code: SYSTEM_ACCOUNT_CODES.SUPPLIERS_PAYABLE, name: 'Proveedores por Pagar', accountType: 'pasivo', isActive: true, isGroup: false },
+  { id: 'acc-2102', code: SYSTEM_ACCOUNT_CODES.VAT_DEBIT, name: 'IVA Débito Fiscal', accountType: 'pasivo', isActive: true, isGroup: false },
+  { id: 'acc-4101', code: SYSTEM_ACCOUNT_CODES.SALES_REVENUE, name: 'Venta de Pastelería y Bollería', accountType: 'ingreso', isActive: true, isGroup: false },
+  { id: 'acc-4102', code: SYSTEM_ACCOUNT_CODES.OTHER_INCOME_SURPLUS, name: 'Otros Ingresos / Sobrantes de Caja', accountType: 'ingreso', isActive: true, isGroup: false },
+  { id: 'acc-5101', code: SYSTEM_ACCOUNT_CODES.COGS_FOOD, name: 'Costo de Ventas / Materias Primas', accountType: 'costo', isActive: true, isGroup: false },
+  { id: 'acc-6101', code: SYSTEM_ACCOUNT_CODES.OPERATING_EXPENSES, name: 'Gastos Operativos y Suministros', accountType: 'gasto', isActive: true, isGroup: false },
+  { id: 'acc-6103', code: SYSTEM_ACCOUNT_CODES.CASH_SHORTAGE, name: 'Faltantes de Caja', accountType: 'gasto', isActive: true, isGroup: false },
+  { id: 'acc-6104', code: SYSTEM_ACCOUNT_CODES.WASTE_SHORTAGE, name: 'Pérdidas por Merma y Ajustes', accountType: 'gasto', isActive: true, isGroup: false },
 ];
 
 function createAccountFinder(accounts: SeedAccount[]) {
   return jest.fn().mockImplementation(({ where }: { where: any }) => {
     const matches = accounts.filter((acc) => {
       if (where?.isActive !== undefined && acc.isActive !== where.isActive) return false;
+      if (where?.isGroup !== undefined && Boolean(acc.isGroup) !== Boolean(where.isGroup)) return false;
       if (typeof where?.code === 'string' && acc.code !== where.code) return false;
+      if (where?.code?.in && !where.code.in.includes(acc.code)) return false;
       if (where?.code?.notIn && where.code.notIn.includes(acc.code)) return false;
       if (where?.accountType && acc.accountType !== where.accountType) return false;
       if (where?.name?.contains) {
@@ -110,11 +114,11 @@ describe('EntryService', () => {
   describe('registerSaleIncome', () => {
     it.each([
       { paymentMethod: 'efectivo', expectedAssetId: 'acc-1101' },
-      { paymentMethod: 'debito', expectedAssetId: 'acc-1102' },
-      { paymentMethod: 'credito', expectedAssetId: 'acc-1102' },
+      { paymentMethod: 'debito', expectedAssetId: 'acc-1103' },
+      { paymentMethod: 'credito', expectedAssetId: 'acc-1103' },
       { paymentMethod: 'transferencia', expectedAssetId: 'acc-1102' },
     ])(
-      'debe imputar método "$paymentMethod" en cuenta $expectedAssetId e IVA Débito en 2102 (nunca 2101)',
+      'debe imputar método "$paymentMethod" en cuenta $expectedAssetId e IVA Débito en 2.1.02.01 (nunca 2.1.01.01)',
       async ({ paymentMethod, expectedAssetId }) => {
         await service.registerSaleIncome({
           id: `sale-${paymentMethod}`,
@@ -151,8 +155,8 @@ describe('EntryService', () => {
       },
     );
 
-    it('NO debe imputar IVA a 2101 (Proveedores) si faltan las cuentas específicas de IVA', async () => {
-      const withoutVat = DEFAULT_ACCOUNTS.filter((acc) => acc.code !== '2102');
+    it('NO debe imputar IVA a 2.1.01.01 (Proveedores) si faltan las cuentas específicas de IVA', async () => {
+      const withoutVat = DEFAULT_ACCOUNTS.filter((acc) => acc.code !== SYSTEM_ACCOUNT_CODES.VAT_DEBIT);
       prisma.accountingAccount.findFirst = createAccountFinder(withoutVat);
 
       await service.registerSaleIncome({
@@ -166,13 +170,15 @@ describe('EntryService', () => {
       const items = prisma.accountingEntry.create.mock.calls[0][0].data.items.create;
       expect(items.some((item: any) => item.accountId === 'acc-2101')).toBe(false);
       expect(items).toHaveLength(2);
-      expect(items[0]).toMatchObject({ accountId: 'acc-1102', debit: 1190 });
+      expect(items[0]).toMatchObject({ accountId: 'acc-1103', debit: 1190 });
       expect(items[1]).toMatchObject({ accountId: 'acc-4101', credit: 1190 });
     });
 
-    it('debe consolidar medios digitales en 1102 cuando 1103 y 1104 están inactivas (y priorizar 1102 sobre 1101)', async () => {
+    it('debe consolidar medios digitales en 1.1.01.02 cuando la cuenta específica está inactiva', async () => {
       const onlyConsolidatedBank = DEFAULT_ACCOUNTS.filter(
-        (acc) => acc.code !== '1103' && acc.code !== '1104',
+        (acc) =>
+          acc.code !== SYSTEM_ACCOUNT_CODES.BANK_CARD &&
+          acc.code !== SYSTEM_ACCOUNT_CODES.CASH,
       );
       prisma.accountingAccount.findFirst = createAccountFinder(onlyConsolidatedBank);
 

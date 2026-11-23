@@ -122,11 +122,11 @@ export const PosCloseShiftModal: React.FC<PosCloseShiftModalProps> = ({
               </p>
               {Math.abs(modalCashDiff) >= 0.01 && (
                 <p className="text-[11px] opacity-90 mt-0.5">
-                  Al confirmar, se contabilizará automáticamente el ajuste entre 1101 Caja
+                  Al confirmar, se contabilizará automáticamente el ajuste entre 1.1.01.01 Caja
                   Efectivo y{' '}
                   {modalCashDiff > 0
-                    ? '4102 Sobrantes de Caja.'
-                    : '6103 Faltantes y Diferencias de Caja.'}
+                    ? '4.1.02.01 Sobrantes de Caja.'
+                    : '6.1.02.01 Faltantes y Diferencias de Caja.'}
                 </p>
               )}
             </div>

@@ -66,11 +66,34 @@ export const AccountingLedgerTab: React.FC<AccountingLedgerTabProps> = ({
               className="w-full text-xs p-2.5 rounded-xl border border-stone-200 dark:border-[#35251F] bg-white dark:bg-[#16100E] font-medium"
             >
               <option value="">Selecciona una cuenta...</option>
-              {accounts.map((acc) => (
-                <option key={acc.id} value={acc.id}>
-                  [{acc.code}] {acc.name} — ({acc.accountType.toUpperCase()})
-                </option>
-              ))}
+              {accounts.map((acc) => {
+                const level = acc.level ?? 1;
+                const isGroup = acc.isGroup;
+                
+                // Generar prefijo de ramas según el nivel jerárquico con espacios no colapsables (\u00A0)
+                const indent =
+                  level === 1
+                    ? ''
+                    : level === 2
+                      ? '\u00A0\u00A0└── '
+                      : level === 3
+                        ? '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0├── '
+                        : '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0└── ';
+                const icon = isGroup ? '📁 ' : '📄 ';
+
+                return (
+                  <option
+                    key={acc.id}
+                    value={acc.id}
+                    disabled={isGroup}
+                    className={isGroup ? 'font-bold bg-stone-100 text-stone-500' : ''}
+                  >
+                    {indent}
+                    {icon}
+                    [{acc.code}] {acc.name} {isGroup ? '(Totalizadora)' : ''}
+                  </option>
+                );
+              })}
             </select>
           </div>
 

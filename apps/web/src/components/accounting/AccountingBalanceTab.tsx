@@ -39,37 +39,69 @@ export const AccountingBalanceTab: React.FC<AccountingBalanceTabProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100 dark:divide-[#281C17]">
-            {balance.map((row) => (
-              <tr key={row.id} className="hover:bg-stone-50/50">
-                <td className="py-2.5 px-4 font-mono font-bold">{row.code}</td>
-                <td className="py-2.5 px-4 font-medium">{row.name}</td>
-                <td className="py-2.5 px-4 uppercase text-[10px] text-stone-400">
-                  {row.accountType}
-                </td>
-                <td className="py-2.5 px-4 text-right font-mono">
-                  {formatMoney(row.totalDebit)}
-                </td>
-                <td className="py-2.5 px-4 text-right font-mono">
-                  {formatMoney(row.totalCredit)}
-                </td>
-                <td className="py-2.5 px-4 text-right font-mono font-bold text-emerald-600">
-                  {row.debitBalance > 0 ? formatMoney(row.debitBalance) : '-'}
-                </td>
-                <td className="py-2.5 px-4 text-right font-mono font-bold text-rose-600">
-                  {row.creditBalance > 0 ? formatMoney(row.creditBalance) : '-'}
-                </td>
-                <td className="py-2.5 px-4 text-center">
-                  <button
-                    type="button"
-                    onClick={() => onOpenLedgerForAccount(row.id)}
-                    title="Ver Libro Mayor de esta cuenta"
-                    className="p-1.5 rounded-lg text-stone-500 hover:text-[#8C1F25] hover:bg-stone-100 dark:hover:bg-[#201613] transition-colors inline-flex items-center justify-center cursor-pointer"
-                  >
-                    <BookOpen className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {balance.map((row) => {
+              const isGroup = row.isGroup;
+              const indentLevel = Math.max(0, (row.level ?? 1) - 1);
+
+              return (
+                <tr
+                  key={row.id}
+                  className={
+                    isGroup
+                      ? 'bg-stone-50/80 dark:bg-[#1E1714] font-semibold text-stone-900 dark:text-stone-100 border-t border-stone-200/60 dark:border-stone-800'
+                      : 'hover:bg-stone-50/50 dark:hover:bg-[#1A1310]'
+                  }
+                >
+                  <td className="py-2.5 px-4 font-mono font-bold">
+                    <span
+                      style={{ paddingLeft: `${indentLevel * 14}px` }}
+                      className="inline-flex items-center gap-1.5"
+                    >
+                      {isGroup && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-sans uppercase">
+                          N{row.level}
+                        </span>
+                      )}
+                      {row.code}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-4 font-medium">
+                    <span style={{ paddingLeft: `${indentLevel * 14}px` }} className="inline-block">
+                      {row.name}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-4 uppercase text-[10px] text-stone-400">
+                    {row.accountType}
+                  </td>
+                  <td className="py-2.5 px-4 text-right font-mono">
+                    {formatMoney(row.totalDebit)}
+                  </td>
+                  <td className="py-2.5 px-4 text-right font-mono">
+                    {formatMoney(row.totalCredit)}
+                  </td>
+                  <td className="py-2.5 px-4 text-right font-mono font-bold text-emerald-600">
+                    {row.debitBalance > 0 ? formatMoney(row.debitBalance) : '-'}
+                  </td>
+                  <td className="py-2.5 px-4 text-right font-mono font-bold text-rose-600">
+                    {row.creditBalance > 0 ? formatMoney(row.creditBalance) : '-'}
+                  </td>
+                  <td className="py-2.5 px-4 text-center">
+                    {!isGroup ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenLedgerForAccount(row.id)}
+                        title="Ver Libro Mayor de esta cuenta"
+                        className="p-1.5 rounded-lg text-stone-500 hover:text-[#8C1F25] hover:bg-stone-100 dark:hover:bg-[#201613] transition-colors inline-flex items-center justify-center cursor-pointer"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-stone-400 font-mono">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

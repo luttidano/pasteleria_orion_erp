@@ -19,6 +19,7 @@ import {
   isUniqueViolation,
   rethrowPrismaError,
 } from '../../../common/utils/prisma-error.util';
+import { SYSTEM_ACCOUNT_CODES } from '../accounting.constants';
 import { AccountingSettingsService } from './accounting-settings.service';
 import { AccountingOutboxService } from '../outbox/accounting-outbox.service';
 import {
@@ -78,6 +79,7 @@ export class AnnualClosingService {
         where: {
           isActive: true,
           accountType: 'patrimonio',
+          isGroup: false,
         },
         orderBy: [{ code: 'desc' }],
         select: { id: true, code: true, name: true },
@@ -85,6 +87,7 @@ export class AnnualClosingService {
       db.accountingAccount.findMany({
         where: {
           accountType: { in: ['ingreso', 'costo', 'gasto'] },
+          isGroup: false,
         },
         orderBy: { code: 'asc' },
       }),
@@ -103,12 +106,22 @@ export class AnnualClosingService {
 
     const exactEquity =
       (await db.accountingAccount.findFirst({
-        where: { code: '3102', isActive: true, accountType: 'patrimonio' },
+        where: {
+          code: SYSTEM_ACCOUNT_CODES.CURRENT_YEAR_EARNINGS,
+          isActive: true,
+          accountType: 'patrimonio',
+          isGroup: false,
+        },
         select: { id: true, code: true, name: true },
       })) ?? equityAccount;
 
     const exact3103 = await db.accountingAccount.findFirst({
-      where: { code: '3103', isActive: true, accountType: 'patrimonio' },
+      where: {
+        code: SYSTEM_ACCOUNT_CODES.RETAINED_EARNINGS,
+        isActive: true,
+        accountType: 'patrimonio',
+        isGroup: false,
+      },
       select: { id: true, code: true, name: true },
     });
     const retainedEarningsAccount =
@@ -283,10 +296,10 @@ export class AnnualClosingService {
       blockingReason = `Hay ${pendingSalesCount} venta(s) POS pendientes de contabilizar hasta el ${closingDate}. Sincronízalas antes de ejecutar el cierre anual.`;
     } else if (!exactEquity) {
       blockingReason =
-        'No existe una cuenta patrimonial activa (ej. 3102 Resultado del Ejercicio) para recibir la refundición.';
+        'No existe una cuenta patrimonial activa (ej. 3.1.02.01 Resultado del Ejercicio) para recibir la refundición.';
     } else if (Math.abs(prior3102Net) >= 0.01 && !retainedEarningsAccount) {
       blockingReason =
-        'No existe la cuenta patrimonial activa 3103 Resultados Acumulados (Ejercicios Anteriores) para recibir el traspaso de años anteriores.';
+        'No existe la cuenta patrimonial activa 3.1.02.02 Resultados Acumulados (Ejercicios Anteriores) para recibir el traspaso de años anteriores.';
     } else if (lines.length === 0) {
       blockingReason = `No existen saldos pendientes en cuentas de ingresos, costos o gastos al ${closingDate}.`;
     }

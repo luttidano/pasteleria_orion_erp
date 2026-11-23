@@ -48,19 +48,19 @@ describe('FinancialReportService', () => {
       const mockAccounts = [
         {
           id: 'acc-ingreso-1',
-          code: '4101',
+          code: '4.1.01.01',
           name: 'Venta de Pastelería y Bollería',
           accountType: 'ingreso',
         },
         {
           id: 'acc-costo-1',
-          code: '5101',
+          code: '5.1.01.01',
           name: 'Costo de Materias Primas e Insumos',
           accountType: 'costo',
         },
         {
           id: 'acc-gasto-1',
-          code: '6101',
+          code: '6.1.01.01',
           name: 'Gastos Operativos y Remuneraciones',
           accountType: 'gasto',
         },
@@ -100,58 +100,58 @@ describe('FinancialReportService', () => {
         // Activos: $1.500.000
         {
           id: 'acc-1101',
-          code: '1101',
+          code: '1.1.01.01',
           name: 'Caja General Efectivo',
           accountType: 'activo',
         },
         {
           id: 'acc-1105',
-          code: '1105',
+          code: '1.1.02.01',
           name: 'Inventario Materias Primas',
           accountType: 'activo',
         },
         {
           id: 'acc-1106',
-          code: '1106',
+          code: '1.1.02.02',
           name: 'Inventario Productos Terminados',
           accountType: 'activo',
         },
         // Pasivos: $500.000
         {
           id: 'acc-2101',
-          code: '2101',
+          code: '2.1.01.01',
           name: 'Proveedores por Pagar',
           accountType: 'pasivo',
         },
         {
           id: 'acc-2102',
-          code: '2102',
+          code: '2.1.02.01',
           name: 'IVA Débito Fiscal',
           accountType: 'pasivo',
         },
         // Patrimonio: $700.000
         {
           id: 'acc-3101',
-          code: '3101',
+          code: '3.1.01.01',
           name: 'Capital Social Inicial',
           accountType: 'patrimonio',
         },
         // Resultados acumulados del período: Utilidad de $300.000
         {
           id: 'acc-4101',
-          code: '4101',
+          code: '4.1.01.01',
           name: 'Ventas de Pastelería',
           accountType: 'ingreso',
         },
         {
           id: 'acc-5101',
-          code: '5101',
+          code: '5.1.01.01',
           name: 'Costo de Materias Primas',
           accountType: 'costo',
         },
         {
           id: 'acc-6101',
-          code: '6101',
+          code: '6.1.01.01',
           name: 'Gastos Operativos',
           accountType: 'gasto',
         },
@@ -218,35 +218,35 @@ describe('FinancialReportService', () => {
       expect(balanceSheet.inventoryValuation.totalWarehouseValue).toBe(360000);
     });
 
-    it('debe distinguir entre Capital (3101), Resultados Acumulados (3103) y Resultado del Ejercicio en el Balance General', async () => {
+    it('debe distinguir entre Capital (3.1.01.01), Resultados Acumulados (3.1.02.02) y Resultado del Ejercicio en el Balance General', async () => {
       const mockAccounts = [
         {
           id: 'acc-1101',
-          code: '1101',
+          code: '1.1.01.01',
           name: 'Caja General Efectivo',
           accountType: 'activo',
         },
         {
           id: 'acc-3101',
-          code: '3101',
+          code: '3.1.01.01',
           name: 'Capital Social Inicial',
           accountType: 'patrimonio',
         },
         {
           id: 'acc-3103',
-          code: '3103',
+          code: '3.1.02.02',
           name: 'Resultados Acumulados (Ejercicios Anteriores)',
           accountType: 'patrimonio',
         },
         {
           id: 'acc-4101',
-          code: '4101',
+          code: '4.1.01.01',
           name: 'Ventas de Pastelería',
           accountType: 'ingreso',
         },
         {
           id: 'acc-6101',
-          code: '6101',
+          code: '6.1.01.01',
           name: 'Gastos Operativos',
           accountType: 'gasto',
         },
@@ -272,15 +272,15 @@ describe('FinancialReportService', () => {
       // Pasivos: $0
       expect(balanceSheet.pasivos.total).toBe(0);
 
-      // Capital (3101): $800.000
+      // Capital (3.1.01.01): $800.000
       expect(balanceSheet.patrimonio.capital.total).toBe(800000);
       expect(balanceSheet.patrimonio.capital.accounts).toHaveLength(1);
-      expect(balanceSheet.patrimonio.capital.accounts[0].code).toBe('3101');
+      expect(balanceSheet.patrimonio.capital.accounts[0].code).toBe('3.1.01.01');
 
-      // Resultados Acumulados (3103): $400.000
+      // Resultados Acumulados (3.1.02.02): $400.000
       expect(balanceSheet.patrimonio.resultadosAcumulados?.total).toBe(400000);
       expect(balanceSheet.patrimonio.resultadosAcumulados?.accounts).toHaveLength(1);
-      expect(balanceSheet.patrimonio.resultadosAcumulados?.accounts[0].code).toBe('3103');
+      expect(balanceSheet.patrimonio.resultadosAcumulados?.accounts[0].code).toBe('3.1.02.02');
 
       // Resultado del Ejercicio (Ingresos 500.000 - Gastos 200.000): $300.000
       expect(balanceSheet.patrimonio.resultadoEjercicio).toBe(300000);

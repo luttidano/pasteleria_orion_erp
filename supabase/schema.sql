@@ -43,15 +43,24 @@ CREATE TABLE IF NOT EXISTS public.supplier (
   updated_at timestamp with time zone DEFAULT now()
 );
 
--- Catálogo de Cuentas Contables
+-- Catálogo de Cuentas Contables (Árbol Jerárquico)
 CREATE TABLE IF NOT EXISTS public.accounting_account (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   code character varying NOT NULL UNIQUE,
   name character varying NOT NULL,
   account_type text NOT NULL CHECK (account_type = ANY (ARRAY['activo'::text, 'ingreso'::text, 'costo'::text, 'gasto'::text, 'pasivo'::text, 'patrimonio'::text])),
+  parent_id uuid REFERENCES public.accounting_account(id) ON DELETE RESTRICT,
+  path character varying(100) NOT NULL DEFAULT '',
+  level smallint NOT NULL DEFAULT 1 CHECK (level BETWEEN 1 AND 5),
+  is_group boolean NOT NULL DEFAULT false,
+  normal_balance character varying(10) NOT NULL DEFAULT 'debit' CHECK (normal_balance IN ('debit', 'credit')),
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_accounting_account_parent ON public.accounting_account(parent_id);
+CREATE INDEX IF NOT EXISTS idx_accounting_account_path ON public.accounting_account(path);
+CREATE INDEX IF NOT EXISTS idx_accounting_account_level ON public.accounting_account(level);
 
 -- =============================================================================
 -- 2. USUARIOS & PERFILES (Vinculado a Supabase Auth)

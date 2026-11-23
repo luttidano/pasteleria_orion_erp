@@ -265,15 +265,25 @@ model PosSaleItem {
 }
 
 model AccountingAccount {
-  id          String                @id @default(uuid()) @db.Uuid
-  code        String                @unique
-  name        String
-  accountType String                @map("account_type")
-  isActive    Boolean               @default(true) @map("is_active")
-  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  id            String                @id @default(uuid()) @db.Uuid
+  code          String                @unique
+  name          String
+  accountType   String                @map("account_type")
+  parentId      String?               @map("parent_id") @db.Uuid
+  path          String                @default("") @db.VarChar(100)
+  level         Int                   @default(1) @db.SmallInt
+  isGroup       Boolean               @default(false) @map("is_group")
+  normalBalance String                @default("debit") @map("normal_balance") @db.VarChar(10)
+  isActive      Boolean               @default(true) @map("is_active")
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  entryItems  AccountingEntryItem[]
+  parent        AccountingAccount?    @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children      AccountingAccount[]   @relation("AccountHierarchy")
+  entryItems    AccountingEntryItem[]
 
+  @@index([parentId], map: "idx_accounting_account_parent")
+  @@index([path], map: "idx_accounting_account_path")
+  @@index([level], map: "idx_accounting_account_level")
   @@map("accounting_account")
 }
 

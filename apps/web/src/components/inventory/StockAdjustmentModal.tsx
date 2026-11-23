@@ -28,10 +28,10 @@ const PAYMENT_OPTIONS: Array<{
   value: InventoryPurchasePaymentMethod;
   label: string;
 }> = [
-  { value: 'efectivo', label: 'Efectivo (Caja 1101)' },
-  { value: 'banco', label: 'Tarjeta / POS Mercado Pago (1102)' },
-  { value: 'transferencia', label: 'Transferencia / Mercado Pago (1102)' },
-  { value: 'credito_proveedor', label: 'Crédito Proveedor (2101)' },
+  { value: 'efectivo', label: 'Efectivo (Caja 1.1.01.01)' },
+  { value: 'banco', label: 'Tarjeta / POS Mercado Pago (1.1.01.02)' },
+  { value: 'transferencia', label: 'Transferencia / Mercado Pago (1.1.01.02)' },
+  { value: 'credito_proveedor', label: 'Crédito Proveedor (2.1.01.01)' },
 ];
 
 export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
@@ -297,7 +297,7 @@ const StockAdjustmentModalContent: React.FC<StockAdjustmentModalContentProps> = 
                   }}
                   className="rounded accent-[#8C1F25]"
                 />
-                <span>Con Factura (desglosar 19% IVA Crédito Fiscal 1108)</span>
+                <span>Con Factura (desglosar 19% IVA Crédito Fiscal 1.1.03.01)</span>
               </label>
             </div>
           )}
@@ -322,16 +322,16 @@ const StockAdjustmentModalContent: React.FC<StockAdjustmentModalContentProps> = 
 
           <p className="text-[11px] text-stone-500 dark:text-stone-400 bg-white/70 dark:bg-[#1E1512] px-3 py-2 rounded-xl border border-[#EADBCE]/70 dark:border-[#2C1D18]">
             {target.itemType === 'general_supply' && reasonType !== 'purchase'
-              ? 'Insumo general: registra trazabilidad física en Kardex (su gasto ya se contabilizó en 6101 al comprarse).'
+              ? 'Insumo general: registra trazabilidad física en Kardex (su gasto ya se contabilizó en 6.1.01.01 al comprarse).'
               : reasonType === 'purchase'
               ? target.itemType === 'general_supply'
-                ? 'Contabilidad: cargará 6101 Gasto Operativo (+ 1108 IVA Crédito si aplica) contra Caja/Banco/Proveedor.'
-                : 'Contabilidad: cargará Inventario (+ 1108 IVA Crédito si aplica) y recalculará el costo promedio.'
+                ? 'Contabilidad: cargará 6.1.01.01 Gasto Operativo (+ 1.1.03.01 IVA Crédito si aplica) contra Caja/Banco/Proveedor.'
+                : 'Contabilidad: cargará Inventario (+ 1.1.03.01 IVA Crédito si aplica) y recalculará el costo promedio.'
               : reasonType === 'recount_surplus'
-              ? 'Contabilidad: aumentará Inventario contra 4102 Sobrantes de Inventario.'
+              ? 'Contabilidad: aumentará Inventario contra 4.1.02.01 Sobrantes de Inventario.'
               : reasonType === 'internal_use'
-              ? 'Contabilidad: rebajará Inventario cargando 6101 Gastos Operativos.'
-              : 'Contabilidad: rebajará Inventario cargando 6104 Pérdidas por Merma / Ajustes.'}
+              ? 'Contabilidad: rebajará Inventario cargando 6.1.01.01 Gastos Operativos.'
+              : 'Contabilidad: rebajará Inventario cargando 6.1.02.02 Pérdidas por Merma / Ajustes.'}
           </p>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8D7BE] dark:border-[#2C1D18]">

@@ -289,6 +289,10 @@ export class FinancialReportService {
         null;
 
       for (const acc of allAccounts) {
+        if (acc.isGroup) {
+          continue;
+        }
+
         const totals = totalsByAccount.get(acc.id) ?? {
           totalDebit: 0,
           totalCredit: 0,
@@ -319,7 +323,7 @@ export class FinancialReportService {
         } else if (acc.accountType === 'patrimonio') {
           const balance = roundMoney(totalCredit - totalDebit);
           if (
-            acc.code === '3103' ||
+            acc.code === '3.1.02.02' ||
             acc.name.toLowerCase().includes('acumulado') ||
             acc.name.toLowerCase().includes('anterior')
           ) {
@@ -330,7 +334,7 @@ export class FinancialReportService {
               amount: balance,
             });
             totalRetainedEarnings += balance;
-          } else if (acc.code === '3102') {
+          } else if (acc.code === '3.1.02.01') {
             balance3102 = balance;
             account3102Info = { id: acc.id, code: acc.code, name: acc.name };
           } else {

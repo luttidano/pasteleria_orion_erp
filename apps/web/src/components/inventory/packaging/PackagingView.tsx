@@ -139,8 +139,13 @@ export const PackagingView: React.FC<PackagingViewProps> = ({
   const handleConfirmAdjustment = async (
     id: string,
     payload: AdjustStockPayload,
+    idempotencyKey?: string,
   ) => {
-    const updated = await packagingService.adjustStock(id, payload);
+    const updated = await packagingService.adjustStock(
+      id,
+      payload,
+      idempotencyKey,
+    );
     setItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
     onInventoryChange?.();
     addToast({

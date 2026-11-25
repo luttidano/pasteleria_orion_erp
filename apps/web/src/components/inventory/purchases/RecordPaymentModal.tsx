@@ -1,7 +1,5 @@
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useRef } from 'react';
 import {
-  X,
   CreditCard,
   Building2,
   Calendar,
@@ -9,6 +7,8 @@ import {
   FileCheck,
   CheckCircle2,
 } from 'lucide-react';
+import { createIdempotencyKey } from '../../../lib/api';
+import { Modal } from '../../common/Modal';
 import type { SupplierInvoice, SupplierPaymentMethod } from '../../../types';
 import { formatMoney } from '../../../utils/formatters';
 
@@ -25,6 +25,7 @@ interface RecordPaymentModalProps {
       reference?: string;
       notes?: string;
     },
+    idempotencyKey?: string,
   ) => Promise<void>;
 }
 
@@ -36,13 +37,12 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
 }) => {
   if (!isOpen || !invoice) return null;
 
-  return createPortal(
+  return (
     <RecordPaymentModalContent
       invoice={invoice}
       onClose={onClose}
       onConfirm={onConfirm}
-    />,
-    document.body,
+    />
   );
 };
 
@@ -67,6 +67,7 @@ const RecordPaymentModalContent: React.FC<ContentProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,13 +87,21 @@ const RecordPaymentModalContent: React.FC<ContentProps> = ({
 
     try {
       setIsSubmitting(true);
-      await onConfirm(invoice.id, {
-        amount,
-        paymentMethod,
-        paymentDate,
-        reference: reference.trim() || undefined,
-        notes: notes.trim() || undefined,
-      });
+      const idempotencyKey = idempotencyKeyRef.current ?? createIdempotencyKey();
+      idempotencyKeyRef.current = idempotencyKey;
+
+      await onConfirm(
+        invoice.id,
+        {
+          amount,
+          paymentMethod,
+          paymentDate,
+          reference: reference.trim() || undefined,
+          notes: notes.trim() || undefined,
+        },
+        idempotencyKey,
+      );
+      idempotencyKeyRef.current = null;
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Error registrando el pago.');
@@ -104,34 +113,46 @@ const RecordPaymentModalContent: React.FC<ContentProps> = ({
   const isFullPayment = amount === invoice.remainingAmount;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-[#1C1412] w-full max-w-lg rounded-3xl shadow-2xl border border-stone-200 dark:border-[#35251F] overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="p-5 border-b border-stone-200 dark:border-[#35251F] flex items-center justify-between bg-stone-50/50 dark:bg-[#16100E]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold">
-              <CreditCard className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-stone-900 dark:text-white font-serif">
-                Registrar Pago a Proveedor
-              </h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400">
-                {invoice.supplier?.name} • Fac #{invoice.invoiceNumber}
-              </p>
-            </div>
+    <Modal
+      isOpen
+      onClose={onClose}
+      closeDisabled={isSubmitting}
+      title="Registrar Pago a Proveedor"
+      subtitle={`${invoice.supplier?.name ?? ''} • Fac #${invoice.invoiceNumber}`}
+      icon={<CreditCard className="w-5 h-5" />}
+      iconWrapperClassName="bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400"
+      footer={
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-stone-500">
+            <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              Generará asiento contable (Debe 2.1.01.01 / Haber{' '}
+              {paymentMethod === 'efectivo' ? '1.1.01.01' : '1.1.01.02'})
+            </span>
           </div>
-          <button
-            onClick={onClose}
-            className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-1 rounded-xl cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-200/50 dark:hover:bg-stone-800 cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="record-payment-form"
+              disabled={isSubmitting || amount <= 0}
+              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-2"
+            >
+              {isSubmitting ? 'Procesando...' : `Confirmar Pago (${formatMoney(amount)})`}
+            </button>
+          </div>
         </div>
-
-        {/* Resumen Deuda */}
-        <div className="p-5 overflow-y-auto space-y-4">
-          <div className="grid grid-cols-3 gap-2.5 p-3.5 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border border-[#EADBCE] dark:border-[#382620]">
+      }
+    >
+      {/* Resumen Deuda */}
+      <div className="grid grid-cols-3 gap-2.5 p-3.5 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border border-[#EADBCE] dark:border-[#382620]">
             <div>
               <span className="text-[10px] font-bold text-stone-400 uppercase block">
                 Total Factura
@@ -296,35 +317,7 @@ const RecordPaymentModalContent: React.FC<ContentProps> = ({
                 className="w-full text-xs p-2.5 rounded-xl border border-stone-200 dark:border-[#35251F] bg-white dark:bg-[#16100E]"
               />
             </div>
-          </form>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-stone-200 dark:border-[#35251F] bg-stone-50/50 dark:bg-[#16100E] flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs text-stone-500">
-            <FileCheck className="w-4 h-4 text-emerald-600" />
-            <span>Generará asiento contable (Debe 2.1.01.01 / Haber {paymentMethod === 'efectivo' ? '1.1.01.01' : '1.1.01.02'})</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-200/50 dark:hover:bg-stone-800 cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              form="record-payment-form"
-              disabled={isSubmitting || amount <= 0}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-2"
-            >
-              {isSubmitting ? 'Procesando...' : `Confirmar Pago (${formatMoney(amount)})`}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 };

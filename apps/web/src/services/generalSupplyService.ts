@@ -62,6 +62,7 @@ export const generalSupplyService = {
     id: string,
     input: number | AdjustStockPayload,
     reason?: string,
+    idempotencyKey?: string,
   ): Promise<GeneralSupplyAdjustmentResult> {
     const body =
       typeof input === 'number'
@@ -71,6 +72,7 @@ export const generalSupplyService = {
       `/general-supplies/${id}/adjust-stock`,
       {
         method: 'POST',
+        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
         body: JSON.stringify(body),
       },
     );

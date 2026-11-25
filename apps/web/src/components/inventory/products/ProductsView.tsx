@@ -186,8 +186,13 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const handleConfirmAdjustment = async (
     id: string,
     payload: AdjustStockPayload,
+    idempotencyKey?: string,
   ) => {
-    const updated = await productService.adjustStock(id, payload);
+    const updated = await productService.adjustStock(
+      id,
+      payload,
+      idempotencyKey,
+    );
     setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     onInventoryChange?.();
     addToast({

@@ -167,8 +167,13 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
   const handleConfirmAdjustment = async (
     id: string,
     payload: AdjustStockPayload,
+    idempotencyKey?: string,
   ) => {
-    const updated = await ingredientService.adjustStock(id, payload);
+    const updated = await ingredientService.adjustStock(
+      id,
+      payload,
+      idempotencyKey,
+    );
     await onRefresh();
     addToast({
       type: updated.accountingWarning ? 'warning' : 'info',

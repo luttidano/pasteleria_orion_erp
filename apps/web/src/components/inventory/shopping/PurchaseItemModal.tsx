@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -10,6 +10,8 @@ import {
   Minus,
   Receipt,
 } from 'lucide-react';
+import { createIdempotencyKey } from '../../../lib/api';
+import { calculateGrossFromNet, calculateGrossTaxBreakdown } from '../../../utils/tax';
 import type {
   InventoryPurchasePaymentMethod,
   ShoppingItem,
@@ -29,6 +31,7 @@ interface PurchaseItemModalProps {
     item: ShoppingItem,
     quantityBought: number,
     details: ConfirmPurchaseDetails,
+    idempotencyKey?: string,
   ) => Promise<void>;
 }
 
@@ -62,11 +65,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
 interface PurchaseItemModalContentProps {
   item: ShoppingItem;
   onClose: () => void;
-  onConfirmPurchase: (
-    item: ShoppingItem,
-    quantityBought: number,
-    details: ConfirmPurchaseDetails,
-  ) => Promise<void>;
+  onConfirmPurchase: PurchaseItemModalProps['onConfirmPurchase'];
 }
 
 const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
@@ -80,7 +79,7 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
 
   const [quantityBought, setQuantityBought] = useState<number | ''>(initialQty);
   const [totalCost, setTotalCost] = useState<number | ''>(
-    unitCost > 0 ? Math.round(unitCost * initialQty * 1.19) : '',
+    unitCost > 0 ? calculateGrossFromNet(unitCost * initialQty) : '',
   );
   const [hasCostManualEdit, setHasCostManualEdit] = useState(false);
   const [hasInvoice, setHasInvoice] = useState(true);
@@ -88,6 +87,7 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
     useState<InventoryPurchasePaymentMethod>('efectivo');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   const recalcSuggestedCost = (
     nextQty: number | '',
@@ -97,7 +97,9 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
     if (manualEdited) return;
     const qty = typeof nextQty === 'number' ? nextQty : 0;
     if (qty > 0 && unitCost > 0) {
-      setTotalCost(Math.round(unitCost * qty * (nextHasInvoice ? 1.19 : 1)));
+      setTotalCost(
+        calculateGrossFromNet(unitCost * qty, { isExempt: !nextHasInvoice }),
+      );
     }
   };
 
@@ -113,15 +115,9 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
   const willRemainLow = resultingStock <= minStock;
   const remainingDeficit = Math.max(0, minStock - resultingStock);
 
-  const netAmount =
-    numericTotalCost > 0
-      ? hasInvoice
-        ? Math.round(numericTotalCost / 1.19)
-        : Math.round(numericTotalCost)
-      : 0;
-  const vatAmount = hasInvoice
-    ? Math.max(0, Math.round(numericTotalCost) - netAmount)
-    : 0;
+  const { netAmount, vatAmount } = calculateGrossTaxBreakdown(numericTotalCost, {
+    isExempt: !hasInvoice,
+  });
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('es-CL', {
@@ -154,11 +150,20 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
     setIsSubmitting(true);
     setError(null);
     try {
-      await onConfirmPurchase(item, Number(quantityBought), {
-        totalCost: Number(totalCost),
-        hasInvoice,
-        paymentMethod,
-      });
+      const idempotencyKey = idempotencyKeyRef.current ?? createIdempotencyKey();
+      idempotencyKeyRef.current = idempotencyKey;
+
+      await onConfirmPurchase(
+        item,
+        Number(quantityBought),
+        {
+          totalCost: Number(totalCost),
+          hasInvoice,
+          paymentMethod,
+        },
+        idempotencyKey,
+      );
+      idempotencyKeyRef.current = null;
       onClose();
     } catch (err: unknown) {
       setError(

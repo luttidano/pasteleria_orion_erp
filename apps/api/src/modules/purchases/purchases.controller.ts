@@ -8,6 +8,7 @@ import {
   Post,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { PurchasesService } from './purchases.service';
 import { CreateSupplierInvoiceDto } from './dto/create-supplier-invoice.dto';
@@ -18,6 +19,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Role } from '../../common/enums';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
 
 @Controller('purchases')
 @UseGuards(AuthGuard, RolesGuard)
@@ -38,6 +40,7 @@ export class PurchasesController {
 
   @Post('invoices')
   @Roles(Role.admin, Role.baker)
+  @UseInterceptors(IdempotencyInterceptor)
   createInvoice(
     @Body() dto: CreateSupplierInvoiceDto,
     @CurrentUser('id') userId?: string,
@@ -47,6 +50,7 @@ export class PurchasesController {
 
   @Post('invoices/:id/payments')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   recordPayment(
     @Param('id', ParseUUIDPipe) invoiceId: string,
     @Body() dto: RecordSupplierPaymentDto,
@@ -57,6 +61,7 @@ export class PurchasesController {
 
   @Delete('invoices/:id')
   @Roles(Role.admin)
+  @UseInterceptors(IdempotencyInterceptor)
   voidInvoice(
     @Param('id', ParseUUIDPipe) invoiceId: string,
     @CurrentUser('id') userId?: string,

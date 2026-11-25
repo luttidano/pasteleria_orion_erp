@@ -192,6 +192,37 @@ describe('AccountingOutbox & PosAccountingSync (Transactional Outbox)', () => {
         attempts: { increment: 1 },
         lastError: 'Período Octubre 2026 cerrado',
       },
+      select: { attempts: true },
+    });
+  });
+
+  it('debe marcar el evento como failed (Dead-Letter) al alcanzar el límite de 5 intentos fallidos', async () => {
+    prisma.accountingOutbox.findUnique.mockResolvedValueOnce({
+      id: 'outbox-dead-letter',
+      aggregateType: 'pos_sale',
+      aggregateId: 'sale-dead',
+      status: 'pending',
+      payload: {
+        ticketNumber: 'TK-DEAD',
+        soldAt: '2026-10-15T16:00:00.000Z',
+        total: 1000,
+        paymentMethod: 'efectivo',
+      },
+    });
+    entryService.registerSaleIncome.mockRejectedValueOnce(
+      new Error('Error irrecuperable'),
+    );
+    prisma.accountingOutbox.update
+      .mockResolvedValueOnce({ attempts: 5 }) // Primer update incrementa y devuelve 5
+      .mockResolvedValueOnce({ id: 'outbox-dead-letter', status: 'failed' }); // Segundo update marca failed
+
+    await expect(processor.processEvent('outbox-dead-letter')).rejects.toThrow(
+      'Error irrecuperable',
+    );
+
+    expect(prisma.accountingOutbox.update).toHaveBeenCalledWith({
+      where: { id: 'outbox-dead-letter' },
+      data: { status: 'failed' },
     });
   });
 

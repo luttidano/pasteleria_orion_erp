@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
+import { randomUUID } from 'crypto';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -17,6 +18,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const { httpAdapter } = this.httpAdapterHost;
     const ctx = host.switchToHttp();
+    const req = ctx.getRequest<any>();
+    const res = ctx.getResponse<any>();
+
+    const correlationId =
+      (typeof req?.headers?.['x-correlation-id'] === 'string' &&
+        req.headers['x-correlation-id'].trim()) ||
+      (typeof req?.headers?.['x-request-id'] === 'string' &&
+        req.headers['x-request-id'].trim()) ||
+      randomUUID();
+
+    try {
+      if (res && typeof res.setHeader === 'function') {
+        res.setHeader('x-correlation-id', correlationId);
+      }
+    } catch {
+      // Ignorar si la respuesta ya fue enviada o no soporta setHeader
+    }
 
     const httpStatus =
       exception instanceof HttpException
@@ -30,7 +48,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       responseBody = typeof response === 'object' ? response : { message: response };
     } else {
       this.logger.error(
-        'Excepción no controlada en API:',
+        `[${correlationId}] Excepción no controlada en API [${req?.method ?? 'UNKNOWN'} ${httpAdapter.getRequestUrl(req)}]:`,
         exception instanceof Error ? exception.stack : String(exception),
       );
       responseBody = {
@@ -40,12 +58,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     httpAdapter.reply(
-      ctx.getResponse(),
+      res,
       {
         ...responseBody,
         statusCode: httpStatus,
         timestamp: new Date().toISOString(),
-        path: httpAdapter.getRequestUrl(ctx.getRequest()),
+        path: httpAdapter.getRequestUrl(req),
+        correlationId,
       },
       httpStatus,
     );

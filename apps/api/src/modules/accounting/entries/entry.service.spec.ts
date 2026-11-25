@@ -2,7 +2,12 @@ import { BadRequestException, ConflictException, ValidationPipe } from '@nestjs/
 import { Test, TestingModule } from '@nestjs/testing';
 import { EntryService } from './entry.service';
 import { EntryVoidService } from './entry-void.service';
-import { AccountingIntegrationService } from '../outbox/accounting-integration.service';
+import { AccountingAccountResolverService } from '../outbox/handlers/accounting-account-resolver.service';
+import { InventoryAccountingHandler } from '../outbox/handlers/inventory-accounting.handler';
+import { PurchaseAccountingHandler } from '../outbox/handlers/purchase-accounting.handler';
+import { SaleAccountingHandler } from '../outbox/handlers/sale-accounting.handler';
+import { ShiftAccountingHandler } from '../outbox/handlers/shift-accounting.handler';
+import { TaxCalculatorService } from '../tax/tax-calculator.service';
 import { PrismaService } from '../../../database/prisma.service';
 import { AccountingPeriodService } from '../periods/accounting-period.service';
 import { InventoryValuationService } from '../../inventory/valuation/inventory-valuation.service';
@@ -101,7 +106,12 @@ describe('EntryService', () => {
       providers: [
         EntryService,
         EntryVoidService,
-        AccountingIntegrationService,
+        AccountingAccountResolverService,
+        TaxCalculatorService,
+        SaleAccountingHandler,
+        ShiftAccountingHandler,
+        InventoryAccountingHandler,
+        PurchaseAccountingHandler,
         { provide: PrismaService, useValue: prisma },
         { provide: AccountingPeriodService, useValue: periodService },
         { provide: InventoryValuationService, useValue: valuationService },

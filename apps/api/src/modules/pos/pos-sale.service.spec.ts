@@ -12,6 +12,7 @@ import { PosAccountingStatusService } from './pos-accounting-status.service';
 import { PrismaService } from '../../database/prisma.service';
 import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
 import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
+import { TaxCalculatorService } from '../accounting/tax/tax-calculator.service';
 import { InventoryStockService } from '../inventory/stock/inventory-stock.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 
@@ -58,6 +59,7 @@ describe('PosSaleService', () => {
         PosShiftReconciliationService,
         PosAccountingStatusService,
         AccountingOutboxService,
+        TaxCalculatorService,
         InventoryStockService,
         { provide: PrismaService, useValue: prisma },
         { provide: AccountingOutboxProcessorService, useValue: outboxProcessor },

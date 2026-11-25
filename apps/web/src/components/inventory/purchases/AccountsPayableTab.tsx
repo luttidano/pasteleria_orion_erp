@@ -75,8 +75,11 @@ export const AccountsPayableTab: React.FC<AccountsPayableTabProps> = ({
   }, [loadData]);
 
   // Handlers
-  const handleCreateInvoice = async (payload: CreateSupplierInvoicePayload) => {
-    await purchaseService.createInvoice(payload);
+  const handleCreateInvoice = async (
+    payload: CreateSupplierInvoicePayload,
+    idempotencyKey?: string,
+  ) => {
+    await purchaseService.createInvoice(payload, idempotencyKey);
     onToast({
       type: 'success',
       title: 'Factura registrada',
@@ -88,8 +91,9 @@ export const AccountsPayableTab: React.FC<AccountsPayableTabProps> = ({
   const handleRecordPayment = async (
     invoiceId: string,
     payload: RecordSupplierPaymentPayload,
+    idempotencyKey?: string,
   ) => {
-    await purchaseService.recordPayment(invoiceId, payload);
+    await purchaseService.recordPayment(invoiceId, payload, idempotencyKey);
     onToast({
       type: 'success',
       title: 'Pago registrado exitosamente',

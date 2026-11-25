@@ -49,10 +49,12 @@ export const packagingService = {
   async adjustStock(
     id: string,
     input: number | AdjustStockPayload,
+    idempotencyKey?: string,
   ): Promise<PackagingAdjustmentResult> {
     const body = typeof input === 'number' ? { delta: input } : input;
     return apiFetch<PackagingAdjustmentResult>(`/packaging/${id}/adjust-stock`, {
       method: 'POST',
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
       body: JSON.stringify(body),
     });
   },

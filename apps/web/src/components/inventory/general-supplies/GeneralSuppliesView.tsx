@@ -178,8 +178,14 @@ export const GeneralSuppliesView: React.FC<GeneralSuppliesViewProps> = ({
   const handleConfirmAdjustment = async (
     id: string,
     payload: AdjustStockPayload,
+    idempotencyKey?: string,
   ) => {
-    const updated = await generalSupplyService.adjustStock(id, payload);
+    const updated = await generalSupplyService.adjustStock(
+      id,
+      payload,
+      undefined,
+      idempotencyKey,
+    );
     setItems((prev) =>
       prev.map((item) => (item.id === id ? updated : item)),
     );

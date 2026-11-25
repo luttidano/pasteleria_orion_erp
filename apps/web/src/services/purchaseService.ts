@@ -45,9 +45,11 @@ export const purchaseService = {
    */
   async createInvoice(
     payload: CreateSupplierInvoicePayload,
+    idempotencyKey?: string,
   ): Promise<SupplierInvoice> {
     return apiFetch<SupplierInvoice>('/purchases/invoices', {
       method: 'POST',
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
       body: JSON.stringify(payload),
     });
   },
@@ -58,6 +60,7 @@ export const purchaseService = {
   async recordPayment(
     invoiceId: string,
     payload: RecordSupplierPaymentPayload,
+    idempotencyKey?: string,
   ): Promise<{
     success: boolean;
     payment: any;
@@ -65,6 +68,7 @@ export const purchaseService = {
   }> {
     return apiFetch(`/purchases/invoices/${invoiceId}/payments`, {
       method: 'POST',
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
       body: JSON.stringify(payload),
     });
   },
@@ -74,9 +78,11 @@ export const purchaseService = {
    */
   async voidInvoice(
     invoiceId: string,
+    idempotencyKey?: string,
   ): Promise<{ success: boolean; invoiceId: string; status: string }> {
     return apiFetch(`/purchases/invoices/${invoiceId}`, {
       method: 'DELETE',
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
     });
   },
 };

@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, CheckCircle2, ClipboardEdit, X } from 'lucide-react';
+import { createIdempotencyKey } from '../../lib/api';
+import { calculateGrossFromNet } from '../../utils/tax';
 import type {
   AdjustStockPayload,
   InventoryAdjustmentReasonType,
@@ -21,7 +23,11 @@ export interface StockAdjustmentTarget {
 interface StockAdjustmentModalProps {
   target: StockAdjustmentTarget | null;
   onClose: () => void;
-  onConfirm: (id: string, payload: AdjustStockPayload) => Promise<void>;
+  onConfirm: (
+    id: string,
+    payload: AdjustStockPayload,
+    idempotencyKey?: string,
+  ) => Promise<void>;
 }
 
 const PAYMENT_OPTIONS: Array<{
@@ -53,7 +59,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
 interface StockAdjustmentModalContentProps {
   target: StockAdjustmentTarget;
   onClose: () => void;
-  onConfirm: (id: string, payload: AdjustStockPayload) => Promise<void>;
+  onConfirm: StockAdjustmentModalProps['onConfirm'];
 }
 
 const StockAdjustmentModalContent: React.FC<StockAdjustmentModalContentProps> = ({
@@ -76,7 +82,7 @@ const StockAdjustmentModalContent: React.FC<StockAdjustmentModalContentProps> = 
   const [reason, setReason] = useState('');
   const [totalCost, setTotalCost] = useState<number | ''>(
     isPositive && initialUnitCost > 0
-      ? Math.round(initialUnitCost * initialQty * 1.19)
+      ? calculateGrossFromNet(initialUnitCost * initialQty)
       : '',
   );
   const [hasCostManualEdit, setHasCostManualEdit] = useState(false);
@@ -85,6 +91,7 @@ const StockAdjustmentModalContent: React.FC<StockAdjustmentModalContentProps> = 
     useState<InventoryPurchasePaymentMethod>('efectivo');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   const recalcSuggestedCost = (
     nextQty: number | '',
@@ -96,7 +103,9 @@ const StockAdjustmentModalContent: React.FC<StockAdjustmentModalContentProps> = 
     const qty = typeof nextQty === 'number' ? nextQty : 0;
     const unitCost = target.unitCost ?? 0;
     if (qty > 0 && unitCost > 0) {
-      setTotalCost(Math.round(unitCost * qty * (nextHasInvoice ? 1.19 : 1)));
+      setTotalCost(
+        calculateGrossFromNet(unitCost * qty, { isExempt: !nextHasInvoice }),
+      );
     }
   };
 
@@ -129,18 +138,26 @@ const StockAdjustmentModalContent: React.FC<StockAdjustmentModalContentProps> = 
     setSubmitting(true);
     setError(null);
     try {
-      await onConfirm(target.id, {
-        delta: signedDelta,
-        reasonType,
-        ...(reason.trim() ? { reason: reason.trim() } : {}),
-        ...(isPositive && reasonType === 'purchase'
-          ? {
-              totalCost: Number(totalCost),
-              hasInvoice,
-              paymentMethod,
-            }
-          : {}),
-      });
+      const idempotencyKey = idempotencyKeyRef.current ?? createIdempotencyKey();
+      idempotencyKeyRef.current = idempotencyKey;
+
+      await onConfirm(
+        target.id,
+        {
+          delta: signedDelta,
+          reasonType,
+          ...(reason.trim() ? { reason: reason.trim() } : {}),
+          ...(isPositive && reasonType === 'purchase'
+            ? {
+                totalCost: Number(totalCost),
+                hasInvoice,
+                paymentMethod,
+              }
+            : {}),
+        },
+        idempotencyKey,
+      );
+      idempotencyKeyRef.current = null;
       onClose();
     } catch (err: unknown) {
       setError(

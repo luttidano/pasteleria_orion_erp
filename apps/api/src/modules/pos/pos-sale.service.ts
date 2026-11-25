@@ -3,12 +3,14 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { PosSaleRecord } from '@repo/types';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
 import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
+import { TaxCalculatorService } from '../accounting/tax/tax-calculator.service';
 import { InventoryStockService } from '../inventory/stock/inventory-stock.service';
 import { PrismaService } from '../../database/prisma.service';
 import { rethrowPrismaError } from '../../common/utils/prisma-error.util';
@@ -26,6 +28,8 @@ export class PosSaleService {
     private readonly posAccountingStatusService: PosAccountingStatusService,
     private readonly inventoryStockService: InventoryStockService,
     private readonly posShiftService: PosShiftService,
+    @Optional()
+    private readonly taxCalculator?: TaxCalculatorService,
   ) {}
 
   /**
@@ -64,11 +68,15 @@ export class PosSaleService {
             },
           );
 
-        const serverTotal = roundMoney(
+        const rawServerTotal = roundMoney(
           pricedItems.reduce((sum, item) => sum + item.lineTotal, 0),
         );
-        const serverSubtotal = roundMoney(serverTotal / 1.19);
-        const serverTaxAmount = roundMoney(serverTotal - serverSubtotal);
+        const taxBreakdown = (
+          this.taxCalculator ?? new TaxCalculatorService()
+        ).breakdownFromGross(rawServerTotal);
+        const serverTotal = taxBreakdown.totalAmount;
+        const serverSubtotal = taxBreakdown.netAmount;
+        const serverTaxAmount = taxBreakdown.vatAmount;
 
         const activeShift = await this.posShiftService.ensureActiveShiftInTx(
           tx,

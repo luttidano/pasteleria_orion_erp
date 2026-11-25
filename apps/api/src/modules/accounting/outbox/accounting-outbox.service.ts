@@ -469,4 +469,24 @@ export class AccountingOutboxService {
       orderBy: { businessDate: 'asc' },
     });
   }
+
+  async findFailedEvents(
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    return db.accountingOutbox.findMany({
+      where: { status: 'failed' },
+      orderBy: { businessDate: 'desc' },
+    });
+  }
+
+  async retryFailedEvent(outboxId: string) {
+    return this.prisma.accountingOutbox.update({
+      where: { id: outboxId },
+      data: {
+        status: 'pending',
+        attempts: 0,
+        lastError: null,
+      },
+    });
+  }
 }

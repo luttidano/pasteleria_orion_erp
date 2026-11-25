@@ -10,15 +10,21 @@ import { AnnualClosingService } from './periods/annual-closing.service';
 import { EntryController } from './entries/entry.controller';
 import { EntryService } from './entries/entry.service';
 import { EntryVoidService } from './entries/entry-void.service';
-import { AccountingIntegrationService } from './outbox/accounting-integration.service';
+import { AccountingAccountResolverService } from './outbox/handlers/accounting-account-resolver.service';
+import { InventoryAccountingHandler } from './outbox/handlers/inventory-accounting.handler';
+import { PurchaseAccountingHandler } from './outbox/handlers/purchase-accounting.handler';
+import { SaleAccountingHandler } from './outbox/handlers/sale-accounting.handler';
+import { ShiftAccountingHandler } from './outbox/handlers/shift-accounting.handler';
 import { AccountingOutboxService } from './outbox/accounting-outbox.service';
 import { AccountingOutboxProcessorService } from './outbox/accounting-outbox-processor.service';
+import { AccountingOutboxScheduler } from './outbox/accounting-outbox.scheduler';
 import { LedgerController } from './reports/ledger.controller';
 import { LedgerService } from './reports/ledger.service';
 import { BalanceController } from './reports/balance.controller';
 import { BalanceService } from './reports/balance.service';
 import { FinancialReportController } from './reports/financial-report.controller';
 import { FinancialReportService } from './reports/financial-report.service';
+import { TaxCalculatorService } from './tax/tax-calculator.service';
 import { TaxController } from './tax/tax.controller';
 import { TaxService } from './tax/tax.service';
 
@@ -42,11 +48,17 @@ import { TaxService } from './tax/tax.service';
     AnnualClosingService,
     EntryService,
     EntryVoidService,
-    AccountingIntegrationService,
+    AccountingAccountResolverService,
+    SaleAccountingHandler,
+    ShiftAccountingHandler,
+    InventoryAccountingHandler,
+    PurchaseAccountingHandler,
     AccountingOutboxProcessorService,
+    AccountingOutboxScheduler,
     LedgerService,
     BalanceService,
     FinancialReportService,
+    TaxCalculatorService,
     TaxService,
   ],
   exports: [
@@ -54,9 +66,14 @@ import { TaxService } from './tax/tax.service';
     PeriodLockService,
     EntryService,
     EntryVoidService,
-    AccountingIntegrationService,
+    AccountingAccountResolverService,
+    SaleAccountingHandler,
+    ShiftAccountingHandler,
+    InventoryAccountingHandler,
+    PurchaseAccountingHandler,
     AccountingOutboxService,
     AccountingOutboxProcessorService,
+    TaxCalculatorService,
     TaxService,
   ],
 })

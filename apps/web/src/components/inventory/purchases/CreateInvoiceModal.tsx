@@ -1,13 +1,17 @@
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Receipt, Building2, Calendar, AlertCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Receipt, Building2, Calendar, AlertCircle } from 'lucide-react';
+import { createIdempotencyKey } from '../../../lib/api';
+import { Modal } from '../../common/Modal';
 import type { CreateSupplierInvoicePayload, Supplier } from '../../../types';
 
 interface CreateInvoiceModalProps {
   isOpen: boolean;
   suppliers: Supplier[];
   onClose: () => void;
-  onConfirm: (payload: CreateSupplierInvoicePayload) => Promise<void>;
+  onConfirm: (
+    payload: CreateSupplierInvoicePayload,
+    idempotencyKey?: string,
+  ) => Promise<void>;
 }
 
 export const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({
@@ -18,13 +22,12 @@ export const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  return createPortal(
+  return (
     <CreateInvoiceModalContent
       suppliers={suppliers}
       onClose={onClose}
       onConfirm={onConfirm}
-    />,
-    document.body,
+    />
   );
 };
 
@@ -57,6 +60,7 @@ const CreateInvoiceModalContent: React.FC<ContentProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,15 +88,22 @@ const CreateInvoiceModalContent: React.FC<ContentProps> = ({
 
     try {
       setIsSubmitting(true);
-      await onConfirm({
-        supplierId,
-        invoiceNumber: invoiceNumber.trim().toUpperCase(),
-        issueDate,
-        dueDate,
-        totalAmount: Number(totalAmount),
-        hasInvoice,
-        notes: notes.trim() || undefined,
-      });
+      const idempotencyKey = idempotencyKeyRef.current ?? createIdempotencyKey();
+      idempotencyKeyRef.current = idempotencyKey;
+
+      await onConfirm(
+        {
+          supplierId,
+          invoiceNumber: invoiceNumber.trim().toUpperCase(),
+          issueDate,
+          dueDate,
+          totalAmount: Number(totalAmount),
+          hasInvoice,
+          notes: notes.trim() || undefined,
+        },
+        idempotencyKey,
+      );
+      idempotencyKeyRef.current = null;
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Error al guardar la factura de proveedor.');
@@ -102,39 +113,41 @@ const CreateInvoiceModalContent: React.FC<ContentProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-[#1C1412] w-full max-w-lg rounded-3xl shadow-2xl border border-stone-200 dark:border-[#35251F] overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="p-5 border-b border-stone-200 dark:border-[#35251F] flex items-center justify-between bg-stone-50/50 dark:bg-[#16100E]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 flex items-center justify-center font-bold">
-              <Receipt className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-stone-900 dark:text-white font-serif">
-                Nueva Factura por Pagar (CxP)
-              </h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400">
-                Registra compras a crédito de materias primas o insumos
-              </p>
-            </div>
-          </div>
+    <Modal
+      isOpen
+      onClose={onClose}
+      closeDisabled={isSubmitting}
+      title="Nueva Factura por Pagar (CxP)"
+      subtitle="Registra compras a crédito de materias primas o insumos"
+      icon={<Receipt className="w-5 h-5" />}
+      iconWrapperClassName="bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300"
+      footer={
+        <div className="flex items-center justify-end gap-2">
           <button
+            type="button"
             onClick={onClose}
-            className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-1 rounded-xl cursor-pointer"
+            disabled={isSubmitting}
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-200/50 dark:hover:bg-stone-800 cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form="create-invoice-form"
+            disabled={isSubmitting || !totalAmount}
+            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#8C1F25] hover:bg-[#73191E] text-white shadow-md disabled:opacity-50 cursor-pointer"
+          >
+            {isSubmitting ? 'Guardando...' : 'Guardar Factura por Pagar'}
           </button>
         </div>
-
-        {/* Formulario */}
-        <div className="p-5 overflow-y-auto space-y-4">
-          {error && (
-            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/40 text-xs text-rose-700 dark:text-rose-400 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+      }
+    >
+      {error && (
+        <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/40 text-xs text-rose-700 dark:text-rose-400 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
           <form id="create-invoice-form" onSubmit={handleSubmit} className="space-y-4">
             {/* Proveedor */}
@@ -282,29 +295,7 @@ const CreateInvoiceModalContent: React.FC<ContentProps> = ({
                 className="w-full text-xs p-2.5 rounded-xl border border-stone-200 dark:border-[#35251F] bg-white dark:bg-[#16100E]"
               />
             </div>
-          </form>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-stone-200 dark:border-[#35251F] bg-stone-50/50 dark:bg-[#16100E] flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-200/50 dark:hover:bg-stone-800 cursor-pointer"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            form="create-invoice-form"
-            disabled={isSubmitting || !totalAmount}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#8C1F25] hover:bg-[#73191E] text-white shadow-md disabled:opacity-50 cursor-pointer"
-          >
-            {isSubmitting ? 'Guardando...' : 'Guardar Factura por Pagar'}
-          </button>
-        </div>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 };

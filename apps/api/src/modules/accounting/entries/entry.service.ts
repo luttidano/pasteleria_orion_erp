@@ -12,7 +12,12 @@ import { CreateAccountingEntryDto } from '../dto/create-accounting-entry.dto';
 import { VoidAccountingEntryDto } from '../dto/accounting-period.dto';
 import { AccountingPeriodService } from '../periods/accounting-period.service';
 import { EntryVoidService } from './entry-void.service';
-import { AccountingIntegrationService } from '../outbox/accounting-integration.service';
+import { AccountingAccountResolverService } from '../outbox/handlers/accounting-account-resolver.service';
+import { InventoryAccountingHandler } from '../outbox/handlers/inventory-accounting.handler';
+import { PurchaseAccountingHandler } from '../outbox/handlers/purchase-accounting.handler';
+import { SaleAccountingHandler } from '../outbox/handlers/sale-accounting.handler';
+import { ShiftAccountingHandler } from '../outbox/handlers/shift-accounting.handler';
+import { TaxCalculatorService } from '../tax/tax-calculator.service';
 import { InventoryValuationService } from '../../inventory/valuation/inventory-valuation.service';
 import type {
   AccountingEntryCreatedResult,
@@ -37,7 +42,17 @@ export class EntryService {
     @Optional()
     private readonly entryVoidService?: EntryVoidService,
     @Optional()
-    private readonly integrationService?: AccountingIntegrationService,
+    private readonly accountResolver?: AccountingAccountResolverService,
+    @Optional()
+    private readonly taxCalculator?: TaxCalculatorService,
+    @Optional()
+    private readonly saleHandler?: SaleAccountingHandler,
+    @Optional()
+    private readonly shiftHandler?: ShiftAccountingHandler,
+    @Optional()
+    private readonly inventoryHandler?: InventoryAccountingHandler,
+    @Optional()
+    private readonly purchaseHandler?: PurchaseAccountingHandler,
   ) {}
 
   async findEntries() {
@@ -223,13 +238,53 @@ export class EntryService {
     return voidService.voidEntry(id, dto, userId);
   }
 
-  private getIntegrationService(): AccountingIntegrationService {
+  private getAccountResolver(): AccountingAccountResolverService {
     return (
-      this.integrationService ??
-      new AccountingIntegrationService(
-        this.prisma,
+      this.accountResolver ?? new AccountingAccountResolverService(this.prisma)
+    );
+  }
+
+  private getTaxCalculator(): TaxCalculatorService {
+    return this.taxCalculator ?? new TaxCalculatorService();
+  }
+
+  private getSaleHandler(): SaleAccountingHandler {
+    return (
+      this.saleHandler ??
+      new SaleAccountingHandler(
+        this.getAccountResolver(),
         this.periodService,
+        this.getTaxCalculator(),
         this.inventoryValuationService,
+      )
+    );
+  }
+
+  private getShiftHandler(): ShiftAccountingHandler {
+    return (
+      this.shiftHandler ??
+      new ShiftAccountingHandler(this.getAccountResolver(), this.periodService)
+    );
+  }
+
+  private getInventoryHandler(): InventoryAccountingHandler {
+    return (
+      this.inventoryHandler ??
+      new InventoryAccountingHandler(
+        this.getAccountResolver(),
+        this.periodService,
+        this.getTaxCalculator(),
+        this.inventoryValuationService,
+      )
+    );
+  }
+
+  private getPurchaseHandler(): PurchaseAccountingHandler {
+    return (
+      this.purchaseHandler ??
+      new PurchaseAccountingHandler(
+        this.getAccountResolver(),
+        this.periodService,
       )
     );
   }
@@ -244,7 +299,7 @@ export class EntryService {
     },
     tx?: Prisma.TransactionClient,
   ): Promise<AccountingEntryCreatedResult | null> {
-    return this.getIntegrationService().registerSaleIncome(sale, tx);
+    return this.getSaleHandler().registerSaleIncome(sale, tx);
   }
 
   async registerShiftDifferenceAdjustment(
@@ -257,7 +312,7 @@ export class EntryService {
     },
     tx?: Prisma.TransactionClient,
   ): Promise<AccountingEntryCreatedResult | null> {
-    return this.getIntegrationService().registerShiftDifferenceAdjustment(params, tx);
+    return this.getShiftHandler().registerShiftDifferenceAdjustment(params, tx);
   }
 
   async registerInventoryPurchase(
@@ -265,7 +320,7 @@ export class EntryService {
     payload: InventoryPurchaseRequestedPayload,
     tx?: Prisma.TransactionClient,
   ): Promise<AccountingEntryCreatedResult | null> {
-    return this.getIntegrationService().registerInventoryPurchase(outboxId, payload, tx);
+    return this.getInventoryHandler().registerInventoryPurchase(outboxId, payload, tx);
   }
 
   async registerProductionTransfer(
@@ -273,7 +328,7 @@ export class EntryService {
     payload: InventoryProductionRequestedPayload,
     tx?: Prisma.TransactionClient,
   ): Promise<AccountingEntryCreatedResult | null> {
-    return this.getIntegrationService().registerProductionTransfer(outboxId, payload, tx);
+    return this.getInventoryHandler().registerProductionTransfer(outboxId, payload, tx);
   }
 
   async registerInventoryAdjustment(
@@ -281,7 +336,7 @@ export class EntryService {
     payload: InventoryAdjustmentRequestedPayload,
     tx?: Prisma.TransactionClient,
   ): Promise<AccountingEntryCreatedResult | null> {
-    return this.getIntegrationService().registerInventoryAdjustment(outboxId, payload, tx);
+    return this.getInventoryHandler().registerInventoryAdjustment(outboxId, payload, tx);
   }
 
   async registerSaleCogs(
@@ -289,7 +344,7 @@ export class EntryService {
     payload: PosSaleCogsRequestedPayload,
     tx?: Prisma.TransactionClient,
   ): Promise<SaleCogsEntryCreatedResult | null> {
-    return this.getIntegrationService().registerSaleCogs(outboxId, payload, tx);
+    return this.getSaleHandler().registerSaleCogs(outboxId, payload, tx);
   }
 
   async registerSupplierPayment(
@@ -297,10 +352,6 @@ export class EntryService {
     payload: SupplierPaymentRequestedPayload,
     tx?: Prisma.TransactionClient,
   ): Promise<AccountingEntryCreatedResult | null> {
-    return this.getIntegrationService().registerSupplierPayment(
-      outboxId,
-      payload,
-      tx,
-    );
+    return this.getPurchaseHandler().registerSupplierPayment(outboxId, payload, tx);
   }
 }

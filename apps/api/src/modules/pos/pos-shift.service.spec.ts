@@ -393,6 +393,34 @@ describe('PosShiftService', () => {
     ).rejects.toThrow(ConflictException);
   });
 
+  it('debe resolver concurrencia en ensureActiveShiftInTx si otra transacción insertó el turno (ON CONFLICT)', async () => {
+    const winningShift = {
+      id: 'shift-winning-race',
+      shiftNumber: 7n,
+      status: 'abierto',
+      openingCash: 5000,
+      openedAt: new Date(),
+    };
+
+    const mockTx = {
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([]) // ON CONFLICT (status) WHERE status = 'abierto' DO NOTHING genera 0 filas
+        .mockResolvedValueOnce([{ id: winningShift.id }]), // SELECT FOR UPDATE
+      posShift: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce(null) // No hay turno abierto inicialmente
+          .mockResolvedValueOnce(null) // Chequeo lastClosed
+          .mockResolvedValueOnce(winningShift), // Raced: recupera el turno insertado por la transacción competidora
+      },
+    };
+
+    const result = await service.ensureActiveShiftInTx(mockTx as any, 'user-race-1', 5000);
+    expect(result).toEqual(winningShift);
+    expect(mockTx.$queryRaw).toHaveBeenCalledTimes(2);
+  });
+
   describe('ClosePosShiftDto con ValidationPipe estricto', () => {
     const pipe = new ValidationPipe({
       whitelist: true,

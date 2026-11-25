@@ -234,8 +234,8 @@ CREATE TABLE IF NOT EXISTS public.pos_sale (
 CREATE TABLE IF NOT EXISTS public.pos_sale_item (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   sale_id uuid NOT NULL REFERENCES public.pos_sale(id) ON DELETE CASCADE,
-  product_id uuid REFERENCES public.product(id) ON DELETE SET NULL,
-  packaging_id uuid REFERENCES public.packaging(id) ON DELETE SET NULL,
+  product_id uuid REFERENCES public.product(id) ON DELETE RESTRICT,
+  packaging_id uuid REFERENCES public.packaging(id) ON DELETE RESTRICT,
   product_name text NOT NULL,
   quantity integer NOT NULL CHECK (quantity > 0),
   unit_price numeric NOT NULL CHECK (unit_price >= 0::numeric),
@@ -251,7 +251,7 @@ CREATE TABLE IF NOT EXISTS public.accounting_entry (
   entry_number bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   entry_date date NOT NULL DEFAULT CURRENT_DATE,
   concept character varying NOT NULL CHECK (length(TRIM(BOTH FROM concept)) > 0),
-  origin text NOT NULL DEFAULT 'manual'::text CHECK (origin = ANY (ARRAY['manual'::text, 'pos'::text, 'closing'::text, 'reversal'::text])),
+  origin text NOT NULL DEFAULT 'manual'::text CHECK (origin = ANY (ARRAY['manual'::text, 'pos'::text, 'inventory'::text, 'closing'::text, 'reversal'::text])),
   status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'voided'::text])),
   pos_sale_id uuid REFERENCES public.pos_sale(id) ON DELETE SET NULL,
   pos_shift_id uuid REFERENCES public.pos_shift(id) ON DELETE SET NULL,
@@ -350,6 +350,71 @@ CREATE TABLE IF NOT EXISTS public.supplier_payment (
 );
 
 -- =============================================================================
+-- 5D. OUTBOX TRANSACCIONAL Y KARDEX DE INVENTARIO
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.accounting_outbox (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  aggregate_type text NOT NULL CHECK (
+    aggregate_type = ANY (
+      ARRAY[
+        'pos_sale'::text,
+        'pos_shift'::text,
+        'inventory_purchase'::text,
+        'inventory_production'::text,
+        'inventory_adjustment'::text,
+        'pos_sale_cogs'::text,
+        'supplier_payment'::text
+      ]
+    )
+  ),
+  aggregate_id uuid NOT NULL,
+  business_date timestamp with time zone NOT NULL,
+  reference_code text NOT NULL,
+  payload jsonb NOT NULL,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'processed'::text, 'failed'::text])),
+  attempts integer NOT NULL DEFAULT 0,
+  last_error text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  processed_at timestamp with time zone,
+  CONSTRAINT uq_accounting_outbox_aggregate UNIQUE (aggregate_type, aggregate_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.stock_movement (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  item_type text NOT NULL CHECK (
+    item_type = ANY (ARRAY['ingredient'::text, 'product'::text, 'packaging'::text, 'general_supply'::text])
+  ),
+  item_id uuid NOT NULL,
+  item_name text NOT NULL,
+  movement_type text NOT NULL CHECK (
+    movement_type = ANY (
+      ARRAY[
+        'purchase'::text,
+        'production_in'::text,
+        'production_out'::text,
+        'sale'::text,
+        'waste'::text,
+        'internal_use'::text,
+        'recount_surplus'::text,
+        'recount_shortage'::text
+      ]
+    )
+  ),
+  quantity_delta numeric(12, 3) NOT NULL CHECK (quantity_delta <> 0::numeric),
+  unit text NOT NULL,
+  stock_before numeric(12, 3) NOT NULL CHECK (stock_before >= 0::numeric),
+  stock_after numeric(12, 3) NOT NULL CHECK (stock_after >= 0::numeric),
+  unit_cost numeric(12, 2) NOT NULL DEFAULT 0 CHECK (unit_cost >= 0::numeric),
+  total_cost numeric(12, 2) NOT NULL DEFAULT 0 CHECK (total_cost >= 0::numeric),
+  reference_type text,
+  reference_id uuid,
+  reason text,
+  created_by uuid REFERENCES public.profile(id) ON DELETE SET NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+-- =============================================================================
 -- 6. ÍNDICES DE RENDIMIENTO
 -- =============================================================================
 
@@ -370,7 +435,7 @@ CREATE INDEX IF NOT EXISTS idx_pos_sale_item_packaging ON public.pos_sale_item(p
 CREATE INDEX IF NOT EXISTS idx_pos_sale_sold_at ON public.pos_sale(sold_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_shift_id ON public.pos_sale(shift_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_unshifted_completed ON public.pos_sale(sold_at DESC) WHERE shift_id IS NULL AND status = 'completada';
-CREATE UNIQUE INDEX IF NOT EXISTS uq_pos_shift_single_open ON public.pos_shift ((1)) WHERE status = 'abierto';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pos_shift_single_open ON public.pos_shift (status) WHERE status = 'abierto';
 CREATE INDEX IF NOT EXISTS idx_pos_shift_status ON public.pos_shift(status);
 CREATE INDEX IF NOT EXISTS idx_pos_shift_opened_at ON public.pos_shift(opened_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pos_shift_closed_at ON public.pos_shift(closed_at DESC);
@@ -378,6 +443,7 @@ CREATE INDEX IF NOT EXISTS idx_pos_shift_opened_by ON public.pos_shift(opened_by
 CREATE INDEX IF NOT EXISTS idx_pos_shift_closed_by ON public.pos_shift(closed_by);
 CREATE INDEX IF NOT EXISTS idx_pos_shift_closing_entry ON public.pos_shift(closing_entry_id);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_date ON public.accounting_entry(entry_date DESC);
+CREATE INDEX IF NOT EXISTS idx_accounting_entry_status_date ON public.accounting_entry(status, entry_date DESC);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_pos_sale ON public.accounting_entry(pos_sale_id);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_pos_shift ON public.accounting_entry(pos_shift_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_accounting_entry_pos_sale ON public.accounting_entry(pos_sale_id) WHERE pos_sale_id IS NOT NULL AND status = 'active';
@@ -390,6 +456,18 @@ CREATE INDEX IF NOT EXISTS idx_accounting_period_closing_entry ON public.account
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_item_entry ON public.accounting_entry_item(entry_id);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_item_account ON public.accounting_entry_item(account_id);
 CREATE INDEX IF NOT EXISTS idx_idempotency_record_expires_at ON public.idempotency_record(expires_at);
+CREATE INDEX IF NOT EXISTS idx_supplier_invoice_supplier ON public.supplier_invoice(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_invoice_status ON public.supplier_invoice(status);
+CREATE INDEX IF NOT EXISTS idx_supplier_invoice_due_date ON public.supplier_invoice(due_date);
+CREATE INDEX IF NOT EXISTS idx_supplier_invoice_created_at ON public.supplier_invoice(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_supplier_payment_invoice ON public.supplier_payment(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_payment_date ON public.supplier_payment(payment_date DESC);
+CREATE INDEX IF NOT EXISTS idx_supplier_payment_accounting_entry ON public.supplier_payment(accounting_entry_id);
+CREATE INDEX IF NOT EXISTS idx_accounting_outbox_pending_date ON public.accounting_outbox (status, business_date ASC) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_accounting_outbox_worker ON public.accounting_outbox (status, attempts, business_date ASC) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_stock_movement_item_date ON public.stock_movement (item_type, item_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_stock_movement_type_date ON public.stock_movement (movement_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_stock_movement_reference ON public.stock_movement (reference_type, reference_id);
 
 -- =============================================================================
 -- 7. TRIGGER AUTOMÁTICO PARA AUTH.USERS -> PUBLIC.PROFILE
@@ -477,6 +555,10 @@ ALTER TABLE public.accounting_entry_item ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.accounting_period ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.accounting_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.idempotency_record ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.supplier_invoice ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.supplier_payment ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accounting_outbox ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stock_movement ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON TABLE public.category FROM anon, authenticated;
 REVOKE ALL ON TABLE public.supplier FROM anon, authenticated;
@@ -497,6 +579,10 @@ REVOKE ALL ON TABLE public.accounting_entry_item FROM anon, authenticated;
 REVOKE ALL ON TABLE public.accounting_period FROM anon, authenticated;
 REVOKE ALL ON TABLE public.accounting_settings FROM anon, authenticated;
 REVOKE ALL ON TABLE public.idempotency_record FROM anon, authenticated;
+REVOKE ALL ON TABLE public.supplier_invoice FROM anon, authenticated;
+REVOKE ALL ON TABLE public.supplier_payment FROM anon, authenticated;
+REVOKE ALL ON TABLE public.accounting_outbox FROM anon, authenticated;
+REVOKE ALL ON TABLE public.stock_movement FROM anon, authenticated;
 
 GRANT ALL ON TABLE public.category TO service_role;
 GRANT ALL ON TABLE public.supplier TO service_role;
@@ -517,3 +603,7 @@ GRANT ALL ON TABLE public.accounting_entry_item TO service_role;
 GRANT ALL ON TABLE public.accounting_period TO service_role;
 GRANT ALL ON TABLE public.accounting_settings TO service_role;
 GRANT ALL ON TABLE public.idempotency_record TO service_role;
+GRANT ALL ON TABLE public.supplier_invoice TO service_role;
+GRANT ALL ON TABLE public.supplier_payment TO service_role;
+GRANT ALL ON TABLE public.accounting_outbox TO service_role;
+GRANT ALL ON TABLE public.stock_movement TO service_role;

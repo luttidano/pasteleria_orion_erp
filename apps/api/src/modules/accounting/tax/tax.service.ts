@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import type {
   PurchasesBookEntry,
   PurchasesBookResponse,
@@ -16,6 +16,7 @@ import {
 } from '../../../common/utils/chile-time.util';
 import { roundMoney } from '../../../common/utils/money.util';
 import { TaxPeriodQueryDto } from './dto/tax-query.dto';
+import { TaxCalculatorService } from './tax-calculator.service';
 
 const MONTH_NAMES = [
   '',
@@ -35,7 +36,14 @@ const MONTH_NAMES = [
 
 @Injectable()
 export class TaxService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly taxCalculator?: TaxCalculatorService,
+  ) {}
+
+  private getCalculator(): TaxCalculatorService {
+    return this.taxCalculator ?? new TaxCalculatorService();
+  }
 
   /**
    * Genera el Libro de Ventas para el período mensual (Chile / SII).
@@ -56,10 +64,9 @@ export class TaxService {
       orderBy: { soldAt: 'asc' },
     });
 
+    const calculator = this.getCalculator();
     const entries: SalesBookEntry[] = sales.map((sale) => {
-      const total = roundMoney(Number(sale.total));
-      const net = roundMoney(total / 1.19);
-      const vat = roundMoney(total - net);
+      const breakdown = calculator.breakdownFromGross(Number(sale.total));
       const dateStr = getZonedDateString(sale.soldAt, STORE_TIMEZONE);
 
       return {
@@ -68,9 +75,9 @@ export class TaxService {
         documentType: 'Boleta Electrónica',
         documentNumber: sale.ticketNumber,
         paymentMethod: sale.paymentMethod,
-        netAmount: net,
-        vatAmount: vat,
-        totalAmount: total,
+        netAmount: breakdown.netAmount,
+        vatAmount: breakdown.vatAmount,
+        totalAmount: breakdown.totalAmount,
         customerName: 'Consumidor Final',
       };
     });
@@ -123,10 +130,9 @@ export class TaxService {
       orderBy: { issueDate: 'asc' },
     });
 
+    const calculator = this.getCalculator();
     const entries: PurchasesBookEntry[] = invoices.map((inv) => {
-      const total = roundMoney(Number(inv.totalAmount));
-      const net = roundMoney(total / 1.19);
-      const vat = roundMoney(total - net);
+      const breakdown = calculator.breakdownFromGross(Number(inv.totalAmount));
 
       return {
         id: inv.id,
@@ -135,9 +141,9 @@ export class TaxService {
         documentNumber: inv.invoiceNumber,
         supplierName: inv.supplier.name,
         supplierRut: inv.supplier.rut || null,
-        netAmount: net,
-        vatAmount: vat,
-        totalAmount: total,
+        netAmount: breakdown.netAmount,
+        vatAmount: breakdown.vatAmount,
+        totalAmount: breakdown.totalAmount,
         source: 'supplier_invoice',
       };
     });
@@ -190,7 +196,7 @@ export class TaxService {
             Number(i.debit) > 0,
         );
         const netAmount = roundMoney(
-          Number(netItem?.debit ?? Math.round(vatAmount / 0.19)),
+          Number(netItem?.debit ?? calculator.netFromVat(vatAmount)),
         );
         const totalAmount = roundMoney(netAmount + vatAmount);
 

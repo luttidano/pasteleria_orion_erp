@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './database/prisma.module';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
@@ -34,6 +35,7 @@ import * as path from 'path';
       ],
     }),
     PrismaModule,
+    ScheduleModule.forRoot(),
     SupabaseModule,
     InventoryModule,
     PurchasesModule,

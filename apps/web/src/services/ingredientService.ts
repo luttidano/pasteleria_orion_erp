@@ -114,10 +114,12 @@ export const ingredientService = {
   async adjustStock(
     id: string,
     input: number | AdjustStockPayload,
+    idempotencyKey?: string,
   ): Promise<IngredientAdjustmentResult> {
     const body = typeof input === 'number' ? { delta: input } : input;
     const data = await apiFetch<ApiIngredient>(`/ingredients/${id}/adjust-stock`, {
       method: 'POST',
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
       body: JSON.stringify(body),
     });
     return mapApiToIngredient(data);
@@ -130,11 +132,16 @@ export const ingredientService = {
     id: string,
     amountBought: number,
     options?: Omit<AdjustStockPayload, 'delta' | 'reasonType'>,
+    idempotencyKey?: string,
   ): Promise<IngredientAdjustmentResult> {
-    return this.adjustStock(id, {
-      delta: amountBought,
-      reasonType: 'purchase',
-      ...options,
-    });
+    return this.adjustStock(
+      id,
+      {
+        delta: amountBought,
+        reasonType: 'purchase',
+        ...options,
+      },
+      idempotencyKey,
+    );
   },
 };

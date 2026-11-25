@@ -199,6 +199,7 @@ export function useShoppingList({
     item: ShoppingItem,
     quantityBought: number,
     details: ConfirmPurchaseDetails,
+    idempotencyKey?: string,
   ) => {
     try {
       let newStock = item.stock + quantityBought;
@@ -213,31 +214,49 @@ export function useShoppingList({
       };
 
       if (item.kind === 'ingredient') {
-        const updated = await ingredientService.registerPurchase(item.id, quantityBought, {
-          totalCost: details.totalCost,
-          hasInvoice: details.hasInvoice,
-          paymentMethod: details.paymentMethod,
-          reason: purchasePayload.reason,
-        });
+        const updated = await ingredientService.registerPurchase(
+          item.id,
+          quantityBought,
+          {
+            totalCost: details.totalCost,
+            hasInvoice: details.hasInvoice,
+            paymentMethod: details.paymentMethod,
+            reason: purchasePayload.reason,
+          },
+          idempotencyKey,
+        );
         newStock = updated.stock;
         accountingWarning = updated.accountingWarning;
         await onRefresh();
       } else if (item.kind === 'resale') {
-        const updated = await productService.adjustStock(item.id, purchasePayload);
+        const updated = await productService.adjustStock(
+          item.id,
+          purchasePayload,
+          idempotencyKey,
+        );
         newStock = updated.stock;
         accountingWarning = updated.accountingWarning;
         const prods = await productService.getAll('resale');
         setResaleProducts(prods);
         await onRefresh();
       } else if (item.kind === 'packaging') {
-        const updated = await packagingService.adjustStock(item.id, purchasePayload);
+        const updated = await packagingService.adjustStock(
+          item.id,
+          purchasePayload,
+          idempotencyKey,
+        );
         newStock = updated.stock;
         accountingWarning = updated.accountingWarning;
         const packs = await packagingService.getAll();
         setPackagings(packs);
         await onRefresh();
       } else if (item.kind === 'general_supply') {
-        const updated = await generalSupplyService.adjustStock(item.id, purchasePayload);
+        const updated = await generalSupplyService.adjustStock(
+          item.id,
+          purchasePayload,
+          undefined,
+          idempotencyKey,
+        );
         newStock = updated.stock;
         accountingWarning = updated.accountingWarning;
         const supplies = await generalSupplyService.getAll();

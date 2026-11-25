@@ -80,7 +80,7 @@ export default defineConfig({
           },
           {
             urlPattern:
-              /^https?:\/\/[^/]+\/api\/(?:health|auth|users|pos|accounting)(?:[/?#].*)?$/i,
+              /^https?:\/\/[^/]+\/api\/(?:health|auth|users|pos|accounting|purchases)(?:[/?#].*)?$/i,
             handler: 'NetworkOnly',
             method: 'GET',
           },
@@ -91,10 +91,10 @@ export default defineConfig({
             method: 'GET',
             options: {
               cacheName: 'orion-api-catalog-reads',
-              networkTimeoutSeconds: 4,
+              networkTimeoutSeconds: 2,
               expiration: {
                 maxEntries: 60,
-                maxAgeSeconds: 60 * 60 * 24,
+                maxAgeSeconds: 60 * 15,
               },
               cacheableResponse: {
                 statuses: [200],

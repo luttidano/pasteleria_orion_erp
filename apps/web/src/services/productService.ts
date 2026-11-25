@@ -55,10 +55,12 @@ export const productService = {
   async adjustStock(
     id: string,
     input: number | AdjustStockPayload,
+    idempotencyKey?: string,
   ): Promise<ProductAdjustmentResult> {
     const body = typeof input === 'number' ? { delta: input } : input;
     return await apiFetch<ProductAdjustmentResult>(`/products/${id}/adjust-stock`, {
       method: 'POST',
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
       body: JSON.stringify(body),
     });
   },

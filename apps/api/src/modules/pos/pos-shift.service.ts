@@ -415,7 +415,7 @@ export class PosShiftService {
     const inserted = await tx.$queryRaw<Array<{ id: string }>>`
       INSERT INTO public.pos_shift (opened_by, opening_cash, status)
       VALUES (${normalizedUserId}::uuid, ${roundMoney(openingCash)}, 'abierto')
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (status) WHERE status = 'abierto' DO NOTHING
       RETURNING id
     `;
 

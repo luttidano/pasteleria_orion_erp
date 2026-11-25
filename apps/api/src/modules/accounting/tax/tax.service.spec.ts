@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { TaxCalculatorService } from './tax-calculator.service';
 import { TaxService } from './tax.service';
 import { PrismaService } from '../../../database/prisma.service';
 
@@ -24,6 +25,7 @@ describe('TaxService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        TaxCalculatorService,
         TaxService,
         { provide: PrismaService, useValue: prisma },
       ],

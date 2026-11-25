@@ -1,7 +1,7 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
-import { AlertTriangle, CheckCircle2, Printer, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Printer } from 'lucide-react';
 import { formatMoney } from '../../utils/formatters';
+import { Modal } from '../common/Modal';
 
 interface PosCloseShiftModalProps {
   isOpen: boolean;
@@ -38,31 +38,35 @@ export const PosCloseShiftModal: React.FC<PosCloseShiftModalProps> = ({
   onClose,
   onConfirm,
 }) => {
-  if (!isOpen) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="w-full max-w-lg my-auto bg-white dark:bg-[#16100E] rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] shadow-2xl p-6 space-y-5">
-        <div className="flex items-start justify-between gap-3 border-b border-[#EADBCE] dark:border-[#35251F] pb-3">
-          <div>
-            <h4 className="text-lg font-bold text-[#2A1B16] dark:text-[#FDF5EE] font-serif">
-              Confirmar Arqueo y Cierre de Turno
-            </h4>
-            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-              Cuenta el efectivo físico en la gaveta. Al confirmar, el turno se cerrará y los
-              indicadores volverán a $0.
-            </p>
-          </div>
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      closeDisabled={isClosing}
+      title="Confirmar Arqueo y Cierre de Turno"
+      subtitle="Cuenta el efectivo físico en la gaveta. Al confirmar, el turno se cerrará y los indicadores volverán a $0."
+      footer={
+        <div className="flex items-center justify-end gap-2.5">
           <button
             type="button"
-            onClick={() => {
-              if (!isClosing) onClose();
-            }}
-            className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-[#261A16] cursor-pointer"
+            onClick={onClose}
+            disabled={isClosing}
+            className="px-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#35251F] text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#261A16] cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isClosing}
+            className="px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs font-bold shadow-btn cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>{isClosing ? 'Cerrando turno...' : 'Confirmar Cierre y Reiniciar Caja'}</span>
           </button>
         </div>
+      }
+    >
 
         <div className="p-4 rounded-2xl bg-[#FAF5ED] dark:bg-[#201612] border border-[#EADBCE] dark:border-[#35251F] space-y-2 text-xs">
           <div className="flex justify-between">
@@ -156,29 +160,7 @@ export const PosCloseShiftModal: React.FC<PosCloseShiftModalProps> = ({
           />
           <span>Imprimir / descargar comprobante de arqueo automáticamente</span>
         </label>
-
-        <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#EADBCE] dark:border-[#35251F]">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isClosing}
-            className="px-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#35251F] text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#261A16] cursor-pointer"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isClosing}
-            className="px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs font-bold shadow-btn cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>{isClosing ? 'Cerrando turno...' : 'Confirmar Cierre y Reiniciar Caja'}</span>
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 };
 

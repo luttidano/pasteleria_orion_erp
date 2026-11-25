@@ -12,6 +12,7 @@ import type {
 import { roundMoney, roundQuantity } from '../../../common/utils/money.util';
 import type { AccountingOutboxService } from '../../accounting/outbox/accounting-outbox.service';
 import type { AccountingOutboxProcessorService } from '../../accounting/outbox/accounting-outbox-processor.service';
+import { calculateTaxBreakdownFromGross } from '../../accounting/tax/tax-calculator.service';
 import { AdjustStockDto } from '../dto/adjust-stock.dto';
 import {
   computeWeightedAverageUnitCost,
@@ -97,7 +98,9 @@ export function resolveInventoryAdjustmentDecision(params: {
     const hasInvoice = dto.hasInvoice ?? true;
     const paymentMethod: InventoryPurchasePaymentMethod =
       dto.paymentMethod ?? 'efectivo';
-    const netCost = hasInvoice ? roundMoney(totalCost / 1.19) : totalCost;
+    const netCost = calculateTaxBreakdownFromGross(totalCost, {
+      isExempt: !hasInvoice,
+    }).netAmount;
     const updatedUnitCost = computeWeightedAverageUnitCost({
       currentStock,
       currentUnitCost,

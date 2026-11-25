@@ -2,10 +2,16 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { EntryService } from '../entries/entry.service';
 import { AccountingOutboxService } from './accounting-outbox.service';
+import type { AccountingEventHandler } from './handlers/accounting-event-handler.interface';
+import { InventoryAccountingHandler } from './handlers/inventory-accounting.handler';
+import { PurchaseAccountingHandler } from './handlers/purchase-accounting.handler';
+import { SaleAccountingHandler } from './handlers/sale-accounting.handler';
+import { ShiftAccountingHandler } from './handlers/shift-accounting.handler';
 import type {
   InventoryAdjustmentRequestedPayload,
   InventoryProductionRequestedPayload,
@@ -15,6 +21,7 @@ import type {
   OutboxSyncBatchResult,
   PosSaleCogsRequestedPayload,
   RecoveredSaleItemCost,
+  SaleCogsEntryCreatedResult,
   SaleIncomeRequestedPayload,
   ShiftDifferenceRequestedPayload,
   SupplierPaymentRequestedPayload,
@@ -24,11 +31,27 @@ import type {
 
 @Injectable()
 export class AccountingOutboxProcessorService {
+  private readonly handlers: AccountingEventHandler[];
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly outboxService: AccountingOutboxService,
     private readonly entryService: EntryService,
-  ) {}
+    @Optional() private readonly saleHandler?: SaleAccountingHandler,
+    @Optional() private readonly shiftHandler?: ShiftAccountingHandler,
+    @Optional() private readonly inventoryHandler?: InventoryAccountingHandler,
+    @Optional() private readonly purchaseHandler?: PurchaseAccountingHandler,
+  ) {
+    const candidates: Array<AccountingEventHandler | undefined> = [
+      this.saleHandler,
+      this.shiftHandler,
+      this.inventoryHandler,
+      this.purchaseHandler,
+    ];
+    this.handlers = candidates.filter(
+      (h): h is AccountingEventHandler => Boolean(h),
+    );
+  }
 
   async processEvent(outboxId: string): Promise<OutboxProcessResult> {
     try {
@@ -76,7 +99,31 @@ export class AccountingOutboxProcessorService {
         let createdEntry: { entryId: string; entryNumber: number } | null = null;
         let recoveredItemCosts: RecoveredSaleItemCost[] | undefined;
 
-        if (aggregateType === 'pos_sale') {
+        const matchingHandler = this.handlers.find((h) =>
+          h.supports(aggregateType),
+        );
+
+        if (matchingHandler) {
+          const handlerResult = await matchingHandler.handle(
+            {
+              id: event.id,
+              aggregateType,
+              aggregateId: event.aggregateId,
+              payload: event.payload,
+            },
+            tx,
+          );
+          createdEntry = handlerResult;
+          if (
+            aggregateType === 'pos_sale_cogs' &&
+            handlerResult &&
+            'recoveredItemCosts' in handlerResult
+          ) {
+            recoveredItemCosts = (
+              handlerResult as SaleCogsEntryCreatedResult
+            ).recoveredItemCosts;
+          }
+        } else if (aggregateType === 'pos_sale') {
           const payload =
             event.payload as unknown as SaleIncomeRequestedPayload;
           createdEntry = await this.entryService.registerSaleIncome(
@@ -177,15 +224,25 @@ export class AccountingOutboxProcessorService {
           ? error.message
           : 'Error procesando evento contable en outbox.';
 
-      await this.prisma.accountingOutbox
+      const updated = await this.prisma.accountingOutbox
         .update({
           where: { id: outboxId },
           data: {
             attempts: { increment: 1 },
             lastError: errorMsg.slice(0, 500),
           },
+          select: { attempts: true },
         })
-        .catch(() => undefined);
+        .catch(() => null);
+
+      if (updated && updated.attempts >= 5) {
+        await this.prisma.accountingOutbox
+          .update({
+            where: { id: outboxId },
+            data: { status: 'failed' },
+          })
+          .catch(() => undefined);
+      }
 
       throw error;
     }

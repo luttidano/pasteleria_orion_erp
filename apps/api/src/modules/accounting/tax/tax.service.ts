@@ -17,6 +17,7 @@ import {
 import { roundMoney } from '../../../common/utils/money.util';
 import { TaxPeriodQueryDto } from './dto/tax-query.dto';
 import { TaxCalculatorService } from './tax-calculator.service';
+import { PosSalesReaderService } from '../../pos/pos-sales-reader.service';
 
 const MONTH_NAMES = [
   '',
@@ -38,6 +39,7 @@ const MONTH_NAMES = [
 export class TaxService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly posSalesReader: PosSalesReaderService,
     @Optional() private readonly taxCalculator?: TaxCalculatorService,
   ) {}
 
@@ -47,7 +49,8 @@ export class TaxService {
 
   /**
    * Genera el Libro de Ventas para el período mensual (Chile / SII).
-   * Consulta las ventas completadas del POS, calculando base neta e IVA Débito Fiscal (19%).
+   * Consulta las ventas completadas del POS a través de PosSalesReaderService,
+   * calculando base neta e IVA Débito Fiscal (19%).
    */
   async getSalesBook(dto: TaxPeriodQueryDto): Promise<SalesBookResponse> {
     const { start, end } = getChileMonthDateRangeUtc(
@@ -56,13 +59,10 @@ export class TaxService {
       STORE_TIMEZONE,
     );
 
-    const sales = await this.prisma.posSale.findMany({
-      where: {
-        status: 'completada',
-        soldAt: { gte: start, lte: end },
-      },
-      orderBy: { soldAt: 'asc' },
-    });
+    const sales = await this.posSalesReader.findCompletedSalesInRange(
+      start,
+      end,
+    );
 
     const calculator = this.getCalculator();
     const entries: SalesBookEntry[] = sales.map((sale) => {

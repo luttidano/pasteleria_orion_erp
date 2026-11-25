@@ -1,16 +1,24 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import type { User, Ingredient, ToastMessage } from './types';
+import { QueryClientProvider } from '@tanstack/react-query';
+import type { User, ToastMessage } from './types';
 import { authService } from './services/authService';
-import { ingredientService } from './services/ingredientService';
-import { AuthPage } from './components/auth/AuthPage';
-import { AdminLayout } from './components/layout/AppLayout';
+import { queryClient } from './lib/queryClient';
 import { ToastContainer } from './components/common/Toast';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthGuard, RoleGuard, GuestGuard } from './guards';
 import { UnauthorizedView } from './components/common/UnauthorizedView';
 import { LoadingScreen } from './components/common/LoadingScreen';
 import { PwaStatusOverlay } from './components/pwa/PwaStatusOverlay';
+
+const AuthPage = lazy(() =>
+  import('./components/auth/AuthPage').then((m) => ({ default: m.AuthPage })),
+);
+const AdminLayout = lazy(() =>
+  import('./components/layout/AppLayout').then((m) => ({
+    default: m.AdminLayout,
+  })),
+);
 import {
   checkServerHealth,
   getConnectionStatus,
@@ -20,21 +28,15 @@ import {
 } from './lib/connectionStatus';
 import './App.css';
 
-const canAccessIngredients = (role?: User['role']): boolean =>
-  role === 'admin' || role === 'baker';
-
 function AppContent() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isIngredientsLoading, setIsIngredientsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatusSnapshot>(() =>
     getConnectionStatus()
   );
   const prevHealthRef = useRef(connectionStatus.health);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const isFetchingRef = useRef(false);
 
   // Notificaciones Toast flotantes
   const addToast = useCallback((toast: Omit<ToastMessage, 'id'>) => {
@@ -51,35 +53,6 @@ function AppContent() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Carga de catálogo de materias primas solo para roles con permiso de inventario
-  const loadIngredients = useCallback(async () => {
-    const user = authService.getCurrentUser();
-    if (!user || !canAccessIngredients(user.role)) {
-      setIngredients([]);
-      return;
-    }
-
-    if (isFetchingRef.current) return;
-    isFetchingRef.current = true;
-    setIsIngredientsLoading(true);
-
-    try {
-      const items = await ingredientService.getIngredients();
-      setIngredients(items);
-    } catch (err) {
-      console.error('Error al cargar insumos:', err);
-      const detail = err instanceof Error ? err.message : String(err);
-      addToast({
-        type: 'error',
-        title: 'Error de inventario',
-        message: detail || 'No se pudieron cargar los insumos.',
-      });
-    } finally {
-      isFetchingRef.current = false;
-      setIsIngredientsLoading(false);
-    }
-  }, [addToast]);
-
   // 1. Suscripción única y garantía de hidratación de sesión de Supabase al arrancar
   useEffect(() => {
     let isMounted = true;
@@ -93,7 +66,7 @@ function AppContent() {
         return updatedUser;
       });
       if (!updatedUser) {
-        setIngredients([]);
+        queryClient.clear();
       }
     });
 
@@ -103,7 +76,7 @@ function AppContent() {
         if (!isMounted) return;
         setCurrentUser(user ?? null);
         if (!user) {
-          setIngredients([]);
+          queryClient.clear();
         }
       })
       .finally(() => {
@@ -118,8 +91,6 @@ function AppContent() {
 
   // 3. Monitoreo real de conexión (Red + API NestJS + PostgreSQL) y re-sincronización
   useEffect(() => {
-    const hasIngredientScope = canAccessIngredients(currentUser?.role);
-
     const unsubscribe = subscribeConnectionStatus((next) => {
       setConnectionStatus(next);
       const prev = prevHealthRef.current;
@@ -130,8 +101,8 @@ function AppContent() {
           title: 'Conexión Restablecida',
           message: 'El servidor ERP y la base de datos vuelven a estar operativos.',
         });
-        if (currentUser?.id && hasIngredientScope && !isFetchingRef.current) {
-          void loadIngredients();
+        if (currentUser?.id) {
+          void queryClient.invalidateQueries();
         }
       } else if (next.health === 'degraded' && prev !== 'degraded') {
         addToast({
@@ -154,8 +125,8 @@ function AppContent() {
 
     const handleFocusOrOnline = () => {
       void checkServerHealth();
-      if (currentUser?.id && hasIngredientScope && !isFetchingRef.current) {
-        void loadIngredients();
+      if (currentUser?.id) {
+        void queryClient.invalidateQueries();
       }
     };
 
@@ -173,7 +144,7 @@ function AppContent() {
       window.removeEventListener('online', handleFocusOrOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [currentUser?.id, currentUser?.role, loadIngredients, addToast]);
+  }, [currentUser?.id, addToast]);
 
   // 3b. Polling adaptativo de salud solo cuando la pestaña está visible
   useEffect(() => {
@@ -190,15 +161,6 @@ function AppContent() {
 
     return () => window.clearInterval(intervalId);
   }, [connectionStatus.health]);
-
-  // 4. Sincronización reactiva del catálogo ante cualquier cambio de sesión o rol
-  useEffect(() => {
-    if (currentUser?.id && canAccessIngredients(currentUser.role)) {
-      void loadIngredients();
-    } else {
-      setIngredients([]);
-    }
-  }, [currentUser?.id, currentUser?.role, loadIngredients]);
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
@@ -222,6 +184,7 @@ function AppContent() {
 
   const handleLogout = async () => {
     await authService.logout();
+    queryClient.clear();
     setCurrentUser(null);
     addToast({
       type: 'info',
@@ -236,7 +199,8 @@ function AppContent() {
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <PwaStatusOverlay />
 
-      <Routes>
+      <Suspense fallback={<LoadingScreen />}>
+        <Routes>
         {/* 1. Ruta Pública: Login (Protegido por GuestGuard) */}
         <Route
           path="/login"
@@ -273,11 +237,8 @@ function AppContent() {
             >
               <AdminLayout
                 user={currentUser!}
-                ingredients={ingredients}
                 onLogout={handleLogout}
-                onRefresh={loadIngredients}
                 addToast={addToast}
-                isLoading={isIngredientsLoading}
                 isOnline={connectionStatus.health === 'online'}
                 connectionStatus={connectionStatus}
                 onCheckConnection={() => void checkServerHealth({ showCheckingState: true })}
@@ -304,18 +265,21 @@ function AppContent() {
 
         {/* 6. Catch-all: Redirige cualquier ruta inexistente a la raíz */}
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+        </Routes>
+      </Suspense>
     </>
   );
 }
 
 function App() {
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <BrowserRouter>
+          <AppContent />
+        </BrowserRouter>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

@@ -1,7 +1,94 @@
 import React from 'react';
 import { Calendar, LoaderCircle, RefreshCw } from 'lucide-react';
-import type { AccountLedgerData, AccountingAccount } from '../../types';
+import type { AccountLedgerData, AccountingAccount, LedgerMovement } from '../../types';
 import { formatMoney } from '../../utils/formatters';
+import { DataTable, type DataTableColumn } from '../common/DataTable';
+
+type LedgerTableRow =
+  | { kind: 'initial'; id: string; entryDate: string; initialBalance: number }
+  | ({ kind: 'movement' } & LedgerMovement);
+
+const LEDGER_COLUMNS: DataTableColumn<LedgerTableRow>[] = [
+  {
+    key: 'entryDate',
+    header: 'Fecha',
+    headerClassName: 'py-3 px-4',
+    cellClassName: 'py-2.5 px-4 font-mono text-stone-500',
+    render: (row) => row.entryDate,
+  },
+  {
+    key: 'entryNumber',
+    header: 'Asiento #',
+    headerClassName: 'py-3 px-4',
+    cellClassName: 'py-2.5 px-4 font-mono font-bold text-[#8C1F25]',
+    render: (row) =>
+      row.kind === 'initial' ? (
+        <span className="font-normal text-stone-500">-</span>
+      ) : (
+        `#${row.entryNumber}`
+      ),
+  },
+  {
+    key: 'concept',
+    header: 'Concepto / Glosa',
+    headerClassName: 'py-3 px-4',
+    cellClassName: 'py-2.5 px-4 font-semibold text-stone-800 dark:text-stone-100',
+    render: (row) =>
+      row.kind === 'initial' ? (
+        <span className="italic text-stone-600 dark:text-stone-300">
+          Saldo Inicial al inicio del período
+        </span>
+      ) : (
+        row.concept
+      ),
+  },
+  {
+    key: 'description',
+    header: 'Detalle Línea',
+    headerClassName: 'py-3 px-4',
+    cellClassName: 'py-2.5 px-4 text-stone-500 max-w-xs truncate',
+    render: (row) => (row.kind === 'initial' ? '-' : row.description || '-'),
+  },
+  {
+    key: 'debit',
+    header: 'DEBE',
+    headerClassName: 'py-3 px-4 text-right',
+    cellClassName: 'py-2.5 px-4 text-right font-mono font-bold text-emerald-600',
+    render: (row) =>
+      row.kind === 'initial' ? (
+        <span className="font-normal text-stone-500">-</span>
+      ) : row.debit > 0 ? (
+        formatMoney(row.debit)
+      ) : (
+        '-'
+      ),
+  },
+  {
+    key: 'credit',
+    header: 'HABER',
+    headerClassName: 'py-3 px-4 text-right',
+    cellClassName: 'py-2.5 px-4 text-right font-mono font-bold text-rose-600',
+    render: (row) =>
+      row.kind === 'initial' ? (
+        <span className="font-normal text-stone-500">-</span>
+      ) : row.credit > 0 ? (
+        formatMoney(row.credit)
+      ) : (
+        '-'
+      ),
+  },
+  {
+    key: 'runningBalance',
+    header: 'Saldo Progresivo',
+    headerClassName: 'py-3 px-4 text-right',
+    cellClassName:
+      'py-2.5 px-4 text-right font-mono font-bold text-stone-900 dark:text-white bg-stone-50/30 dark:bg-[#201613]/30',
+    render: (row) =>
+      row.kind === 'initial'
+        ? formatMoney(row.initialBalance)
+        : formatMoney(row.runningBalance),
+  },
+];
 
 interface AccountingLedgerTabProps {
   accounts: AccountingAccount[];
@@ -246,72 +333,34 @@ export const AccountingLedgerTab: React.FC<AccountingLedgerTabProps> = ({
 
           {/* Tabla de Movimientos Cronológicos */}
           <div className="overflow-x-auto rounded-2xl border border-stone-200/80 dark:border-[#35251F]">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-[#FAF5ED] dark:bg-[#201613] text-[10px] font-bold uppercase text-stone-700 dark:text-stone-300 border-b border-stone-200 dark:border-[#35251F]">
-                  <th className="py-3 px-4">Fecha</th>
-                  <th className="py-3 px-4">Asiento #</th>
-                  <th className="py-3 px-4">Concepto / Glosa</th>
-                  <th className="py-3 px-4">Detalle Línea</th>
-                  <th className="py-3 px-4 text-right">DEBE</th>
-                  <th className="py-3 px-4 text-right">HABER</th>
-                  <th className="py-3 px-4 text-right">Saldo Progresivo</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100 dark:divide-[#281C17]">
-                {ledgerData.period.startDate && (
-                  <tr className="bg-stone-50/40 dark:bg-[#1C1411]/40 text-stone-500 font-medium">
-                    <td className="py-2.5 px-4 font-mono">{ledgerData.period.startDate}</td>
-                    <td className="py-2.5 px-4">-</td>
-                    <td className="py-2.5 px-4 italic font-semibold text-stone-600 dark:text-stone-300">
-                      Saldo Inicial al inicio del período
-                    </td>
-                    <td className="py-2.5 px-4">-</td>
-                    <td className="py-2.5 px-4 text-right font-mono">-</td>
-                    <td className="py-2.5 px-4 text-right font-mono">-</td>
-                    <td className="py-2.5 px-4 text-right font-mono font-bold text-stone-700 dark:text-stone-200">
-                      {formatMoney(ledgerData.initialBalance)}
-                    </td>
-                  </tr>
-                )}
-
-                {ledgerData.movements.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-8 text-center text-stone-400">
-                      No se registraron movimientos para esta cuenta en el rango de fechas
-                      seleccionado.
-                    </td>
-                  </tr>
-                ) : (
-                  ledgerData.movements.map((mov) => (
-                    <tr
-                      key={mov.id}
-                      className="hover:bg-stone-50/50 dark:hover:bg-[#1C1411]/50"
-                    >
-                      <td className="py-2.5 px-4 font-mono text-stone-500">{mov.entryDate}</td>
-                      <td className="py-2.5 px-4 font-mono font-bold text-[#8C1F25]">
-                        #{mov.entryNumber}
-                      </td>
-                      <td className="py-2.5 px-4 font-semibold text-stone-800 dark:text-stone-100">
-                        {mov.concept}
-                      </td>
-                      <td className="py-2.5 px-4 text-stone-500 max-w-xs truncate">
-                        {mov.description || '-'}
-                      </td>
-                      <td className="py-2.5 px-4 text-right font-mono font-bold text-emerald-600">
-                        {mov.debit > 0 ? formatMoney(mov.debit) : '-'}
-                      </td>
-                      <td className="py-2.5 px-4 text-right font-mono font-bold text-rose-600">
-                        {mov.credit > 0 ? formatMoney(mov.credit) : '-'}
-                      </td>
-                      <td className="py-2.5 px-4 text-right font-mono font-bold text-stone-900 dark:text-white bg-stone-50/30 dark:bg-[#201613]/30">
-                        {formatMoney(mov.runningBalance)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+            <DataTable
+              columns={LEDGER_COLUMNS}
+              data={[
+                ...(ledgerData.period.startDate
+                  ? [
+                      {
+                        kind: 'initial' as const,
+                        id: '__initial_balance__',
+                        entryDate: ledgerData.period.startDate,
+                        initialBalance: ledgerData.initialBalance,
+                      },
+                    ]
+                  : []),
+                ...ledgerData.movements.map((mov) => ({
+                  kind: 'movement' as const,
+                  ...mov,
+                })),
+              ]}
+              keyExtractor={(row) => row.id}
+              tableClassName="w-full text-left text-xs border-collapse"
+              headerRowClassName="bg-[#FAF5ED] dark:bg-[#201613] text-[10px] font-bold uppercase text-stone-700 dark:text-stone-300 border-b border-stone-200 dark:border-[#35251F]"
+              rowClassName={(row) =>
+                row.kind === 'initial'
+                  ? 'bg-stone-50/40 dark:bg-[#1C1411]/40 text-stone-500 font-medium'
+                  : 'hover:bg-stone-50/50 dark:hover:bg-[#1C1411]/50'
+              }
+              emptyState="No se registraron movimientos para esta cuenta en el rango de fechas seleccionado."
+            />
           </div>
         </div>
       )}

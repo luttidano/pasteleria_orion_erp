@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { Plus } from 'lucide-react';
+import { BookOpen, Plus } from 'lucide-react';
 import type { Category, Ingredient } from '../../../types';
+import { Modal } from '../../common/Modal';
 
 export interface RecipeFormData {
   name: string;
@@ -77,12 +77,37 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-white dark:bg-[#16100E] rounded-2xl max-w-lg w-full p-6 border border-stone-200 dark:border-[#35251F] shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
-        <h3 className="text-lg font-bold text-[#2A1B16] dark:text-[#FDF5EE]">Nueva Receta</h3>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      closeDisabled={isSubmitting}
+      title="Nueva Receta"
+      icon={<BookOpen className="w-5 h-5" />}
+      maxWidthClassName="max-w-lg"
+      containerClassName="bg-white dark:bg-[#16100E] rounded-2xl border border-stone-200 dark:border-[#35251F] shadow-xl"
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="px-4 py-2 text-xs rounded-xl border border-stone-200 text-stone-600 dark:text-stone-400 cursor-pointer disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form="recipe-form-modal"
+            disabled={isSubmitting}
+            className="px-4 py-2 text-xs rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white font-bold cursor-pointer disabled:opacity-50"
+          >
+            {isSubmitting ? 'Guardando...' : 'Guardar Receta'}
+          </button>
+        </>
+      }
+    >
+      <form id="recipe-form-modal" onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="text-xs font-semibold text-stone-600 dark:text-stone-400">Nombre</label>
             <input
@@ -228,26 +253,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2 text-xs rounded-xl border border-stone-200 text-stone-600 dark:text-stone-400 cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 text-xs rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white font-bold cursor-pointer disabled:opacity-50"
-            >
-              {isSubmitting ? 'Guardando...' : 'Guardar Receta'}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 };

@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import {
-  X,
   User,
   Mail,
   Lock,
@@ -14,6 +12,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import type { UserProfile, CreateUserData, UpdateUserData, UserRole } from '../../../types';
+import { Modal } from '../../common/Modal';
 
 interface UserModalProps {
   isOpen: boolean;
@@ -59,8 +58,6 @@ export const UserModal: React.FC<UserModalProps> = ({
     }
   }, [isOpen, userToEdit]);
 
-  if (!isOpen) return null;
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -101,7 +98,6 @@ export const UserModal: React.FC<UserModalProps> = ({
       if (isEditing) {
         const payload: UpdateUserData = {
           name: cleanName,
-          // No permitir que el admin se degrade a sí mismo
           role: isEditingSelf ? 'admin' : role,
         };
         await onSave(payload);
@@ -151,211 +147,187 @@ export const UserModal: React.FC<UserModalProps> = ({
       color: 'border-emerald-600 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5',
     },
   ];
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-      <div
-        className="w-full max-w-lg bg-white dark:bg-[#18110E] rounded-[26px] p-6 sm:p-7 shadow-modal border border-stone-200 dark:border-[#38261F] text-[#2A1B16] dark:text-[#FBF4EB] animate-modal-pop relative max-h-[90vh] flex flex-col"
-        role="dialog"
-        aria-modal="true"
-      >
-        {/* Cabecera del Modal */}
-        <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-[#2C1D18]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#8C1F25]/10 dark:bg-[#8C1F25]/25 text-[#8C1F25] dark:text-[#E8A598] flex items-center justify-center">
-              <User className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-serif text-lg sm:text-xl font-bold text-stone-900 dark:text-stone-100">
-                {isEditing ? 'Editar Colaborador' : 'Nuevo Colaborador'}
-              </h2>
-              <p className="text-xs text-stone-500 dark:text-stone-400">
-                {isEditing
-                  ? 'Modifica los datos y asignación de rol'
-                  : 'Crea una cuenta de acceso al ERP Orión'}
-              </p>
-            </div>
-          </div>
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      closeDisabled={isSubmitting}
+      title={isEditing ? 'Editar Colaborador' : 'Nuevo Colaborador'}
+      subtitle={
+        isEditing
+          ? 'Modifica los datos y asignación de rol'
+          : 'Crea una cuenta de acceso al ERP Orión'
+      }
+      icon={<User className="w-5 h-5" />}
+      maxWidthClassName="max-w-lg"
+      containerClassName="bg-white dark:bg-[#18110E] rounded-[26px] shadow-modal border border-stone-200 dark:border-[#38261F] text-[#2A1B16] dark:text-[#FBF4EB] animate-modal-pop"
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#251814] transition-colors cursor-pointer"
-            aria-label="Cerrar modal"
+            disabled={isSubmitting}
+            className="px-4 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
           >
-            <X className="w-5 h-5" />
+            Cancelar
           </button>
+          <button
+            type="submit"
+            form="user-modal-form"
+            disabled={isSubmitting}
+            className="px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#73191E] text-white text-xs font-semibold shadow-btn transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Guardando...</span>
+              </>
+            ) : (
+              <span>{isEditing ? 'Guardar Cambios' : 'Crear Colaborador'}</span>
+            )}
+          </button>
+        </>
+      }
+    >
+      <form id="user-modal-form" onSubmit={handleSubmit} className="space-y-4">
+        {errorMsg && (
+          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+            Nombre y Apellido <span className="text-[#8C1F25]">*</span>
+          </label>
+          <div className="relative">
+            <User className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ej. Francisca Pérez"
+              required
+              className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#1E1512] text-xs sm:text-sm text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-[#8C1F25] dark:focus:border-[#E25C64] transition-colors"
+            />
+          </div>
         </div>
 
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} className="space-y-4 pt-4 overflow-y-auto flex-1 pr-1">
-          {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+        <div>
+          <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+            Correo Electrónico <span className="text-[#8C1F25]">*</span>
+          </label>
+          <div className="relative">
+            <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="francisca@pasteleriaorion.cl"
+              disabled={isEditing}
+              required
+              className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#1E1512] text-xs sm:text-sm text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-[#8C1F25] dark:focus:border-[#E25C64] transition-colors ${
+                isEditing ? 'opacity-60 cursor-not-allowed bg-stone-100 dark:bg-stone-800' : ''
+              }`}
+            />
+          </div>
+          {isEditing && (
+            <p className="text-[11px] text-stone-400 mt-1">
+              El correo está vinculado a la autenticación del usuario y no se puede modificar directamente.
+            </p>
+          )}
+        </div>
+
+        {!isEditing && (
+          <div>
+            <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+              Contraseña Inicial <span className="text-[#8C1F25]">*</span>
+            </label>
+            <div className="relative">
+              <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mínimo 8 caracteres"
+                minLength={8}
+                required
+                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#1E1512] text-xs sm:text-sm text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-[#8C1F25] dark:focus:border-[#E25C64] transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="p-1.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-[11px] text-stone-400 mt-1">
+              El colaborador podrá ingresar de inmediato con esta clave temporal.
+            </p>
+          </div>
+        )}
+
+        <div className="pt-2">
+          <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-2">
+            Asignación de Rol & Privilegios <span className="text-[#8C1F25]">*</span>
+          </label>
+
+          {isEditingSelf && (
+            <div className="mb-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMsg}</span>
+              <span>
+                Estás editando tu propia cuenta. Por seguridad, no puedes cambiar tu propio rol de Administrador.
+              </span>
             </div>
           )}
 
-          {/* Campo: Nombre */}
-          <div>
-            <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
-              Nombre y Apellido <span className="text-[#8C1F25]">*</span>
-            </label>
-            <div className="relative">
-              <User className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ej. Francisca Pérez"
-                required
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#1E1512] text-xs sm:text-sm text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-[#8C1F25] dark:focus:border-[#E25C64] transition-colors"
-              />
-            </div>
-          </div>
+          <div className="space-y-2">
+            {roleOptions.map((opt) => {
+              const isSelected = role === opt.id;
+              const Icon = opt.icon;
+              const disabled = isEditingSelf && opt.id !== 'admin';
 
-          {/* Campo: Correo Electrónico */}
-          <div>
-            <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
-              Correo Electrónico <span className="text-[#8C1F25]">*</span>
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="francisca@pasteleriaorion.cl"
-                disabled={isEditing}
-                required
-                className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#1E1512] text-xs sm:text-sm text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-[#8C1F25] dark:focus:border-[#E25C64] transition-colors ${
-                  isEditing ? 'opacity-60 cursor-not-allowed bg-stone-100 dark:bg-stone-800' : ''
-                }`}
-              />
-            </div>
-            {isEditing && (
-              <p className="text-[11px] text-stone-400 mt-1">
-                El correo está vinculado a la autenticación del usuario y no se puede modificar directamente.
-              </p>
-            )}
-          </div>
-
-          {/* Campo: Contraseña (Solo nuevo) */}
-          {!isEditing && (
-            <div>
-              <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
-                Contraseña Inicial <span className="text-[#8C1F25]">*</span>
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mínimo 8 caracteres"
-                  minLength={8}
-                  required
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#1E1512] text-xs sm:text-sm text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-[#8C1F25] dark:focus:border-[#E25C64] transition-colors"
-                />
+              return (
                 <button
+                  key={opt.id}
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="p-1.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer"
+                  disabled={disabled}
+                  onClick={() => setRole(opt.id)}
+                  className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    disabled
+                      ? 'opacity-40 cursor-not-allowed border-stone-200 dark:border-stone-800'
+                      : isSelected
+                      ? `${opt.color} ring-1 ring-offset-0 ring-current`
+                      : 'border-stone-200 dark:border-stone-800 hover:bg-stone-50 dark:hover:bg-[#201511]'
+                  }`}
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              <p className="text-[11px] text-stone-400 mt-1">
-                El colaborador podrá ingresar de inmediato con esta clave temporal.
-              </p>
-            </div>
-          )}
-
-          {/* Selector de Rol */}
-          <div className="pt-2">
-            <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-2">
-              Asignación de Rol & Privilegios <span className="text-[#8C1F25]">*</span>
-            </label>
-
-            {isEditingSelf && (
-              <div className="mb-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>
-                  Estás editando tu propia cuenta. Por seguridad, no puedes cambiar tu propio rol de Administrador.
-                </span>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              {roleOptions.map((opt) => {
-                const isSelected = role === opt.id;
-                const Icon = opt.icon;
-                const disabled = isEditingSelf && opt.id !== 'admin';
-
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => setRole(opt.id)}
-                    className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                      disabled
-                        ? 'opacity-40 cursor-not-allowed border-stone-200 dark:border-stone-800'
-                        : isSelected
-                        ? `${opt.color} ring-1 ring-offset-0 ring-current`
-                        : 'border-stone-200 dark:border-stone-800 hover:bg-stone-50 dark:hover:bg-[#201511]'
-                    }`}
-                  >
-                    <div className="mt-0.5 shrink-0">
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-stone-900 dark:text-stone-100">
-                          {opt.title}
+                  <div className="mt-0.5 shrink-0">
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-stone-900 dark:text-stone-100">
+                        {opt.title}
+                      </span>
+                      {isSelected && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-200/80 dark:bg-stone-700/80">
+                          Seleccionado
                         </span>
-                        {isSelected && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-200/80 dark:bg-stone-700/80">
-                            Seleccionado
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
-                        {opt.description}
-                      </p>
+                      )}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
+                    <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
+                      {opt.description}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
-
-          {/* Botones de Acción */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-100 dark:border-[#2C1D18]">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold transition-colors cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#73191E] text-white text-xs font-semibold shadow-btn transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Guardando...</span>
-                </>
-              ) : (
-                <span>{isEditing ? 'Guardar Cambios' : 'Crear Colaborador'}</span>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
-);
+        </div>
+      </form>
+    </Modal>
+  );
 };

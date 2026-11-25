@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { ChefHat, X, AlertTriangle, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
+import { ChefHat, AlertTriangle, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
 import type { Recipe, ProductionResult } from '../../../types';
 import { createIdempotencyKey } from '../../../lib/api';
 import { recipeService } from '../../../services/recipeService';
+import { Modal } from '../../common/Modal';
 
 interface ProduceRecipeModalProps {
   recipe: Recipe | null;
@@ -127,32 +127,38 @@ const ProduceRecipeModalContent: React.FC<ProduceRecipeModalContentProps> = ({
       setIsSubmitting(false);
     }
   };
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-white dark:bg-[#1A120F] rounded-3xl max-w-lg w-full max-h-[92vh] overflow-y-auto border border-[#EADBCE] dark:border-[#2C1D18] shadow-2xl p-5 sm:p-6 space-y-5 animate-modal-pop">
-        {/* Encabezado */}
-        <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-stone-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-[#8C1F25]/10 text-[#8C1F25] dark:text-[#E07A5F] flex items-center justify-center">
-              <ChefHat className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 font-serif leading-tight">
-                Elaborar Tanda: {recipe.name}
-              </h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400">
-                Rinde {recipe.yieldServings} porciones por tanda base
-              </p>
-            </div>
-          </div>
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      closeDisabled={isSubmitting}
+      title={`Elaborar Tanda: ${recipe.name}`}
+      subtitle={`Rinde ${recipe.yieldServings} porciones por tanda base`}
+      icon={<ChefHat className="w-5 h-5" />}
+      maxWidthClassName="max-w-lg"
+      containerClassName="bg-white dark:bg-[#1A120F] rounded-3xl border border-[#EADBCE] dark:border-[#2C1D18] shadow-2xl animate-modal-pop"
+      footer={
+        <>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer"
+            disabled={isSubmitting}
+            className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-bold cursor-pointer disabled:opacity-50"
           >
-            <X className="w-5 h-5" />
+            Cancelar
           </button>
-        </div>
-
+          <button
+            type="submit"
+            form="produce-recipe-form"
+            disabled={isSubmitting || products.length === 0 || (hasAnyInsufficient && numericBatches > (recipe.maxBatches || 0))}
+            className="px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#73191E] text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+          >
+            <ChefHat className="w-4 h-4" />
+            <span>{isSubmitting ? 'Registrando...' : `Confirmar y Producir (${numericBatches} ${numericBatches === 1 ? 'tanda' : 'tandas'})`}</span>
+          </button>
+        </>
+      }
+    >
         {/* Alerta de disponibilidad máxima */}
         {recipe.maxBatches !== undefined && (
           <div
@@ -186,7 +192,7 @@ const ProduceRecipeModalContent: React.FC<ProduceRecipeModalContentProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleProduce} className="space-y-4">
+        <form id="produce-recipe-form" onSubmit={handleProduce} className="space-y-4">
           {/* Selector de Producto Asignado */}
           <div>
             <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
@@ -334,29 +340,8 @@ const ProduceRecipeModalContent: React.FC<ProduceRecipeModalContentProps> = ({
             </div>
           </div>
 
-          {/* Botones de acción */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200 dark:border-stone-800">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-bold cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || products.length === 0 || (hasAnyInsufficient && numericBatches > (recipe.maxBatches || 0))}
-              className="px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#73191E] text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-            >
-              <ChefHat className="w-4 h-4" />
-              <span>{isSubmitting ? 'Registrando...' : `Confirmar y Producir (${numericBatches} ${numericBatches === 1 ? 'tanda' : 'tandas'})`}</span>
-            </button>
-          </div>
         </form>
-      </div>
-    </div>,
-    document.body
-);
+    </Modal>
+  );
 };
 

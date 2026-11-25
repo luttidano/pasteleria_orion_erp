@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { InventoryValuationModule } from '../inventory/valuation/inventory-valuation.module';
+import { PosSalesReaderModule } from '../pos/pos-sales-reader.module';
 import { AccountController } from './accounts/account.controller';
 import { AccountService } from './accounts/account.service';
 import { AccountingPeriodController } from './periods/accounting-period.controller';
@@ -29,7 +30,7 @@ import { TaxController } from './tax/tax.controller';
 import { TaxService } from './tax/tax.service';
 
 @Module({
-  imports: [InventoryValuationModule],
+  imports: [InventoryValuationModule, PosSalesReaderModule],
   controllers: [
     AccountController,
     AccountingPeriodController,

@@ -9,9 +9,13 @@ import {
   Cake,
   Tag,
 } from 'lucide-react';
-import type { User, Ingredient, ToastMessage, Recipe, Category, ProductionResult } from '../../../types';
+import type { User, ToastMessage, Recipe, Category, ProductionResult } from '../../../types';
 import { recipeService } from '../../../services/recipeService';
 import { categoryService } from '../../../services/categoryService';
+import {
+  useIngredientsQuery,
+  useInvalidateInventory,
+} from '../../../hooks/queries/useInventoryQueries';
 import { CategoryManagerModal } from '../categories/CategoryManagerModal';
 import { ProduceRecipeModal } from './ProduceRecipeModal';
 import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
@@ -20,17 +24,15 @@ import { RecipeCardItem } from './RecipeCardItem';
 
 interface RecipesViewProps {
   user: User;
-  ingredients: Ingredient[];
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
-  onRefresh?: () => void;
 }
 
 export const RecipesView: React.FC<RecipesViewProps> = ({
   user,
-  ingredients,
   addToast,
-  onRefresh,
 }) => {
+  const { data: ingredients = [] } = useIngredientsQuery();
+  const invalidateInventory = useInvalidateInventory();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -109,7 +111,7 @@ export const RecipesView: React.FC<RecipesViewProps> = ({
       });
     }
     void loadRecipes();
-    onRefresh?.();
+    void invalidateInventory();
   };
 
   const handleCreateRecipe = async (data: RecipeFormData) => {

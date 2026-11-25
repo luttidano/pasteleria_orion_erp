@@ -7,7 +7,10 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
+import {
+  AccountingOutboxProcessorService,
+  dispatchOutboxBestEffort,
+} from '../accounting/outbox/accounting-outbox-processor.service';
 import { CreateSupplierInvoiceDto } from './dto/create-supplier-invoice.dto';
 import { RecordSupplierPaymentDto } from './dto/record-supplier-payment.dto';
 import { QuerySupplierInvoicesDto } from './dto/query-supplier-invoices.dto';
@@ -268,9 +271,9 @@ export class PurchasesService {
     ).start;
 
     const txResult = await this.prisma.$transaction(async (tx) => {
-      // Bloqueo consultivo de concurrencia para evitar doble pago simultáneo
+      // Bloqueo consultivo de concurrencia con firma dual int4 para evitar colisiones de 32 bits
       await tx.$executeRaw`
-        SELECT pg_advisory_xact_lock(hashtext('supplier_invoice:' || ${invoiceId}::text)::bigint)
+        SELECT pg_advisory_xact_lock(hashtext('supplier_invoice'::text), hashtext(${invoiceId}::text))
       `;
 
       const invoice = await tx.supplierInvoice.findUnique({
@@ -358,7 +361,8 @@ export class PurchasesService {
     let accountingWarning: string | null = null;
 
     try {
-      const processResult = await this.outboxProcessor.processEvent(
+      const processResult = await dispatchOutboxBestEffort(
+        this.outboxProcessor,
         txResult.outboxId,
       );
       accountingEntryId = processResult.entryId ?? null;

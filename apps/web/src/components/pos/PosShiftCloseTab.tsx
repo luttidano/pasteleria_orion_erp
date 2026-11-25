@@ -9,6 +9,7 @@ interface PosShiftCloseTabProps {
   shiftsHistory: PosShiftRecord[];
   lastReceiptShift: PosShiftRecord | null;
   isLoadingShift: boolean;
+  isOnline?: boolean;
   openingCashInput: string;
   onOpeningCashInputChange: (value: string) => void;
   isSavingOpeningCash: boolean;
@@ -28,6 +29,7 @@ export const PosShiftCloseTab: React.FC<PosShiftCloseTabProps> = ({
   shiftsHistory,
   lastReceiptShift,
   isLoadingShift,
+  isOnline = true,
   openingCashInput,
   onOpeningCashInputChange,
   isSavingOpeningCash,
@@ -151,7 +153,7 @@ export const PosShiftCloseTab: React.FC<PosShiftCloseTabProps> = ({
             <button
               type="button"
               onClick={onSaveOpeningCash}
-              disabled={isSavingOpeningCash || !isOpeningCashDirty}
+              disabled={!isOnline || isSavingOpeningCash || !isOpeningCashDirty}
               className="px-3 py-2 rounded-xl bg-stone-800 hover:bg-stone-900 dark:bg-[#8C1F25] dark:hover:bg-[#74191E] text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
               {isSavingOpeningCash ? 'Guardando...' : 'Guardar Fondo'}
@@ -205,16 +207,18 @@ export const PosShiftCloseTab: React.FC<PosShiftCloseTabProps> = ({
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <span className="text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5 text-stone-400" />
-            {isOpeningCashDirty
-              ? 'Guarda el cambio en el Fondo Inicial antes de cerrar el turno.'
-              : hasClosingActivity
-                ? 'El comprobante de arqueo se emite al cerrar el turno y queda guardado en el historial.'
-                : 'Registra una venta o asigna un fondo inicial para poder cerrar el turno.'}
+            {!isOnline
+              ? 'Sin conexión con el servidor ERP: guarda el fondo o cierra el turno al recuperar red.'
+              : isOpeningCashDirty
+                ? 'Guarda el cambio en el Fondo Inicial antes de cerrar el turno.'
+                : hasClosingActivity
+                  ? 'El comprobante de arqueo se emite al cerrar el turno y queda guardado en el historial.'
+                  : 'Registra una venta o asigna un fondo inicial para poder cerrar el turno.'}
           </span>
           <button
             type="button"
             onClick={onOpenCloseModal}
-            disabled={isLoadingShift || !hasClosingActivity || isOpeningCashDirty}
+            disabled={!isOnline || isLoadingShift || !hasClosingActivity || isOpeningCashDirty}
             className="px-6 py-3 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs sm:text-sm font-bold shadow-btn transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Lock className="w-4 h-4" />

@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { AlertTriangle, CheckCircle2, ClipboardEdit, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardEdit } from 'lucide-react';
 import { createIdempotencyKey } from '../../lib/api';
 import { calculateGrossFromNet } from '../../utils/tax';
+import { Modal } from '../common/Modal';
 import type {
   AdjustStockPayload,
   InventoryAdjustmentReasonType,
@@ -170,38 +170,58 @@ const StockAdjustmentModalContent: React.FC<StockAdjustmentModalContentProps> = 
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-[100] bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-      <div className="relative bg-[#FAF5ED] dark:bg-[#16100E] rounded-[26px] max-w-md w-full shadow-2xl border-2 border-[#DFCAA9] dark:border-[#35251F] overflow-hidden animate-modal-pop my-auto">
-        <div className="px-5 py-4 border-b border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7] dark:bg-[#1F1512] flex items-center justify-between">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <ClipboardEdit className="w-5 h-5 text-[#8C1F25] shrink-0" />
-            <div className="min-w-0">
-              <h3 className="text-base font-bold text-[#1C120D] dark:text-[#FBF4EB] font-serif truncate">
-                {isPositive ? 'Ingreso / Ajuste (+)' : 'Salida / Merma (-)'}:{' '}
-                {target.name}
-              </h3>
-              <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                Stock actual: <b>{target.currentStock} {target.unit}</b>
-                {numericQty > 0 && (
-                  <>
-                    {' '}
-                    → Nuevo: <b>{Math.max(0, resultingStock)} {target.unit}</b>
-                  </>
-                )}
-              </p>
-            </div>
-          </div>
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      closeDisabled={submitting}
+      zIndexClassName="z-[100]"
+      maxWidthClassName="max-w-md"
+      containerClassName="bg-[#FAF5ED] dark:bg-[#16100E] rounded-[26px] shadow-2xl border-2 border-[#DFCAA9] dark:border-[#35251F] animate-modal-pop"
+      headerClassName="px-5 py-4 border-b border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7] dark:bg-[#1F1512] flex items-center justify-between gap-3"
+      title={`${isPositive ? 'Ingreso / Ajuste (+)' : 'Salida / Merma (-)'}: ${target.name}`}
+      subtitle={
+        <>
+          Stock actual:{' '}
+          <b>
+            {target.currentStock} {target.unit}
+          </b>
+          {numericQty > 0 && (
+            <>
+              {' '}
+              → Nuevo:{' '}
+              <b>
+                {Math.max(0, resultingStock)} {target.unit}
+              </b>
+            </>
+          )}
+        </>
+      }
+      icon={<ClipboardEdit className="w-5 h-5" />}
+      footerClassName="px-5 py-3.5 border-t border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7]/60 dark:bg-[#1A120F] flex items-center justify-end gap-2"
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-stone-500 hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer"
+            disabled={submitting}
+            className="px-4 py-2 rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] text-xs font-semibold text-stone-700 dark:text-stone-300 cursor-pointer disabled:opacity-50"
           >
-            <X className="w-4 h-4" />
+            Cancelar
           </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <button
+            type="submit"
+            form="stock-adjustment-form"
+            disabled={submitting || numericQty <= 0 || exceedsStock}
+            className="px-5 py-2 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            {submitting ? 'Guardando...' : 'Confirmar Ajuste'}
+          </button>
+        </>
+      }
+    >
+      <form id="stock-adjustment-form" onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/70 text-rose-800 dark:text-rose-200 text-xs flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
@@ -351,26 +371,7 @@ const StockAdjustmentModalContent: React.FC<StockAdjustmentModalContentProps> = 
               : 'Contabilidad: rebajará Inventario cargando 6.1.02.02 Pérdidas por Merma / Ajustes.'}
           </p>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8D7BE] dark:border-[#2C1D18]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] text-xs font-semibold text-stone-700 dark:text-stone-300 cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || numericQty <= 0 || exceedsStock}
-              className="px-5 py-2 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              {submitting ? 'Guardando...' : 'Confirmar Ajuste'}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 };

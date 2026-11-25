@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import {
   X,
   Truck,
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { Supplier, SupplyModality, SupplierType } from '../../../types';
 import { formatPhoneForWhatsApp, getSupplyModality } from '../../../services/supplierService';
+import { Modal } from '../../common/Modal';
 
 interface SupplierModalProps {
   isOpen: boolean;
@@ -219,11 +219,17 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-[#FAF5ED] dark:bg-[#16100E] rounded-[26px] max-w-xl w-full shadow-2xl border border-[#DFCAA9] dark:border-[#35251F] overflow-hidden animate-modal-pop my-6">
-        {/* Encabezado */}
-        <div className="relative px-6 py-5 border-b border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7] dark:bg-[#1F1512]">
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      closeDisabled={isSubmitting}
+      maxWidthClassName="max-w-xl"
+      containerClassName="bg-[#FAF5ED] dark:bg-[#16100E] rounded-[26px] shadow-2xl border border-[#DFCAA9] dark:border-[#35251F] animate-modal-pop"
+      bodyClassName="p-6 space-y-4 overflow-y-auto flex-1"
+      footerClassName="px-6 py-3.5 border-t border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7]/60 dark:bg-[#1A120F] flex items-center justify-end gap-3"
+      customHeader={
+        <div className="relative px-6 py-5 border-b border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7] dark:bg-[#1F1512] shrink-0">
           <div className="flex flex-col items-center text-center">
             <span className="text-3xl select-none p-2 bg-white/70 dark:bg-white/5 rounded-2xl border border-[#DFCAA9]/60 dark:border-white/10 shadow-xs mb-1.5">
               {icon}
@@ -238,15 +244,41 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
           <button
             onClick={onClose}
             type="button"
-            className="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center text-[#7C695C] hover:text-[#1C120D] dark:text-[#9F8C7F] dark:hover:text-[#FBF4EB] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+            disabled={isSubmitting}
+            className="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center text-[#7C695C] hover:text-[#1C120D] dark:text-[#9F8C7F] dark:hover:text-[#FBF4EB] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-50"
             title="Cerrar ventana"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[78vh] overflow-y-auto">
+      }
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="px-4 py-2.5 rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] text-[#4A3B32] dark:text-[#D5C2B4] font-semibold text-xs hover:bg-[#F3E7D7] dark:hover:bg-[#251A15] transition-colors cursor-pointer disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form="supplier-modal-form"
+            disabled={isSubmitting}
+            className="px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#72191E] active:scale-[0.98] text-white font-semibold text-xs shadow-md shadow-[#8C1F25]/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-75"
+          >
+            {isSubmitting ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            <span>{supplierToEdit ? 'Guardar Cambios' : 'Registrar Proveedor'}</span>
+          </button>
+        </>
+      }
+    >
+        <form id="supplier-modal-form" onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
               <span className="font-bold">⚠️ Atención:</span> {error}
@@ -713,32 +745,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
             </div>
           </div>
 
-          {/* Botones de acción */}
-          <div className="pt-3 border-t border-[#E8D7BE] dark:border-[#2C1D18] flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2.5 rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] text-[#4A3B32] dark:text-[#D5C2B4] font-semibold text-xs hover:bg-[#F3E7D7] dark:hover:bg-[#251A15] transition-colors cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#72191E] active:scale-[0.98] text-white font-semibold text-xs shadow-md shadow-[#8C1F25]/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-75"
-            >
-              {isSubmitting ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4" />
-              )}
-              <span>{supplierToEdit ? 'Guardar Cambios' : 'Registrar Proveedor'}</span>
-            </button>
-          </div>
         </form>
-      </div>
-    </div>,
-    document.body
+    </Modal>
   );
 };

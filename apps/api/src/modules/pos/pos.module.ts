@@ -6,11 +6,12 @@ import { PosShiftService } from './pos-shift.service';
 import { PosShiftReconciliationService } from './pos-shift-reconciliation.service';
 import { PosSummaryService } from './pos-summary.service';
 import { PosAccountingStatusService } from './pos-accounting-status.service';
+import { PosSalesReaderModule } from './pos-sales-reader.module';
 import { AccountingModule } from '../accounting/accounting.module';
 import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
-  imports: [InventoryModule, AccountingModule],
+  imports: [InventoryModule, AccountingModule, PosSalesReaderModule],
   controllers: [PosController, PosShiftController],
   providers: [
     PosSaleService,
@@ -19,6 +20,10 @@ import { InventoryModule } from '../inventory/inventory.module';
     PosSummaryService,
     PosAccountingStatusService,
   ],
-  exports: [PosAccountingStatusService, PosShiftReconciliationService],
+  exports: [
+    PosAccountingStatusService,
+    PosShiftReconciliationService,
+    PosSalesReaderModule,
+  ],
 })
 export class PosModule {}

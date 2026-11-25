@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
+import {
+  AccountingOutboxProcessorService,
+  dispatchOutboxBestEffort,
+} from '../accounting/outbox/accounting-outbox-processor.service';
 import { PosAccountingStatusService } from './pos-accounting-status.service';
 import {
   getZonedDateString,
@@ -87,7 +90,8 @@ export class PosShiftReconciliationService {
     const cashDiff = Number(params.cashDifference ?? 0);
     if (Math.abs(cashDiff) >= 0.01 && params.outboxEventId) {
       try {
-        const adj = await this.accountingOutboxProcessor.processEvent(
+        const adj = await dispatchOutboxBestEffort(
+          this.accountingOutboxProcessor,
           params.outboxEventId,
         );
 

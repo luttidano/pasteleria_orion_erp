@@ -9,7 +9,10 @@ import { randomUUID } from 'crypto';
 import type { PosSaleRecord } from '@repo/types';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
+import {
+  AccountingOutboxProcessorService,
+  dispatchOutboxBestEffort,
+} from '../accounting/outbox/accounting-outbox-processor.service';
 import { TaxCalculatorService } from '../accounting/tax/tax-calculator.service';
 import { InventoryStockService } from '../inventory/stock/inventory-stock.service';
 import { PrismaService } from '../../database/prisma.service';
@@ -173,7 +176,10 @@ export class PosSaleService {
     const accountingEntryCreated = authoritativeTotal > 0;
     if (accountingEntryCreated && outboxEventId) {
       try {
-        await this.accountingOutboxProcessor.processEvent(outboxEventId);
+        await dispatchOutboxBestEffort(
+          this.accountingOutboxProcessor,
+          outboxEventId,
+        );
         await this.posAccountingStatusService
           .markSalePosted(sale.id)
           .catch(() => undefined);
@@ -197,8 +203,10 @@ export class PosSaleService {
 
     if (cogsOutboxEventId) {
       try {
-        const cogsProcessResult =
-          await this.accountingOutboxProcessor.processEvent(cogsOutboxEventId);
+        const cogsProcessResult = await dispatchOutboxBestEffort(
+          this.accountingOutboxProcessor,
+          cogsOutboxEventId,
+        );
         if (cogsProcessResult?.recoveredItemCosts?.length) {
           await this.posAccountingStatusService
             .applyRecoveredItemCosts(cogsProcessResult.recoveredItemCosts)

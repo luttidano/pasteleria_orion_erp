@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import type { GeneralSupply, Supplier } from '../../../types';
 import { supplierService } from '../../../services/supplierService';
 import type { SaveGeneralSupplyPayload } from '../../../services/generalSupplyService';
+import { Modal } from '../../common/Modal';
 
 interface GeneralSupplyModalProps {
   isOpen: boolean;
@@ -139,32 +139,47 @@ export const GeneralSupplyModal: React.FC<GeneralSupplyModalProps> = ({
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-white dark:bg-[#1E1512] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border border-[#EADBCE] dark:border-[#2C1D18] shadow-2xl p-6">
-        <div className="flex items-center justify-between pb-4 border-b border-stone-200 dark:border-stone-800">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">{icon}</span>
-            <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-              {itemToEdit ? 'Editar Insumo General' : 'Nuevo Insumo General'}
-            </h3>
-          </div>
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      closeDisabled={isSubmitting}
+      title={itemToEdit ? 'Editar Insumo General' : 'Nuevo Insumo General'}
+      icon={<span className="text-2xl">{icon}</span>}
+      maxWidthClassName="max-w-lg"
+      containerClassName="bg-white dark:bg-[#1E1512] rounded-2xl border border-[#EADBCE] dark:border-[#2C1D18] shadow-2xl"
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400 cursor-pointer"
+            disabled={isSubmitting}
+            className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 text-sm font-semibold cursor-pointer disabled:opacity-50"
           >
-            <X className="w-5 h-5" />
+            Cancelar
           </button>
-        </div>
-
+          <button
+            type="submit"
+            form="general-supply-form"
+            disabled={isSubmitting}
+            className="px-5 py-2 rounded-xl bg-[#8C1F25] text-white text-sm font-bold shadow-md hover:bg-[#73191E] transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isSubmitting
+              ? 'Guardando...'
+              : itemToEdit
+                ? 'Guardar Cambios'
+                : 'Crear Insumo'}
+          </button>
+        </>
+      }
+    >
         {error && (
-          <div className="mt-4 p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl border border-rose-200 dark:border-rose-900">
+          <div className="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl border border-rose-200 dark:border-rose-900">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form id="general-supply-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
               Nombre del Insumo <span className="text-[#8C1F25]">*</span>
@@ -352,30 +367,8 @@ export const GeneralSupplyModal: React.FC<GeneralSupplyModalProps> = ({
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-stone-200 dark:border-stone-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 text-sm font-semibold cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2 rounded-xl bg-[#8C1F25] text-white text-sm font-bold shadow-md hover:bg-[#73191E] transition-all cursor-pointer disabled:opacity-50"
-            >
-              {isSubmitting
-                ? 'Guardando...'
-                : itemToEdit
-                  ? 'Guardar Cambios'
-                  : 'Crear Insumo'}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 };
 

@@ -248,6 +248,45 @@ export class AccountingOutboxProcessorService {
     }
   }
 
+  /**
+   * Ejecuta processEvent con un presupuesto máximo de latencia en el hot path HTTP.
+   * Si supera maxWaitMs, libera el request sin bloquear y deja que el worker
+   * asíncrono o la promesa en curso completen la contabilización.
+   */
+  async processEventBestEffort(
+    outboxId: string,
+    maxWaitMs = 1500,
+  ): Promise<OutboxProcessResult> {
+    if (maxWaitMs <= 0) {
+      return this.processEvent(outboxId);
+    }
+
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const processingPromise = this.processEvent(outboxId);
+    processingPromise.catch(() => undefined);
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(
+          new Error(
+            `Sincronización contable diferida al worker en segundo plano (>${maxWaitMs}ms).`,
+          ),
+        );
+      }, maxWaitMs);
+      if (typeof timeoutHandle.unref === 'function') {
+        timeoutHandle.unref();
+      }
+    });
+
+    try {
+      return await Promise.race([processingPromise, timeoutPromise]);
+    } finally {
+      if (timeoutHandle !== undefined) {
+        clearTimeout(timeoutHandle);
+      }
+    }
+  }
+
   async syncPendingEvents(): Promise<OutboxSyncBatchResult> {
     const pendingEvents = await this.outboxService.findPendingEvents();
 
@@ -292,4 +331,16 @@ export class AccountingOutboxProcessorService {
       recoveredItemCosts,
     };
   }
+}
+
+export async function dispatchOutboxBestEffort(
+  processor: Pick<AccountingOutboxProcessorService, 'processEvent'> &
+    Partial<Pick<AccountingOutboxProcessorService, 'processEventBestEffort'>>,
+  outboxId: string,
+  maxWaitMs = 1500,
+): Promise<OutboxProcessResult> {
+  if (typeof processor.processEventBestEffort === 'function') {
+    return processor.processEventBestEffort(outboxId, maxWaitMs);
+  }
+  return processor.processEvent(outboxId);
 }

@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CreditCard,
   Store,
+  WifiOff,
 } from 'lucide-react';
 import type { PosPaymentMethod } from '../../types';
 import { formatMoney } from '../../utils/formatters';
@@ -18,6 +19,7 @@ interface PosCartPanelProps {
   paymentMethod: PosPaymentMethod;
   onPaymentMethodChange: (method: PosPaymentMethod) => void;
   isSavingSale: boolean;
+  isOnline?: boolean;
   onUpdateQuantity: (cartKey: string, delta: number) => void;
   onClearCart: () => void;
   onCompleteSale: () => void;
@@ -42,6 +44,7 @@ export const PosCartPanel: React.FC<PosCartPanelProps> = ({
   paymentMethod,
   onPaymentMethodChange,
   isSavingSale,
+  isOnline = true,
   onUpdateQuantity,
   onClearCart,
   onCompleteSale,
@@ -157,15 +160,31 @@ export const PosCartPanel: React.FC<PosCartPanelProps> = ({
           </div>
         </div>
 
+        {!isOnline && (
+          <div
+            role="status"
+            className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-200 text-xs font-medium"
+          >
+            <WifiOff className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>Sin conexión con el servidor ERP. Cobro deshabilitado hasta recuperar red.</span>
+          </div>
+        )}
+
         {/* Botón de Cobro */}
         <button
           type="button"
           onClick={onCompleteSale}
-          disabled={isSavingSale || cart.length === 0}
+          disabled={!isOnline || isSavingSale || cart.length === 0}
           className="w-full py-3.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] active:scale-[0.98] text-white text-sm font-bold shadow-btn transition-all duration-150 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <CheckCircle2 className="w-4 h-4" />
-          <span>{isSavingSale ? 'Registrando venta...' : `Cobrar ${formatMoney(total)}`}</span>
+          <span>
+            {!isOnline
+              ? 'Sin conexión (Cobro bloqueado)'
+              : isSavingSale
+                ? 'Registrando venta...'
+                : `Cobrar ${formatMoney(total)}`}
+          </span>
         </button>
       </div>
     </div>

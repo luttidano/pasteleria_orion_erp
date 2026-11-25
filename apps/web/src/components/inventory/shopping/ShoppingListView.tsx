@@ -1,6 +1,6 @@
 import React from 'react';
 import { Copy, Check, ClipboardList } from 'lucide-react';
-import type { Ingredient, ToastMessage } from '../../../types';
+import type { ToastMessage } from '../../../types';
 import { PurchaseItemModal } from './PurchaseItemModal';
 import { useShoppingList } from './hooks/useShoppingList';
 import { ShoppingListFiltersBar } from './components/ShoppingListFiltersBar';
@@ -8,14 +8,10 @@ import { ShoppingListItemRow } from './components/ShoppingListItemRow';
 import { ShoppingListEmptyState } from './components/ShoppingListEmptyState';
 
 interface ShoppingListViewProps {
-  ingredients: Ingredient[];
-  onRefresh: () => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
 }
 
 export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
-  ingredients,
-  onRefresh,
   addToast,
 }) => {
   const {
@@ -32,7 +28,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
     counts,
     handleConfirmPurchase,
     handleCopyShoppingList,
-  } = useShoppingList({ ingredients, onRefresh, addToast });
+  } = useShoppingList({ addToast });
 
   return (
     <div className="max-w-4xl mx-auto space-y-5 animate-fade-in">

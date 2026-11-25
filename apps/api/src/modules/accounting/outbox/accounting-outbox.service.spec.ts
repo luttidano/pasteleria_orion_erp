@@ -300,5 +300,31 @@ describe('AccountingOutbox & PosAccountingSync (Transactional Outbox)', () => {
       },
     });
   });
+
+  it('debe acotar la latencia del hot path con processEventBestEffort sin bloquear ante demora contable', async () => {
+    const slowSpy = jest
+      .spyOn(processor, 'processEvent')
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            const t = setTimeout(() => {
+              resolve({
+                outboxId: 'outbox-slow',
+                aggregateType: 'pos_sale',
+                aggregateId: 'sale-slow',
+                entryId: 'entry-slow',
+                entryNumber: 999,
+                alreadyProcessed: false,
+              });
+            }, 250);
+            if (typeof t.unref === 'function') t.unref();
+          }),
+      );
+
+    await expect(
+      processor.processEventBestEffort('outbox-slow', 20),
+    ).rejects.toThrow(/diferida al worker en segundo plano/i);
+    expect(slowSpy).toHaveBeenCalledWith('outbox-slow');
+  });
 });
 

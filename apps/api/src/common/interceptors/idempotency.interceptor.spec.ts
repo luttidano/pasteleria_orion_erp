@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { lastValueFrom, of, throwError } from 'rxjs';
 import { IdempotencyInterceptor } from './idempotency.interceptor';
+import { getIdempotencyContext } from '../idempotency/idempotency-context';
 
 function createHttpContext(overrides: {
   method?: string;
@@ -281,6 +282,34 @@ describe('IdempotencyInterceptor', () => {
         { handle: jest.fn() },
       ),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('debe propagar IdempotencyContext y proteger respuestas cuando committedInTx ya selló en BD', async () => {
+    prisma.idempotencyRecord.update
+      .mockRejectedValueOnce(new Error('Network glitch'))
+      .mockRejectedValueOnce(new Error('Network glitch'));
+
+    const ctx = createHttpContext({
+      headers: { 'idempotency-key': 'uuid-tx-sealed' },
+      body: { amount: 2500 },
+    });
+
+    let capturedRecordId: string | undefined;
+    const obs = await interceptor.intercept(ctx.context, {
+      handle: () => {
+        const store = getIdempotencyContext();
+        capturedRecordId = store?.recordId;
+        if (store) {
+          store.committedInTx = true;
+        }
+        return of({ ok: true, id: 'sale-tx-1' });
+      },
+    });
+
+    const result = await lastValueFrom(obs);
+    expect(capturedRecordId).toBe('rec-1');
+    expect(result).toEqual({ ok: true, id: 'sale-tx-1' });
+    expect(prisma.idempotencyRecord.deleteMany).toHaveBeenCalledTimes(1); // Solo limpieza inicial, nunca borra tras commit
   });
 });
 

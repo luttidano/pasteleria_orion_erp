@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import type { Packaging, PackagingType, Supplier } from '../../../types';
 import { supplierService } from '../../../services/supplierService';
+import { Modal } from '../../common/Modal';
 
 interface PackagingModalProps {
   isOpen: boolean;
@@ -103,28 +103,43 @@ export const PackagingModal: React.FC<PackagingModalProps> = ({
       setIsSubmitting(false);
     }
   };
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-white dark:bg-[#1E1512] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border border-[#EADBCE] dark:border-[#2C1D18] shadow-2xl p-6">
-        <div className="flex items-center justify-between pb-4 border-b border-stone-200 dark:border-stone-800">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">{icon}</span>
-            <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-              {itemToEdit ? 'Editar Empaque' : 'Nuevo Empaque & Despacho'}
-            </h3>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400">
-            <X className="w-5 h-5" />
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      closeDisabled={isSubmitting}
+      title={itemToEdit ? 'Editar Empaque' : 'Nuevo Empaque & Despacho'}
+      icon={<span className="text-2xl">{icon}</span>}
+      maxWidthClassName="max-w-lg"
+      containerClassName="bg-white dark:bg-[#1E1512] rounded-2xl border border-[#EADBCE] dark:border-[#2C1D18] shadow-2xl"
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 text-sm font-semibold cursor-pointer disabled:opacity-50"
+          >
+            Cancelar
           </button>
-        </div>
-
+          <button
+            type="submit"
+            form="packaging-modal-form"
+            disabled={isSubmitting}
+            className="px-5 py-2 rounded-xl bg-[#8C1F25] text-white text-sm font-bold shadow-md hover:bg-[#73191E] transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isSubmitting ? 'Guardando...' : itemToEdit ? 'Guardar Cambios' : 'Crear Empaque'}
+          </button>
+        </>
+      }
+    >
         {error && (
-          <div className="mt-4 p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl border border-rose-200">
+          <div className="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl border border-rose-200">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form id="packaging-modal-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
               Clasificación Funcional <span className="text-[#8C1F25]">*</span>
@@ -317,25 +332,7 @@ export const PackagingModal: React.FC<PackagingModalProps> = ({
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-stone-200 dark:border-stone-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 text-sm font-semibold cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2 rounded-xl bg-[#8C1F25] text-white text-sm font-bold shadow-md hover:bg-[#73191E] transition-all cursor-pointer disabled:opacity-50"
-            >
-              {isSubmitting ? 'Guardando...' : itemToEdit ? 'Guardar Cambios' : 'Crear Empaque'}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>,
-    document.body
-);
+    </Modal>
+  );
 };

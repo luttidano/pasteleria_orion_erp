@@ -80,13 +80,13 @@ export default defineConfig({
           },
           {
             urlPattern:
-              /^https?:\/\/[^/]+\/api\/(?:health|auth|users|pos|accounting|purchases)(?:[/?#].*)?$/i,
+              /^https?:\/\/[^/]+\/api\/(?:health|auth|users|pos|accounting|purchases|ingredients|recipes|products|packaging|general-supplies)(?:[/?#].*)?$/i,
             handler: 'NetworkOnly',
             method: 'GET',
           },
           {
             urlPattern:
-              /^https?:\/\/[^/]+\/api\/(?:ingredients|recipes|products|categories|packaging|general-supplies|suppliers)(?:[/?#].*)?$/i,
+              /^https?:\/\/[^/]+\/api\/(?:categories|suppliers)(?:[/?#].*)?$/i,
             handler: 'NetworkFirst',
             method: 'GET',
             options: {
@@ -105,6 +105,26 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('@supabase/supabase-js')) return 'vendor-supabase'
+          if (id.includes('@tanstack/react-query')) return 'vendor-query'
+          if (id.includes('lucide-react')) return 'vendor-icons'
+          if (id.includes('react-router')) return 'vendor-router'
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/')
+          ) {
+            return 'vendor-react'
+          }
+          return undefined
+        },
+      },
+    },
+  },
   envDir: '../../',
   server: {
     host: true,

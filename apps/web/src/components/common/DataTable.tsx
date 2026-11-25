@@ -22,6 +22,8 @@ interface DataTableProps<T> {
   tableClassName?: string;
   headerRowClassName?: string;
   bodyClassName?: string;
+  renderExpandedRow?: (row: T, index: number) => React.ReactNode;
+  footerContent?: React.ReactNode;
 }
 
 /**
@@ -40,6 +42,8 @@ export function DataTable<T>({
   tableClassName = 'w-full text-left border-collapse text-sm',
   headerRowClassName = 'bg-[#FAF5ED] dark:bg-[#201613] border-b border-stone-200 dark:border-[#35251F] text-xs font-bold uppercase text-stone-700 dark:text-stone-300',
   bodyClassName = 'divide-y divide-stone-100 dark:divide-[#281C17]',
+  renderExpandedRow,
+  footerContent,
 }: DataTableProps<T>) {
   return (
     <div className={containerClassName}>
@@ -76,28 +80,34 @@ export function DataTable<T>({
               </td>
             </tr>
           ) : (
-            data.map((row, idx) => (
-              <tr
-                key={keyExtractor(row, idx)}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={`${
-                  onRowClick ? 'cursor-pointer ' : ''
-                }hover:bg-stone-50 dark:hover:bg-[#201613]/50 transition-colors ${
-                  rowClassName ? rowClassName(row) : ''
-                }`}
-              >
-                {columns.map((col) => (
-                  <td
-                    key={col.key}
-                    className={col.cellClassName ?? 'py-3 px-4'}
+            data.map((row, idx) => {
+              const expandedContent = renderExpandedRow?.(row, idx);
+              return (
+                <React.Fragment key={keyExtractor(row, idx)}>
+                  <tr
+                    onClick={onRowClick ? () => onRowClick(row) : undefined}
+                    className={`${
+                      onRowClick ? 'cursor-pointer ' : ''
+                    }hover:bg-stone-50 dark:hover:bg-[#201613]/50 transition-colors ${
+                      rowClassName ? rowClassName(row) : ''
+                    }`}
                   >
-                    {col.render(row, idx)}
-                  </td>
-                ))}
-              </tr>
-            ))
+                    {columns.map((col) => (
+                      <td
+                        key={col.key}
+                        className={col.cellClassName ?? 'py-3 px-4'}
+                      >
+                        {col.render(row, idx)}
+                      </td>
+                    ))}
+                  </tr>
+                  {expandedContent}
+                </React.Fragment>
+              );
+            })
           )}
         </tbody>
+        {footerContent}
       </table>
     </div>
   );

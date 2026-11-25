@@ -24,6 +24,7 @@ import { formatMoney } from '../../../utils/formatters';
 import { GeneralSupplyModal } from './GeneralSupplyModal';
 import { StockAdjustmentModal, type StockAdjustmentTarget } from '../StockAdjustmentModal';
 import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
+import { DataTable, type DataTableColumn } from '../../common/DataTable';
 
 interface GeneralSuppliesViewProps {
   user: User;
@@ -344,144 +345,160 @@ export const GeneralSuppliesView: React.FC<GeneralSuppliesViewProps> = ({
 
       {/* Table */}
       <div className="bg-white dark:bg-[#1E1512] rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-stone-50 dark:bg-[#170F0D] border-b border-stone-200 dark:border-stone-800 text-stone-500 text-xs">
-              <tr>
-                <th className="py-3 px-4">Insumo</th>
-                <th className="py-3 px-4">Categoría</th>
-                <th className="py-3 px-4">Stock</th>
-                <th className="py-3 px-4">Ajuste Rápido</th>
-                <th className="py-3 px-4">Costo Ref.</th>
-                <th className="py-3 px-4">Proveedor</th>
-                {isAdmin && <th className="py-3 px-4 text-right">Acciones</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100 dark:divide-stone-800/60">
-              {filteredItems.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={isAdmin ? 7 : 6}
-                    className="py-8 text-center text-stone-400 text-sm"
-                  >
-                    {loading
-                      ? 'Cargando inventario...'
-                      : 'No se encontraron insumos generales registrados.'}
-                  </td>
-                </tr>
-              ) : (
-                filteredItems.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="hover:bg-stone-50/50 dark:hover:bg-stone-800/20"
-                  >
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{item.icon || '🧤'}</span>
-                        <div>
-                          <div className="font-bold text-stone-900 dark:text-stone-100">
-                            {item.name}
-                          </div>
-                          {item.description && (
-                            <div className="text-[11px] text-stone-400 line-clamp-1">
-                              {item.description}
-                            </div>
-                          )}
+        <DataTable
+          data={filteredItems}
+          keyExtractor={(item) => item.id}
+          isLoading={loading}
+          loadingLabel="Cargando inventario..."
+          emptyState="No se encontraron insumos generales registrados."
+          tableClassName="w-full text-left text-sm"
+          headerRowClassName="bg-stone-50 dark:bg-[#170F0D] border-b border-stone-200 dark:border-stone-800 text-stone-500 text-xs"
+          bodyClassName="divide-y divide-stone-100 dark:divide-stone-800/60"
+          rowClassName={() => 'hover:bg-stone-50/50 dark:hover:bg-stone-800/20'}
+          columns={(() => {
+            const cols: DataTableColumn<GeneralSupply>[] = [
+              {
+                key: 'name',
+                header: 'Insumo',
+                render: (item) => (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{item.icon || '🧤'}</span>
+                    <div>
+                      <div className="font-bold text-stone-900 dark:text-stone-100">
+                        {item.name}
+                      </div>
+                      {item.description && (
+                        <div className="text-[11px] text-stone-400 line-clamp-1">
+                          {item.description}
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-xs text-stone-600 dark:text-stone-400 font-medium">
-                      <span className="px-2.5 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 text-[11px] font-semibold">
-                        {item.category}
+                      )}
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'category',
+                header: 'Categoría',
+                cellClassName:
+                  'py-3 px-4 text-xs text-stone-600 dark:text-stone-400 font-medium',
+                render: (item) => (
+                  <span className="px-2.5 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 text-[11px] font-semibold">
+                    {item.category}
+                  </span>
+                ),
+              },
+              {
+                key: 'stock',
+                header: 'Stock',
+                render: (item) => (
+                  <>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-mono font-bold text-stone-900 dark:text-stone-100">
+                        {item.stock} {item.unit}
                       </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-mono font-bold text-stone-900 dark:text-stone-100">
-                          {item.stock} {item.unit}
-                        </span>
-                        {item.status === 'agotado' && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300">
-                            Agotado
-                          </span>
-                        )}
-                        {item.status === 'bajo' && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300">
-                            Bajo
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-stone-400">
-                        Mín: {item.minStock} {item.unit}
-                        {item.stock <= item.minStock && ' • En Lista de Compras'}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => openAdjustmentModal(item, -1)}
-                          disabled={item.stock <= 0}
-                          title="Registrar consumo / merma"
-                          className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer disabled:opacity-40"
-                        >
-                          <MinusCircle className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openAdjustmentModal(item, 1)}
-                          title="Registrar compra / reposición"
-                          className="p-1 rounded-md text-stone-400 hover:text-emerald-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                        >
-                          <PlusCircle className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-xs text-stone-600 dark:text-stone-300">
-                      {formatMoney(item.costPrice)}
-                    </td>
-                    <td className="py-3 px-4 text-xs text-stone-600 dark:text-stone-300">
-                      {item.supplier ? (
-                        <span className="flex items-center gap-1">
-                          {item.supplier.icon} {item.supplier.name}
-                        </span>
-                      ) : (
-                        <span className="text-stone-400 italic">
-                          Opcional / Sin asignar
+                      {item.status === 'agotado' && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300">
+                          Agotado
                         </span>
                       )}
-                    </td>
-                    {isAdmin && (
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingItem(item);
-                              setIsModalOpen(true);
-                            }}
-                            title="Editar insumo"
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeletingItem(item)}
-                            title="Eliminar insumo"
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                      {item.status === 'bajo' && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300">
+                          Bajo
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-stone-400">
+                      Mín: {item.minStock} {item.unit}
+                      {item.stock <= item.minStock && ' • En Lista de Compras'}
+                    </div>
+                  </>
+                ),
+              },
+              {
+                key: 'quickAdjust',
+                header: 'Ajuste Rápido',
+                render: (item) => (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openAdjustmentModal(item, -1)}
+                      disabled={item.stock <= 0}
+                      title="Registrar consumo / merma"
+                      className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer disabled:opacity-40"
+                    >
+                      <MinusCircle className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openAdjustmentModal(item, 1)}
+                      title="Registrar compra / reposición"
+                      className="p-1 rounded-md text-stone-400 hover:text-emerald-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+                ),
+              },
+              {
+                key: 'costPrice',
+                header: 'Costo Ref.',
+                cellClassName:
+                  'py-3 px-4 font-mono text-xs text-stone-600 dark:text-stone-300',
+                render: (item) => formatMoney(item.costPrice),
+              },
+              {
+                key: 'supplier',
+                header: 'Proveedor',
+                cellClassName:
+                  'py-3 px-4 text-xs text-stone-600 dark:text-stone-300',
+                render: (item) =>
+                  item.supplier ? (
+                    <span className="flex items-center gap-1">
+                      {item.supplier.icon} {item.supplier.name}
+                    </span>
+                  ) : (
+                    <span className="text-stone-400 italic">
+                      Opcional / Sin asignar
+                    </span>
+                  ),
+              },
+            ];
+
+            if (isAdmin) {
+              cols.push({
+                key: 'actions',
+                header: 'Acciones',
+                headerClassName: 'py-3 px-4 text-right',
+                cellClassName: 'py-3 px-4 text-right',
+                render: (item) => (
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingItem(item);
+                        setIsModalOpen(true);
+                      }}
+                      title="Editar insumo"
+                      className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingItem(item)}
+                      title="Eliminar insumo"
+                      className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ),
+              });
+            }
+
+            return cols;
+          })()}
+        />
       </div>
 
       {/* Modales */}

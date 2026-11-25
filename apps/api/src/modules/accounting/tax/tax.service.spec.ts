@@ -2,16 +2,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TaxCalculatorService } from './tax-calculator.service';
 import { TaxService } from './tax.service';
 import { PrismaService } from '../../../database/prisma.service';
+import { PosSalesReaderService } from '../../pos/pos-sales-reader.service';
 
 describe('TaxService', () => {
   let service: TaxService;
   let prisma: any;
+  let posSalesReader: { findCompletedSalesInRange: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
-      posSale: {
-        findMany: jest.fn(),
-      },
       supplierInvoice: {
         findMany: jest.fn(),
       },
@@ -22,12 +21,16 @@ describe('TaxService', () => {
         findMany: jest.fn(),
       },
     };
+    posSalesReader = {
+      findCompletedSalesInRange: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TaxCalculatorService,
         TaxService,
         { provide: PrismaService, useValue: prisma },
+        { provide: PosSalesReaderService, useValue: posSalesReader },
       ],
     }).compile();
 
@@ -37,7 +40,7 @@ describe('TaxService', () => {
   describe('getSalesBook', () => {
     it('debe calcular correctamente las ventas netas y el IVA Débito (19%) del mes', async () => {
       // 2 ventas de $11.900 cada una (Neto: $10.000, IVA: $1.900)
-      prisma.posSale.findMany.mockResolvedValue([
+      posSalesReader.findCompletedSalesInRange.mockResolvedValue([
         {
           id: 'sale-1',
           ticketNumber: 'TK-001',
@@ -99,7 +102,7 @@ describe('TaxService', () => {
   describe('getVatSummary (F29 y Balance IVA)', () => {
     it('debe determinar IVA a pagar cuando Débito > Crédito + Remanente', async () => {
       // Ventas: $119.000 (IVA Débito: $19.000, Neto: $100.000)
-      prisma.posSale.findMany.mockResolvedValue([
+      posSalesReader.findCompletedSalesInRange.mockResolvedValue([
         {
           id: 'sale-1',
           ticketNumber: 'TK-100',
@@ -150,7 +153,7 @@ describe('TaxService', () => {
 
     it('debe generar nuevo Remanente a favor cuando Crédito + Remanente > Débito', async () => {
       // Ventas: $23.800 (IVA Débito: $3.800, Neto: $20.000)
-      prisma.posSale.findMany.mockResolvedValue([
+      posSalesReader.findCompletedSalesInRange.mockResolvedValue([
         {
           id: 'sale-1',
           ticketNumber: 'TK-200',

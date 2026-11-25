@@ -1,7 +1,41 @@
 import React from 'react';
 import { Ban, Lock, Plus } from 'lucide-react';
-import type { AccountingEntry, AccountingEntryOrigin } from '../../types';
+import type { AccountingEntry, AccountingEntryItem, AccountingEntryOrigin } from '../../types';
 import { formatMoney } from '../../utils/formatters';
+import { DataTable, type DataTableColumn } from '../common/DataTable';
+
+const JOURNAL_ITEM_COLUMNS: DataTableColumn<AccountingEntryItem>[] = [
+  {
+    key: 'accountCode',
+    header: 'Código',
+    headerClassName: 'py-2 px-4',
+    cellClassName: 'py-2 px-4 font-mono text-stone-500',
+    render: (it) => it.accountCode,
+  },
+  {
+    key: 'accountName',
+    header: 'Cuenta Contable',
+    headerClassName: 'py-2 px-4',
+    cellClassName: 'py-2 px-4 font-semibold text-stone-700 dark:text-stone-200',
+    render: (it) => it.accountName,
+  },
+  {
+    key: 'debit',
+    header: 'DEBE',
+    headerClassName: 'py-2 px-4 text-right',
+    cellClassName:
+      'py-2 px-4 text-right font-mono font-bold text-stone-900 dark:text-white',
+    render: (it) => (it.debit > 0 ? formatMoney(it.debit) : '-'),
+  },
+  {
+    key: 'credit',
+    header: 'HABER',
+    headerClassName: 'py-2 px-4 text-right',
+    cellClassName:
+      'py-2 px-4 text-right font-mono font-bold text-stone-900 dark:text-white',
+    render: (it) => (it.credit > 0 ? formatMoney(it.credit) : '-'),
+  },
+];
 
 interface AccountingJournalTabProps {
   entries: AccountingEntry[];
@@ -146,32 +180,14 @@ export const AccountingJournalTab: React.FC<AccountingJournalTabProps> = ({
                   </p>
                 )}
 
-                <table className="w-full text-xs text-left">
-                  <thead>
-                    <tr className="border-b border-stone-100 dark:border-[#281C17] text-stone-400 uppercase text-[10px]">
-                      <th className="py-2 px-4">Código</th>
-                      <th className="py-2 px-4">Cuenta Contable</th>
-                      <th className="py-2 px-4 text-right">DEBE</th>
-                      <th className="py-2 px-4 text-right">HABER</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-50 dark:divide-[#1C1411]">
-                    {entry.items.map((it) => (
-                      <tr key={it.id}>
-                        <td className="py-2 px-4 font-mono text-stone-500">{it.accountCode}</td>
-                        <td className="py-2 px-4 font-semibold text-stone-700 dark:text-stone-200">
-                          {it.accountName}
-                        </td>
-                        <td className="py-2 px-4 text-right font-mono font-bold text-stone-900 dark:text-white">
-                          {it.debit > 0 ? formatMoney(it.debit) : '-'}
-                        </td>
-                        <td className="py-2 px-4 text-right font-mono font-bold text-stone-900 dark:text-white">
-                          {it.credit > 0 ? formatMoney(it.credit) : '-'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable
+                  columns={JOURNAL_ITEM_COLUMNS}
+                  data={entry.items}
+                  keyExtractor={(it) => it.id}
+                  tableClassName="w-full text-xs text-left"
+                  headerRowClassName="border-b border-stone-100 dark:border-[#281C17] text-stone-400 uppercase text-[10px]"
+                  bodyClassName="divide-y divide-stone-50 dark:divide-[#1C1411]"
+                />
               </div>
             );
           })}

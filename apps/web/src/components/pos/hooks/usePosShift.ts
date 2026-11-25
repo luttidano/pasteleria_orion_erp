@@ -35,6 +35,7 @@ const EMPTY_SHIFT_OVERVIEW: PosActiveShiftOverview = {
 
 interface UsePosShiftOptions {
   isAdmin: boolean;
+  isOnline?: boolean;
   addToastRef: MutableRefObject<(toast: Omit<ToastMessage, 'id'>) => void>;
 }
 
@@ -42,7 +43,11 @@ interface UsePosShiftOptions {
  * Encapsula la carga de turno activo, fondo inicial, historial de arqueos
  * y cierre idempotente de caja en POS.
  */
-export function usePosShift({ isAdmin, addToastRef }: UsePosShiftOptions) {
+export function usePosShift({
+  isAdmin,
+  isOnline = true,
+  addToastRef,
+}: UsePosShiftOptions) {
   const [shiftOverview, setShiftOverview] =
     useState<PosActiveShiftOverview>(EMPTY_SHIFT_OVERVIEW);
   const todayKey = shiftOverview.businessDate ?? getChileTodayIso();
@@ -111,6 +116,14 @@ export function usePosShift({ isAdmin, addToastRef }: UsePosShiftOptions) {
 
   const handleSaveOpeningCash = useCallback(async () => {
     if (isSavingOpeningCash) return;
+    if (!isOnline) {
+      addToastRef.current({
+        type: 'error',
+        title: 'Sin conexión con el servidor',
+        message: 'Restablece la conexión antes de guardar el fondo inicial.',
+      });
+      return;
+    }
     setIsSavingOpeningCash(true);
     try {
       const updated = await posShiftService.updateOpeningCash({
@@ -135,7 +148,7 @@ export function usePosShift({ isAdmin, addToastRef }: UsePosShiftOptions) {
     } finally {
       setIsSavingOpeningCash(false);
     }
-  }, [isSavingOpeningCash, parsedOpeningCash, addToastRef]);
+  }, [isSavingOpeningCash, isOnline, parsedOpeningCash, addToastRef]);
 
   const openCloseShiftModal = useCallback(() => {
     closeShiftIdempotencyKeyRef.current = null;
@@ -161,6 +174,14 @@ export function usePosShift({ isAdmin, addToastRef }: UsePosShiftOptions) {
 
   const handleConfirmCloseShift = useCallback(async () => {
     if (isClosingShift) return;
+    if (!isOnline) {
+      addToastRef.current({
+        type: 'error',
+        title: 'Sin conexión con el servidor',
+        message: 'Restablece la conexión antes de cerrar el turno de caja.',
+      });
+      return;
+    }
     setIsClosingShift(true);
     try {
       const idempotencyKey =
@@ -235,6 +256,7 @@ export function usePosShift({ isAdmin, addToastRef }: UsePosShiftOptions) {
     }
   }, [
     isClosingShift,
+    isOnline,
     parsedCountedCash,
     closeNotes,
     loadShiftSummary,

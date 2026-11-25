@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import type {
-  Ingredient,
   CatalogProduct,
   Packaging,
   GeneralSupply,
@@ -12,22 +11,22 @@ import { ingredientService } from '../../../../services/ingredientService';
 import { productService } from '../../../../services/productService';
 import { packagingService } from '../../../../services/packagingService';
 import { generalSupplyService } from '../../../../services/generalSupplyService';
+import {
+  useIngredientsQuery,
+  useInvalidateInventory,
+} from '../../../../hooks/queries/useInventoryQueries';
 import { STORE_TIMEZONE } from '../../../../utils/formatters';
 import type { ConfirmPurchaseDetails } from '../PurchaseItemModal';
 import { formatShoppingListForWhatsApp } from '../utils/shoppingWhatsApp';
 import type { ShoppingCounts } from '../components/ShoppingListFiltersBar';
 
 interface UseShoppingListParams {
-  ingredients: Ingredient[];
-  onRefresh: () => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
 }
 
-export function useShoppingList({
-  ingredients,
-  onRefresh,
-  addToast,
-}: UseShoppingListParams) {
+export function useShoppingList({ addToast }: UseShoppingListParams) {
+  const { data: ingredients = [] } = useIngredientsQuery();
+  const invalidateInventory = useInvalidateInventory();
   const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'out' | 'low'>('all');
   const [kindFilter, setKindFilter] = useState<'all' | ShoppingItemKind>('all');
   const [selectedItemForPurchase, setSelectedItemForPurchase] = useState<ShoppingItem | null>(null);
@@ -227,7 +226,7 @@ export function useShoppingList({
         );
         newStock = updated.stock;
         accountingWarning = updated.accountingWarning;
-        await onRefresh();
+        await invalidateInventory();
       } else if (item.kind === 'resale') {
         const updated = await productService.adjustStock(
           item.id,
@@ -238,7 +237,7 @@ export function useShoppingList({
         accountingWarning = updated.accountingWarning;
         const prods = await productService.getAll('resale');
         setResaleProducts(prods);
-        await onRefresh();
+        await invalidateInventory();
       } else if (item.kind === 'packaging') {
         const updated = await packagingService.adjustStock(
           item.id,
@@ -249,7 +248,7 @@ export function useShoppingList({
         accountingWarning = updated.accountingWarning;
         const packs = await packagingService.getAll();
         setPackagings(packs);
-        await onRefresh();
+        await invalidateInventory();
       } else if (item.kind === 'general_supply') {
         const updated = await generalSupplyService.adjustStock(
           item.id,
@@ -261,7 +260,7 @@ export function useShoppingList({
         accountingWarning = updated.accountingWarning;
         const supplies = await generalSupplyService.getAll();
         setGeneralSupplies(supplies);
-        await onRefresh();
+        await invalidateInventory();
       }
 
       const unit = item.unit || 'un';

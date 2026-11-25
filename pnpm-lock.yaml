@@ -147,6 +147,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.117.2
         version: 2.117.2
+      '@tanstack/react-query':
+        specifier: ^5.108.4
+        version: 5.108.4(@types/react@19.3.0)(react@19.2.8)
       lucide-react:
         specifier: ^1.48.0
         version: 1.48.0(react@19.2.8)
@@ -2633,6 +2636,18 @@ packages:
       '@opentelemetry/api': '>=1.0.0'
     peerDependenciesMeta:
       '@opentelemetry/api':
+        optional: true
+
+  '@tanstack/query-core@5.108.4':
+    resolution: {integrity: sha512-2Ks5dlLWz4eXJrthOyG0qW3SLt3xx0RrQmAmN0rnmogiaaOYuWiAe6HAm9KE2b2v8nig+vraNz8fsfZ6fF6zFg==}
+
+  '@tanstack/react-query@5.108.4':
+    resolution: {integrity: sha512-GlTa94kfEKTVsbzXe58rFA3GZ0ZE7N1aFtbZAfOS3XxMv8YNn4C+8rsz40LorHLazdm5PsqCroWaYAR+ZkMXMQ==}
+    peerDependencies:
+      '@types/react': ^18 || ^19
+      react: ^18 || ^19
+    peerDependenciesMeta:
+      '@types/react':
         optional: true
 
   '@tokenizer/inflate@0.4.1':
@@ -8839,6 +8854,15 @@ snapshots:
       '@supabase/postgrest-js': 2.117.2
       '@supabase/realtime-js': 2.117.2
       '@supabase/storage-js': 2.117.2
+
+  '@tanstack/query-core@5.108.4': {}
+
+  '@tanstack/react-query@5.108.4(@types/react@19.3.0)(react@19.2.8)':
+    dependencies:
+      '@tanstack/query-core': 5.108.4
+      react: 19.2.8
+    optionalDependencies:
+      '@types/react': 19.3.0
 
   '@tokenizer/inflate@0.4.1(supports-color@8.1.1)':
     dependencies:

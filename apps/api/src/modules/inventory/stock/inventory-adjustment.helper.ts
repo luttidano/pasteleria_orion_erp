@@ -11,7 +11,10 @@ import type {
 } from '@repo/types';
 import { roundMoney, roundQuantity } from '../../../common/utils/money.util';
 import type { AccountingOutboxService } from '../../accounting/outbox/accounting-outbox.service';
-import type { AccountingOutboxProcessorService } from '../../accounting/outbox/accounting-outbox-processor.service';
+import {
+  AccountingOutboxProcessorService,
+  dispatchOutboxBestEffort,
+} from '../../accounting/outbox/accounting-outbox-processor.service';
 import { calculateTaxBreakdownFromGross } from '../../accounting/tax/tax-calculator.service';
 import { AdjustStockDto } from '../dto/adjust-stock.dto';
 import {
@@ -254,7 +257,7 @@ export async function processInventoryOutboxAfterCommit(
   }
 
   try {
-    await accountingOutboxProcessor.processEvent(outboxEventId);
+    await dispatchOutboxBestEffort(accountingOutboxProcessor, outboxEventId);
     return {
       accountingStatus: 'posted',
       accountingWarning: null,

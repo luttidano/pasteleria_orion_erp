@@ -13,6 +13,11 @@ import { Observable, from, of, throwError } from 'rxjs';
 import { catchError, concatMap } from 'rxjs/operators';
 import { PrismaService } from '../../database/prisma.service';
 import { isUniqueViolation } from '../utils/prisma-error.util';
+import {
+  type IdempotencyExecutionContext,
+  runWithIdempotencyContext,
+  toPrismaJsonValue,
+} from '../idempotency/idempotency-context';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const IDEMPOTENCY_KEY_MAX_LEN = 128;
@@ -52,13 +57,6 @@ function hashRequestPayload(body: unknown, query: unknown): string {
   return createHash('sha256')
     .update(JSON.stringify(canonical))
     .digest('hex');
-}
-
-function toPrismaJsonValue(value: unknown): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput {
-  if (value === undefined || value === null) {
-    return Prisma.JsonNull;
-  }
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 @Injectable()
@@ -146,59 +144,85 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
 
     const recordId = reservation.recordId;
+    const defaultStatusCode =
+      typeof res?.statusCode === 'number' && res.statusCode !== 200
+        ? res.statusCode
+        : method === 'POST'
+          ? 201
+          : 200;
 
-    return next.handle().pipe(
-      concatMap((responseData) => {
-        const resolvedStatusCode =
-          typeof res?.statusCode === 'number' && res.statusCode !== 200
-            ? res.statusCode
-            : method === 'POST'
-              ? 201
-              : 200;
+    const executionStore: IdempotencyExecutionContext = {
+      recordId,
+      statusCode: defaultStatusCode,
+      ttlMs: COMPLETED_TTL_MS,
+      committedInTx: false,
+    };
 
-        const updatePayload = {
-          status: 'completed',
-          statusCode: resolvedStatusCode,
-          responseBody: toPrismaJsonValue(responseData),
-          expiresAt: new Date(Date.now() + COMPLETED_TTL_MS),
-        };
+    return new Observable((subscriber) =>
+      runWithIdempotencyContext(executionStore, () =>
+        next
+          .handle()
+          .pipe(
+            concatMap((responseData) => {
+              const resolvedStatusCode =
+                typeof res?.statusCode === 'number' && res.statusCode !== 200
+                  ? res.statusCode
+                  : method === 'POST'
+                    ? 201
+                    : 200;
 
-        return from(
-          this.prisma.idempotencyRecord
-            .update({
-              where: { id: recordId },
-              data: updatePayload,
-            })
-            .catch(async (err) => {
-              console.error(
-                `[IdempotencyInterceptor] Error persistiendo estado completed para clave "${idempotencyKey}", reintentando:`,
-                err instanceof Error ? err.message : String(err),
-              );
-              try {
-                await this.prisma.idempotencyRecord.update({
-                  where: { id: recordId },
-                  data: updatePayload,
-                });
-              } catch (retryErr) {
-                console.error(
-                  `[IdempotencyInterceptor] Reintento fallido para clave "${idempotencyKey}":`,
-                  retryErr instanceof Error ? retryErr.message : String(retryErr),
-                );
-                throw new InternalServerErrorException(
-                  'No se pudo registrar la confirmación de la operación idempotente en la base de datos.',
-                );
-              }
+              const updatePayload = {
+                status: 'completed',
+                statusCode: resolvedStatusCode,
+                responseBody: toPrismaJsonValue(responseData),
+                expiresAt: new Date(Date.now() + COMPLETED_TTL_MS),
+              };
+
+              return from(
+                this.prisma.idempotencyRecord
+                  .update({
+                    where: { id: recordId },
+                    data: updatePayload,
+                  })
+                  .catch(async (err) => {
+                    console.error(
+                      `[IdempotencyInterceptor] Error persistiendo estado completed para clave "${idempotencyKey}", reintentando:`,
+                      err instanceof Error ? err.message : String(err),
+                    );
+                    try {
+                      await this.prisma.idempotencyRecord.update({
+                        where: { id: recordId },
+                        data: updatePayload,
+                      });
+                    } catch (retryErr) {
+                      console.error(
+                        `[IdempotencyInterceptor] Reintento fallido para clave "${idempotencyKey}":`,
+                        retryErr instanceof Error ? retryErr.message : String(retryErr),
+                      );
+                      if (executionStore.committedInTx) {
+                        return;
+                      }
+                      throw new InternalServerErrorException(
+                        'No se pudo registrar la confirmación de la operación idempotente en la base de datos.',
+                      );
+                    }
+                  }),
+              ).pipe(concatMap(() => of(responseData)));
             }),
-        ).pipe(concatMap(() => of(responseData)));
-      }),
-      catchError((err) =>
-        from(
-          this.prisma.idempotencyRecord
-            .deleteMany({
-              where: { id: recordId, status: 'processing' },
-            })
-            .catch(() => undefined),
-        ).pipe(concatMap(() => throwError(() => err))),
+            catchError((err) => {
+              if (executionStore.committedInTx) {
+                return throwError(() => err);
+              }
+              return from(
+                this.prisma.idempotencyRecord
+                  .deleteMany({
+                    where: { id: recordId, status: 'processing' },
+                  })
+                  .catch(() => undefined),
+              ).pipe(concatMap(() => throwError(() => err)));
+            }),
+          )
+          .subscribe(subscriber),
       ),
     );
   }

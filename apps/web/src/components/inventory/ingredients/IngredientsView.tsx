@@ -1,26 +1,13 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
-import {
-  Plus,
-  Edit2,
-  Trash2,
-  Minus,
-  Plus as PlusIcon,
-  Tag,
-} from 'lucide-react';
-import type {
-  AdjustStockPayload,
-  Category,
-  Ingredient,
-  ToastMessage,
-  User,
-} from '../../../types';
-import { ingredientService } from '../../../services/ingredientService';
-import { categoryService } from '../../../services/categoryService';
+import React from 'react';
+import { Plus, Tag } from 'lucide-react';
+import type { ToastMessage, User } from '../../../types';
 import { IngredientModal } from './IngredientModal';
 import { IngredientMetricsCards } from './IngredientMetricsCards';
 import { IngredientFiltersBar } from './IngredientFiltersBar';
-import { StockAdjustmentModal, type StockAdjustmentTarget } from '../StockAdjustmentModal';
-import { getCategoryDefaultIcon } from '../../../utils/categoryIcons';
+import { IngredientCardGrid } from './IngredientCardGrid';
+import { IngredientTable } from './IngredientTable';
+import { useIngredientsView } from './hooks/useIngredientsView';
+import { StockAdjustmentModal } from '../StockAdjustmentModal';
 import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
 import { CategoryManagerModal } from '../categories/CategoryManagerModal';
 
@@ -28,208 +15,59 @@ export type StatusFilterType = 'todos' | 'bajo' | 'agotado' | 'comprar';
 
 interface IngredientsViewProps {
   user: User;
-  ingredients: Ingredient[];
-  onRefresh: () => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   externalFilter?: StatusFilterType;
   onNavigateToShoppingList?: () => void;
-  isLoading?: boolean;
 }
 
 export const IngredientsView: React.FC<IngredientsViewProps> = ({
   user,
-  ingredients,
-  onRefresh,
   addToast,
   externalFilter,
   onNavigateToShoppingList,
-  isLoading = false,
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [statusFilter, setStatusFilter] = useState<StatusFilterType>('todos');
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
-  const isAdmin = user.role === 'admin';
+  const {
+    ingredients,
+    isLoading,
+    isAdmin,
+    searchTerm,
+    setSearchTerm,
+    selectedCategory,
+    setSelectedCategory,
+    statusFilter,
+    setStatusFilter,
+    viewMode,
+    setViewMode,
+    categoryFilters,
+    metrics,
+    filteredProducts,
+    isModalOpen,
+    setIsModalOpen,
+    isCategoryModalOpen,
+    setIsCategoryModalOpen,
+    ingredientToEdit,
+    setIngredientToEdit,
+    ingredientToDelete,
+    setIngredientToDelete,
+    isDeleting,
+    adjustmentTarget,
+    setAdjustmentTarget,
+    openAdjustmentModal,
+    handleConfirmAdjustment,
+    handleSaveIngredient,
+    handleConfirmDelete,
+    resetFilters,
+    invalidateInventory,
+  } = useIngredientsView({ user, addToast, externalFilter });
 
-  const refreshCategories = useCallback(async () => {
-    try {
-      const data = await categoryService.getAll('ingredient');
-      setCategories(data);
-      setSelectedCategory((prev) =>
-        prev !== 'Todas' && !data.some((c) => c.name === prev) ? 'Todas' : prev
-      );
-    } catch (err) {
-      console.error('[IngredientsView] Error cargando categorías de ingredientes:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    categoryService
-      .getAll('ingredient')
-      .then((data) => {
-        if (!cancelled) {
-          setCategories(data);
-        }
-      })
-      .catch((err) => {
-        console.error('[IngredientsView] Error cargando categorías de ingredientes:', err);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const categoryFilters = useMemo(() => {
-    const base: Array<{ key: string; label: string; value: string; icon: string }> = [
-      { key: 'todas', label: 'Todos', value: 'Todas', icon: '🧁' },
-    ];
-    for (const cat of categories) {
-      base.push({
-        key: cat.id,
-        label: cat.name,
-        value: cat.name,
-        icon: cat.icon || getCategoryDefaultIcon(cat.name, categories),
-      });
-    }
-    return base;
-  }, [categories]);
-
-  // Sync external filter from sidebar if provided
-  useEffect(() => {
-    if (externalFilter) {
-      setStatusFilter(externalFilter);
-    }
-  }, [externalFilter]);
-
-  // Modals state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [ingredientToEdit, setIngredientToEdit] = useState<Ingredient | null>(null);
-  const [ingredientToDelete, setIngredientToDelete] = useState<Ingredient | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [adjustmentTarget, setAdjustmentTarget] = useState<StockAdjustmentTarget | null>(null);
-
-  // Accurate bakery metrics
-  const metrics = useMemo(() => {
-    const total = ingredients.length;
-    const ok = ingredients.filter((p) => p.stock > p.minStock).length;
-    const low = ingredients.filter((p) => p.stock > 0 && p.stock <= p.minStock).length;
-    const out = ingredients.filter((p) => p.stock <= 0).length;
-    return { total, ok, low, out };
-  }, [ingredients]);
-
-  // Filtered ingredients
-  const filteredProducts = useMemo(() => {
-    return ingredients.filter((item) => {
-      // 1. Text Search
-      const matchesSearch =
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchTerm.toLowerCase());
-
-      // 2. Category Tab
-      const matchesCategory =
-        selectedCategory === 'Todas' ||
-        item.category.trim().toLowerCase() === selectedCategory.trim().toLowerCase();
-
-      // 3. Exact Status Filter
-      let matchesStatus = true;
-      if (statusFilter === 'bajo') {
-        // EXACTAMENTE los que están bajos de stock pero tienen existencia (> 0)
-        matchesStatus = item.stock > 0 && item.stock <= item.minStock;
-      } else if (statusFilter === 'agotado') {
-        // EXACTAMENTE los que están en 0 (agotados)
-        matchesStatus = item.stock <= 0;
-      } else if (statusFilter === 'comprar') {
-        // Todos los que necesitan compra (bajo stock o agotados)
-        matchesStatus = item.stock <= item.minStock;
-      }
-
-      return matchesSearch && matchesCategory && matchesStatus;
-    });
-  }, [ingredients, searchTerm, selectedCategory, statusFilter]);
-
-  // Ajuste de stock con motivo contable (Modal)
-  const openAdjustmentModal = (ingredient: Ingredient, delta: number) => {
-    setAdjustmentTarget({
-      id: ingredient.id,
-      name: ingredient.name,
-      itemType: 'ingredient',
-      currentStock: ingredient.stock,
-      unit: ingredient.unit,
-      unitCost: ingredient.price,
-      initialDelta: delta,
-    });
+  const handleOpenCreateModal = () => {
+    setIngredientToEdit(null);
+    setIsModalOpen(true);
   };
 
-  const handleConfirmAdjustment = async (
-    id: string,
-    payload: AdjustStockPayload,
-    idempotencyKey?: string,
-  ) => {
-    const updated = await ingredientService.adjustStock(
-      id,
-      payload,
-      idempotencyKey,
-    );
-    await onRefresh();
-    addToast({
-      type: updated.accountingWarning ? 'warning' : 'info',
-      title: updated.accountingWarning
-        ? 'Existencia actualizada (pendiente contable)'
-        : 'Existencia actualizada',
-      message: updated.accountingWarning
-        ? `${updated.name}: ${updated.stock} ${updated.unit}. ${updated.accountingWarning}`
-        : `${updated.name}: ${updated.stock} ${updated.unit}`,
-    });
-  };
-
-  // Add / Edit
-  const handleSaveIngredient = async (
-    data: Omit<Ingredient, 'id' | 'createdAt' | 'updatedAt' | 'status'>
-  ) => {
-    if (ingredientToEdit) {
-      await ingredientService.updateIngredient(ingredientToEdit.id, data);
-      addToast({
-        type: 'success',
-        title: 'Ingrediente actualizado',
-        message: `Guardamos los cambios de "${data.name}".`,
-      });
-    } else {
-      await ingredientService.addIngredient(data);
-      addToast({
-        type: 'success',
-        title: 'Ingrediente agregado',
-        message: `"${data.name}" se agregó a la despensa.`,
-      });
-    }
-    await onRefresh();
-  };
-
-  // Delete
-  const handleConfirmDelete = async () => {
-    if (!ingredientToDelete) return;
-    setIsDeleting(true);
-    try {
-      await ingredientService.deleteIngredient(ingredientToDelete.id);
-      addToast({
-        type: 'warning',
-        title: 'Ingrediente eliminado',
-        message: `Se quitó "${ingredientToDelete.name}" de la despensa.`,
-      });
-      await onRefresh();
-      setIngredientToDelete(null);
-    } catch (err: unknown) {
-      addToast({
-        type: 'error',
-        title: 'Error al eliminar ingrediente',
-        message: err instanceof Error ? err.message : 'No se pudo eliminar el ingrediente.',
-      });
-    } finally {
-      setIsDeleting(false);
-    }
+  const handleOpenEditModal = (item: (typeof ingredients)[number]) => {
+    setIngredientToEdit(item);
+    setIsModalOpen(true);
   };
 
   return (
@@ -258,10 +96,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setIngredientToEdit(null);
-                setIsModalOpen(true);
-              }}
+              onClick={handleOpenCreateModal}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] active:scale-[0.98] text-white text-xs sm:text-sm font-semibold shadow-btn transition-all duration-150 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -297,7 +132,6 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
         }
       />
 
-
       {/* 4. Lista o Cuadrícula de Ingredientes */}
       {isLoading ? (
         <div className="bg-white dark:bg-[#16100E] p-12 rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] text-center animate-pulse shadow-xs">
@@ -320,21 +154,20 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
           </p>
           <div className="mt-4 flex items-center justify-center gap-2.5 flex-wrap">
             <button
-              onClick={() => onRefresh()}
+              onClick={() => void invalidateInventory()}
               className="px-4 py-2.5 bg-stone-100 hover:bg-stone-200 dark:bg-[#251A15] dark:hover:bg-[#32231D] text-[#1C120D] dark:text-[#FBF4EB] rounded-xl text-xs font-semibold cursor-pointer transition-colors inline-flex items-center gap-1.5"
               title="Volver a sincronizar insumos con el servidor"
             >
               <span>🔄 Sincronizar despensa</span>
             </button>
-            <button
-              onClick={() => {
-                setIngredientToEdit(null);
-                setIsModalOpen(true);
-              }}
-              className="px-4 py-2.5 bg-[#8C1F25] hover:bg-[#74191E] text-white rounded-xl text-xs font-semibold cursor-pointer shadow-btn transition-colors inline-flex items-center gap-1.5"
-            >
-              <span>+ Agregar primer ingrediente</span>
-            </button>
+            {isAdmin && (
+              <button
+                onClick={handleOpenCreateModal}
+                className="px-4 py-2.5 bg-[#8C1F25] hover:bg-[#74191E] text-white rounded-xl text-xs font-semibold cursor-pointer shadow-btn transition-colors inline-flex items-center gap-1.5"
+              >
+                <span>+ Agregar primer ingrediente</span>
+              </button>
+            )}
           </div>
         </div>
       ) : filteredProducts.length === 0 ? (
@@ -355,277 +188,29 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
               : 'Intenta limpiar los filtros o buscar con otro término.'}
           </p>
           <button
-            onClick={() => {
-              setSearchTerm('');
-              setSelectedCategory('Todas');
-              setStatusFilter('todos');
-            }}
+            onClick={resetFilters}
             className="mt-4 px-4 py-2 bg-stone-100 hover:bg-stone-200 dark:bg-[#251A15] dark:hover:bg-[#32231D] text-[#1C120D] dark:text-[#FBF4EB] rounded-xl text-xs font-semibold cursor-pointer"
           >
             Ver todos los ingredientes
           </button>
         </div>
       ) : viewMode === 'cards' ? (
-        /* Vista de Tarjetas Espaciosas y Visuales (Ideal para pasteleros) */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredProducts.map((item) => {
-            const isOutOfStock = item.stock <= 0;
-            const isLowStock = !isOutOfStock && item.stock <= item.minStock;
-
-            // Porcentaje visual para la barra de nivel (base: doble del mínimo)
-            const maxRef = Math.max(item.minStock * 2.5, item.stock, 1);
-            const percent = Math.min(100, Math.round((item.stock / maxRef) * 100));
-
-            return (
-              <div
-                key={item.id}
-                className={`bg-white dark:bg-[#16100E] rounded-[22px] p-5 border transition-all flex flex-col justify-between hover:shadow-md ${
-                  isOutOfStock
-                    ? 'border-rose-300 dark:border-rose-900 bg-rose-50/20 dark:bg-rose-950/15'
-                    : isLowStock
-                    ? 'border-amber-300 dark:border-amber-900 bg-amber-50/20 dark:bg-amber-950/15'
-                    : 'border-[#DFCAA9]/80 dark:border-[#35251F]'
-                }`}
-              >
-                <div>
-                  {/* Top: Icono y Estado */}
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="w-12 h-12 rounded-2xl bg-[#FAF5ED] dark:bg-[#221713] border border-[#EADBCE] dark:border-[#3A2822] flex items-center justify-center text-2xl select-none shadow-xs">
-                      {item.icon || '🌾'}
-                    </div>
-
-                    {isOutOfStock ? (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800">
-                        ❌ Agotado
-                      </span>
-                    ) : isLowStock ? (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800 animate-pulse">
-                        ⚠️ Queda Poco
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800">
-                        ✓ Suficiente
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Nombre y Categoría */}
-                  <h4 className="font-bold text-stone-900 dark:text-[#FAF3EC] text-base leading-snug">
-                    {item.name}
-                  </h4>
-                  <span className="text-[11px] text-stone-500 dark:text-stone-400 font-medium mt-0.5 block">
-                    {item.category}
-                  </span>
-
-                  {item.description && (
-                    <p className="text-xs text-stone-500 dark:text-stone-400 mt-2 line-clamp-1 italic">
-                      "{item.description}"
-                    </p>
-                  )}
-
-                  {/* Existencias Grandes */}
-                  <div className="mt-4 pt-3 border-t border-stone-100 dark:border-[#281C17]">
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-xs text-stone-500 dark:text-stone-400 font-medium">Disponible:</span>
-                      <div className="text-right">
-                        <span
-                          className={`text-2xl font-black font-sans ${
-                            isOutOfStock
-                              ? 'text-rose-600 dark:text-rose-400'
-                              : isLowStock
-                              ? 'text-amber-700 dark:text-amber-400'
-                              : 'text-stone-900 dark:text-white'
-                          }`}
-                        >
-                          {item.stock}
-                        </span>{' '}
-                        <span className="text-xs font-bold text-stone-600 dark:text-stone-400 uppercase">
-                          {item.unit}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Barra visual de nivel */}
-                    <div className="w-full bg-stone-100 dark:bg-[#251A15] rounded-full h-2 mt-2 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          isOutOfStock
-                            ? 'bg-rose-500'
-                            : isLowStock
-                            ? 'bg-amber-500'
-                            : 'bg-emerald-500'
-                        }`}
-                        style={{ width: `${Math.max(4, percent)}%` }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] text-stone-400 dark:text-stone-500 mt-1">
-                      <span>Mínimo para avisar:</span>
-                      <span className="font-semibold text-stone-700 dark:text-stone-300">
-                        {item.minStock} {item.unit}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Botones de acción rápida: Sumar / Restar y Editar */}
-                <div className="mt-5 pt-3 border-t border-stone-100 dark:border-[#281C17] flex items-center justify-between gap-2">
-                  {/* Ajuste rápido con botones grandes */}
-                  <div className="flex items-center gap-1.5 bg-stone-100 dark:bg-[#201613] p-1 rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => openAdjustmentModal(item, -1)}
-                      disabled={item.stock <= 0}
-                      className="w-8 h-8 rounded-lg bg-white dark:bg-[#2C1E19] hover:bg-stone-50 dark:hover:bg-[#382620] text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-[#3A2822] flex items-center justify-center shadow-xs transition-colors disabled:opacity-40 cursor-pointer"
-                      title={`Descontar / Registrar merma (${item.unit})`}
-                    >
-                      <Minus className="w-3.5 h-3.5" />
-                    </button>
-                    <span className="text-xs font-bold text-stone-700 dark:text-stone-300 px-1">
-                      1 {item.unit}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => openAdjustmentModal(item, 1)}
-                      className="w-8 h-8 rounded-lg bg-white dark:bg-[#2C1E19] hover:bg-stone-50 dark:hover:bg-[#382620] text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-[#3A2822] flex items-center justify-center shadow-xs transition-colors cursor-pointer"
-                      title={`Ingresar compra / sobrante (${item.unit})`}
-                    >
-                      <PlusIcon className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  {/* Acciones Editar y Borrar (Solo Administrador) */}
-                  {isAdmin && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIngredientToEdit(item);
-                          setIsModalOpen(true);
-                        }}
-                        className="p-2 rounded-xl text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-[#221713] transition-colors cursor-pointer"
-                        title="Modificar ingrediente"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIngredientToDelete(item)}
-                        className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                        title="Eliminar de la despensa"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <IngredientCardGrid
+          items={filteredProducts}
+          isAdmin={isAdmin}
+          onAdjustStock={openAdjustmentModal}
+          onEdit={handleOpenEditModal}
+          onDelete={setIngredientToDelete}
+        />
       ) : (
-        /* Vista de Tabla Espaciosa y Limpia */
-        <div className="bg-white dark:bg-[#16100E] rounded-[22px] border border-[#DFCAA9] dark:border-[#35251F] shadow-xs overflow-hidden">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="bg-[#FAF5ED] dark:bg-[#201613] border-b border-stone-200 dark:border-[#35251F] text-xs font-bold uppercase text-stone-700 dark:text-stone-300">
-                <th className="py-4 px-6">Ingrediente</th>
-                <th className="py-4 px-4">Categoría</th>
-                <th className="py-4 px-4 text-center">Existencia</th>
-                <th className="py-4 px-4">Estado</th>
-                {isAdmin && <th className="py-4 px-6 text-right">Opciones</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100 dark:divide-[#281C17]">
-              {filteredProducts.map((item) => {
-                const isOutOfStock = item.stock <= 0;
-                const isLowStock = !isOutOfStock && item.stock <= item.minStock;
-
-                return (
-                  <tr key={item.id} className="hover:bg-stone-50/70 dark:hover:bg-[#201613]/60 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl select-none">{item.icon || '🌾'}</span>
-                        <div>
-                          <div className="font-bold text-stone-900 dark:text-[#FAF3EC]">{item.name}</div>
-                          {item.description && (
-                            <div className="text-xs text-stone-400 mt-0.5">{item.description}</div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-xs font-semibold text-stone-600 dark:text-stone-400">
-                      {item.category}
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <div className="inline-flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openAdjustmentModal(item, -1)}
-                          disabled={item.stock <= 0}
-                          className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-[#281C17] hover:bg-stone-200 dark:hover:bg-[#35251F] text-stone-800 dark:text-stone-200 flex items-center justify-center text-xs disabled:opacity-30 cursor-pointer"
-                        >
-                          -
-                        </button>
-                        <span className="font-extrabold text-base font-sans min-w-[70px] text-center text-stone-900 dark:text-white">
-                          {item.stock} {item.unit}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => openAdjustmentModal(item, 1)}
-                          className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-[#281C17] hover:bg-stone-200 dark:hover:bg-[#35251F] text-stone-800 dark:text-stone-200 flex items-center justify-center text-xs cursor-pointer"
-                        >
-                          +
-                        </button>
-                      </div>
-                      <div className="text-[10px] text-stone-400 dark:text-stone-500 mt-0.5">
-                        Mínimo: {item.minStock} {item.unit}
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      {isOutOfStock ? (
-                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200">
-                          Agotado
-                        </span>
-                      ) : isLowStock ? (
-                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200">
-                          Queda poco
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-200">
-                          Suficiente
-                        </span>
-                      )}
-                    </td>
-                    {isAdmin && (
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setIngredientToEdit(item);
-                              setIsModalOpen(true);
-                            }}
-                            className="p-1.5 text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white rounded-lg hover:bg-stone-100 dark:hover:bg-[#201613] cursor-pointer"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setIngredientToDelete(item)}
-                            className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <IngredientTable
+          items={filteredProducts}
+          isAdmin={isAdmin}
+          onAdjustStock={openAdjustmentModal}
+          onEdit={handleOpenEditModal}
+          onDelete={setIngredientToDelete}
+        />
       )}
-
 
       {/* Modales */}
       <IngredientModal
@@ -669,15 +254,11 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
         onConfirm={handleConfirmDelete}
       />
 
-      {/* Modal de Gestión de Categorías */}
       <CategoryManagerModal
         isOpen={isCategoryModalOpen}
         onClose={() => setIsCategoryModalOpen(false)}
         type="ingredient"
-        onCategoriesChanged={() => {
-          void refreshCategories();
-          void onRefresh();
-        }}
+        onCategoriesChanged={() => void invalidateInventory()}
         addToast={addToast}
       />
 

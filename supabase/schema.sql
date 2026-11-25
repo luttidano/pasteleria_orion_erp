@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS public.recipe (
   description text,
   yield_servings integer NOT NULL DEFAULT 1,
   image_url text,
+  is_active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
@@ -143,6 +144,7 @@ CREATE TABLE IF NOT EXISTS public.product (
   cost_price numeric DEFAULT 0,
   image_url text,
   icon text DEFAULT '🧁'::text,
+  is_active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now()
 );
@@ -157,9 +159,11 @@ CREATE TABLE IF NOT EXISTS public.packaging (
   min_stock numeric NOT NULL DEFAULT 0 CHECK (min_stock >= 0::numeric),
   unit text NOT NULL DEFAULT 'un'::text,
   cost_price numeric DEFAULT 0,
+  sale_price numeric(12, 2) NOT NULL DEFAULT 0 CHECK (sale_price >= 0::numeric),
   supplier_id uuid REFERENCES public.supplier(id) ON DELETE SET NULL,
   icon text DEFAULT '📦'::text,
   description text,
+  is_active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now()
 );
@@ -227,6 +231,7 @@ CREATE TABLE IF NOT EXISTS public.pos_sale (
   data_origin text NOT NULL DEFAULT 'demo'::text CHECK (data_origin = ANY (ARRAY['demo'::text, 'real'::text])),
   accounting_status text NOT NULL DEFAULT 'posted'::text CHECK (accounting_status = ANY (ARRAY['posted'::text, 'pending'::text, 'failed'::text])),
   accounting_error text,
+  created_by uuid REFERENCES public.profile(id) ON DELETE SET NULL,
   shift_id uuid REFERENCES public.pos_shift(id) ON DELETE SET NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now()
 );
@@ -239,6 +244,7 @@ CREATE TABLE IF NOT EXISTS public.pos_sale_item (
   product_name text NOT NULL,
   quantity integer NOT NULL CHECK (quantity > 0),
   unit_price numeric NOT NULL CHECK (unit_price >= 0::numeric),
+  unit_cost numeric(12, 2) NOT NULL DEFAULT 0 CHECK (unit_cost >= 0::numeric),
   line_total numeric NOT NULL CHECK (line_total >= 0::numeric)
 );
 
@@ -255,6 +261,7 @@ CREATE TABLE IF NOT EXISTS public.accounting_entry (
   status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'voided'::text])),
   pos_sale_id uuid REFERENCES public.pos_sale(id) ON DELETE SET NULL,
   pos_shift_id uuid REFERENCES public.pos_shift(id) ON DELETE SET NULL,
+  outbox_id uuid REFERENCES public.accounting_outbox(id) ON DELETE SET NULL,
   voided_at timestamp with time zone,
   voided_by uuid REFERENCES public.profile(id) ON DELETE SET NULL,
   void_reason text,
@@ -425,14 +432,18 @@ CREATE INDEX IF NOT EXISTS idx_recipe_ingredient_ingredient ON public.recipe_ing
 CREATE INDEX IF NOT EXISTS idx_product_category ON public.product(category_id);
 CREATE INDEX IF NOT EXISTS idx_product_recipe ON public.product(recipe_id);
 CREATE INDEX IF NOT EXISTS idx_product_supplier ON public.product(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_product_is_active ON public.product(is_active);
+CREATE INDEX IF NOT EXISTS idx_recipe_is_active ON public.recipe(is_active);
 CREATE INDEX IF NOT EXISTS idx_packaging_supplier ON public.packaging(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_packaging_package_type ON public.packaging(package_type);
+CREATE INDEX IF NOT EXISTS idx_packaging_is_active ON public.packaging(is_active);
 CREATE INDEX IF NOT EXISTS idx_general_supply_supplier ON public.general_supply(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_general_supply_category ON public.general_supply(category);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_items_sale ON public.pos_sale_item(sale_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_items_product ON public.pos_sale_item(product_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_item_packaging ON public.pos_sale_item(packaging_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_sold_at ON public.pos_sale(sold_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pos_sale_created_by ON public.pos_sale(created_by);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_shift_id ON public.pos_sale(shift_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sale_unshifted_completed ON public.pos_sale(sold_at DESC) WHERE shift_id IS NULL AND status = 'completada';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_pos_shift_single_open ON public.pos_shift (status) WHERE status = 'abierto';
@@ -446,8 +457,10 @@ CREATE INDEX IF NOT EXISTS idx_accounting_entry_date ON public.accounting_entry(
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_status_date ON public.accounting_entry(status, entry_date DESC);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_pos_sale ON public.accounting_entry(pos_sale_id);
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_pos_shift ON public.accounting_entry(pos_shift_id);
+CREATE INDEX IF NOT EXISTS idx_accounting_entry_outbox_id ON public.accounting_entry(outbox_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_accounting_entry_pos_sale ON public.accounting_entry(pos_sale_id) WHERE pos_sale_id IS NOT NULL AND status = 'active';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_accounting_entry_pos_shift ON public.accounting_entry(pos_shift_id) WHERE pos_shift_id IS NOT NULL AND status = 'active';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_accounting_entry_outbox_id ON public.accounting_entry(outbox_id) WHERE outbox_id IS NOT NULL AND status = 'active';
 CREATE INDEX IF NOT EXISTS idx_accounting_entry_reversed ON public.accounting_entry(reversed_entry_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_accounting_entry_closing_year ON public.accounting_entry(closing_year) WHERE origin = 'closing' AND status = 'active' AND closing_year IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_accounting_period_year_month ON public.accounting_period(year DESC, month DESC);

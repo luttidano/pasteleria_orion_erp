@@ -23,9 +23,14 @@ import { PosCloseShiftModal } from './PosCloseShiftModal';
 interface PosViewProps {
   section: 'pos-caja' | 'pos-historial' | 'pos-cierre';
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
+  isOnline?: boolean;
 }
 
-export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
+export const PosView: React.FC<PosViewProps> = ({
+  section,
+  addToast,
+  isOnline = true,
+}) => {
   const currentUser = authService.getCurrentUser();
   const isAdmin = currentUser?.role === 'admin';
 
@@ -88,7 +93,7 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
     openCloseShiftModal,
     handlePrintShift,
     handleConfirmCloseShift,
-  } = usePosShift({ isAdmin, addToastRef });
+  } = usePosShift({ isAdmin, isOnline, addToastRef });
 
   useEffect(() => {
     saleIdempotencyKeyRef.current = null;
@@ -198,6 +203,15 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
   const handleCompleteSale = async () => {
     if (isSavingSale) return;
 
+    if (!isOnline) {
+      addToast({
+        type: 'error',
+        title: 'Sin conexión con el servidor',
+        message: 'Restablece la conexión con el servidor ERP antes de cobrar la venta.',
+      });
+      return;
+    }
+
     if (cart.length === 0) {
       addToast({
         type: 'error',
@@ -299,6 +313,7 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
             paymentMethod={paymentMethod}
             onPaymentMethodChange={setPaymentMethod}
             isSavingSale={isSavingSale}
+            isOnline={isOnline}
             onUpdateQuantity={updateQuantity}
             onClearCart={clearCart}
             onCompleteSale={() => void handleCompleteSale()}
@@ -321,6 +336,7 @@ export const PosView: React.FC<PosViewProps> = ({ section, addToast }) => {
           shiftsHistory={shiftsHistory}
           lastReceiptShift={lastReceiptShift}
           isLoadingShift={isLoadingShift}
+          isOnline={isOnline}
           openingCashInput={openingCashInput}
           onOpeningCashInputChange={setOpeningCashInput}
           isSavingOpeningCash={isSavingOpeningCash}

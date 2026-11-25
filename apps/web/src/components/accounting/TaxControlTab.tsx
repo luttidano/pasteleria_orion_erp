@@ -14,13 +14,141 @@ import {
   Search,
 } from 'lucide-react';
 import type {
+  PurchasesBookEntry,
   PurchasesBookResponse,
+  SalesBookEntry,
   SalesBookResponse,
   ToastMessage,
   VatSummaryResponse,
 } from '../../types';
 import { taxService } from '../../services/taxService';
 import { formatMoney } from '../../utils/formatters';
+import { DataTable, type DataTableColumn } from '../common/DataTable';
+
+const SALES_BOOK_COLUMNS: DataTableColumn<SalesBookEntry>[] = [
+  {
+    key: 'date',
+    header: 'Fecha',
+    headerClassName: 'py-2.5 px-3',
+    cellClassName: 'py-2.5 px-3 font-mono text-gray-600',
+    render: (s) => s.date,
+  },
+  {
+    key: 'documentType',
+    header: 'Tipo Doc',
+    headerClassName: 'py-2.5 px-3',
+    cellClassName: 'py-2.5 px-3 text-gray-700',
+    render: (s) => s.documentType,
+  },
+  {
+    key: 'documentNumber',
+    header: 'N° Ticket',
+    headerClassName: 'py-2.5 px-3',
+    cellClassName: 'py-2.5 px-3 font-semibold text-gray-900',
+    render: (s) => s.documentNumber,
+  },
+  {
+    key: 'paymentMethod',
+    header: 'Medio Pago',
+    headerClassName: 'py-2.5 px-3',
+    cellClassName: 'py-2.5 px-3 capitalize text-gray-600',
+    render: (s) => s.paymentMethod,
+  },
+  {
+    key: 'netAmount',
+    header: 'Monto Neto',
+    headerClassName: 'py-2.5 px-3 text-right',
+    cellClassName: 'py-2.5 px-3 text-right text-gray-700 font-mono',
+    render: (s) => formatMoney(s.netAmount),
+  },
+  {
+    key: 'vatAmount',
+    header: 'IVA Débito (19%)',
+    headerClassName: 'py-2.5 px-3 text-right text-blue-600',
+    cellClassName: 'py-2.5 px-3 text-right text-blue-600 font-mono font-medium',
+    render: (s) => formatMoney(s.vatAmount),
+  },
+  {
+    key: 'totalAmount',
+    header: 'Total',
+    headerClassName: 'py-2.5 px-3 text-right font-bold',
+    cellClassName: 'py-2.5 px-3 text-right font-mono font-bold text-gray-900',
+    render: (s) => formatMoney(s.totalAmount),
+  },
+];
+
+const PURCHASES_BOOK_COLUMNS: DataTableColumn<PurchasesBookEntry>[] = [
+  {
+    key: 'date',
+    header: 'Fecha',
+    headerClassName: 'py-2.5 px-3',
+    cellClassName: 'py-2.5 px-3 font-mono text-gray-600',
+    render: (p) => p.date,
+  },
+  {
+    key: 'documentNumber',
+    header: 'N° Factura',
+    headerClassName: 'py-2.5 px-3',
+    cellClassName: 'py-2.5 px-3 font-semibold text-gray-900',
+    render: (p) => p.documentNumber,
+  },
+  {
+    key: 'supplierName',
+    header: 'Proveedor',
+    headerClassName: 'py-2.5 px-3',
+    cellClassName: 'py-2.5 px-3 text-gray-800 font-medium',
+    render: (p) => p.supplierName,
+  },
+  {
+    key: 'supplierRut',
+    header: 'RUT',
+    headerClassName: 'py-2.5 px-3',
+    cellClassName: 'py-2.5 px-3 text-gray-500 font-mono',
+    render: (p) =>
+      p.supplierRut || (
+        <span className="text-gray-400 italic font-sans text-[11px]">Sin RUT</span>
+      ),
+  },
+  {
+    key: 'source',
+    header: 'Origen',
+    headerClassName: 'py-2.5 px-3',
+    cellClassName: 'py-2.5 px-3',
+    render: (p) => (
+      <span
+        className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+          p.source === 'supplier_invoice'
+            ? 'bg-blue-50 text-blue-700'
+            : 'bg-amber-50 text-amber-700'
+        }`}
+      >
+        {p.source === 'supplier_invoice' ? 'CxP Factura' : 'Insumo Directo'}
+      </span>
+    ),
+  },
+  {
+    key: 'netAmount',
+    header: 'Monto Neto',
+    headerClassName: 'py-2.5 px-3 text-right',
+    cellClassName: 'py-2.5 px-3 text-right text-gray-700 font-mono',
+    render: (p) => formatMoney(p.netAmount),
+  },
+  {
+    key: 'vatAmount',
+    header: 'IVA Crédito (19%)',
+    headerClassName: 'py-2.5 px-3 text-right text-emerald-600',
+    cellClassName:
+      'py-2.5 px-3 text-right text-emerald-600 font-mono font-medium',
+    render: (p) => formatMoney(p.vatAmount),
+  },
+  {
+    key: 'totalAmount',
+    header: 'Total',
+    headerClassName: 'py-2.5 px-3 text-right font-bold',
+    cellClassName: 'py-2.5 px-3 text-right font-mono font-bold text-gray-900',
+    render: (p) => formatMoney(p.totalAmount),
+  },
+];
 
 interface TaxControlTabProps {
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
@@ -572,39 +700,17 @@ export const TaxControlTab: React.FC<TaxControlTabProps> = ({ addToast }) => {
             </button>
           </div>
 
-          <div className="overflow-x-auto max-h-[480px]">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-gray-50 text-gray-600 font-semibold sticky top-0 z-10 border-b border-gray-200">
-                <tr>
-                  <th className="py-2.5 px-3">Fecha</th>
-                  <th className="py-2.5 px-3">Tipo Doc</th>
-                  <th className="py-2.5 px-3">N° Ticket</th>
-                  <th className="py-2.5 px-3">Medio Pago</th>
-                  <th className="py-2.5 px-3 text-right">Monto Neto</th>
-                  <th className="py-2.5 px-3 text-right text-blue-600">IVA Débito (19%)</th>
-                  <th className="py-2.5 px-3 text-right font-bold">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredSales.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50/70 transition-colors">
-                    <td className="py-2.5 px-3 font-mono text-gray-600">{s.date}</td>
-                    <td className="py-2.5 px-3 text-gray-700">{s.documentType}</td>
-                    <td className="py-2.5 px-3 font-semibold text-gray-900">{s.documentNumber}</td>
-                    <td className="py-2.5 px-3 capitalize text-gray-600">{s.paymentMethod}</td>
-                    <td className="py-2.5 px-3 text-right text-gray-700 font-mono">{formatMoney(s.netAmount)}</td>
-                    <td className="py-2.5 px-3 text-right text-blue-600 font-mono font-medium">{formatMoney(s.vatAmount)}</td>
-                    <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-900">{formatMoney(s.totalAmount)}</td>
-                  </tr>
-                ))}
-                {filteredSales.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="text-center py-8 text-gray-400">
-                      No se encontraron ventas para este período o filtro.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
+          <DataTable
+            columns={SALES_BOOK_COLUMNS}
+            data={filteredSales}
+            keyExtractor={(s) => s.id}
+            containerClassName="overflow-x-auto max-h-[480px]"
+            tableClassName="w-full text-left text-xs"
+            headerRowClassName="bg-gray-50 text-gray-600 font-semibold sticky top-0 z-10 border-b border-gray-200"
+            bodyClassName="divide-y divide-gray-100"
+            rowClassName={() => 'hover:bg-gray-50/70 transition-colors'}
+            emptyState="No se encontraron ventas para este período o filtro."
+            footerContent={
               <tfoot className="bg-gray-50 font-bold border-t border-gray-200 text-xs">
                 <tr>
                   <td colSpan={4} className="py-3 px-3 text-gray-700">
@@ -621,8 +727,8 @@ export const TaxControlTab: React.FC<TaxControlTabProps> = ({ addToast }) => {
                   </td>
                 </tr>
               </tfoot>
-            </table>
-          </div>
+            }
+          />
         </div>
       )}
 
@@ -650,53 +756,17 @@ export const TaxControlTab: React.FC<TaxControlTabProps> = ({ addToast }) => {
             </button>
           </div>
 
-          <div className="overflow-x-auto max-h-[480px]">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-gray-50 text-gray-600 font-semibold sticky top-0 z-10 border-b border-gray-200">
-                <tr>
-                  <th className="py-2.5 px-3">Fecha</th>
-                  <th className="py-2.5 px-3">N° Factura</th>
-                  <th className="py-2.5 px-3">Proveedor</th>
-                  <th className="py-2.5 px-3">RUT</th>
-                  <th className="py-2.5 px-3">Origen</th>
-                  <th className="py-2.5 px-3 text-right">Monto Neto</th>
-                  <th className="py-2.5 px-3 text-right text-emerald-600">IVA Crédito (19%)</th>
-                  <th className="py-2.5 px-3 text-right font-bold">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredPurchases.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50/70 transition-colors">
-                    <td className="py-2.5 px-3 font-mono text-gray-600">{p.date}</td>
-                    <td className="py-2.5 px-3 font-semibold text-gray-900">{p.documentNumber}</td>
-                    <td className="py-2.5 px-3 text-gray-800 font-medium">{p.supplierName}</td>
-                    <td className="py-2.5 px-3 text-gray-500 font-mono">
-                      {p.supplierRut || <span className="text-gray-400 italic font-sans text-[11px]">Sin RUT</span>}
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          p.source === 'supplier_invoice'
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'bg-amber-50 text-amber-700'
-                        }`}
-                      >
-                        {p.source === 'supplier_invoice' ? 'CxP Factura' : 'Insumo Directo'}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-right text-gray-700 font-mono">{formatMoney(p.netAmount)}</td>
-                    <td className="py-2.5 px-3 text-right text-emerald-600 font-mono font-medium">{formatMoney(p.vatAmount)}</td>
-                    <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-900">{formatMoney(p.totalAmount)}</td>
-                  </tr>
-                ))}
-                {filteredPurchases.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="text-center py-8 text-gray-400">
-                      No se encontraron compras con factura para este período o filtro.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
+          <DataTable
+            columns={PURCHASES_BOOK_COLUMNS}
+            data={filteredPurchases}
+            keyExtractor={(p) => p.id}
+            containerClassName="overflow-x-auto max-h-[480px]"
+            tableClassName="w-full text-left text-xs"
+            headerRowClassName="bg-gray-50 text-gray-600 font-semibold sticky top-0 z-10 border-b border-gray-200"
+            bodyClassName="divide-y divide-gray-100"
+            rowClassName={() => 'hover:bg-gray-50/70 transition-colors'}
+            emptyState="No se encontraron compras con factura para este período o filtro."
+            footerContent={
               <tfoot className="bg-gray-50 font-bold border-t border-gray-200 text-xs">
                 <tr>
                   <td colSpan={5} className="py-3 px-3 text-gray-700">
@@ -713,8 +783,8 @@ export const TaxControlTab: React.FC<TaxControlTabProps> = ({ addToast }) => {
                   </td>
                 </tr>
               </tfoot>
-            </table>
-          </div>
+            }
+          />
         </div>
       )}
     </div>

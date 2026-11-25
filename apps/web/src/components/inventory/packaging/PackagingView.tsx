@@ -15,6 +15,7 @@ import { formatMoney } from '../../../utils/formatters';
 import { PackagingModal } from './PackagingModal';
 import { StockAdjustmentModal, type StockAdjustmentTarget } from '../StockAdjustmentModal';
 import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
+import { DataTable, type DataTableColumn } from '../../common/DataTable';
 
 interface PackagingViewProps {
   user?: User | null;
@@ -286,136 +287,174 @@ export const PackagingView: React.FC<PackagingViewProps> = ({
 
       {/* Table */}
       <div className="bg-white dark:bg-[#1E1512] rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-stone-50 dark:bg-[#170F0D] border-b border-stone-200 dark:border-stone-800 text-stone-500 text-xs">
-              <tr>
-                <th className="py-3 px-4">Empaque</th>
-                <th className="py-3 px-4">Tipo</th>
-                <th className="py-3 px-4">Categoría</th>
-                <th className="py-3 px-4">Stock</th>
-                <th className="py-3 px-4">Ajuste Rápido</th>
-                <th className="py-3 px-4">Costo / Venta POS</th>
-                <th className="py-3 px-4">Proveedor</th>
-                <th className="py-3 px-4 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100 dark:divide-stone-800/60">
-              {filteredItems.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-stone-400 text-sm">
-                    {loading ? 'Cargando inventario...' : 'No se encontraron empaques registrados.'}
-                  </td>
-                </tr>
-              ) : (
-                filteredItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-stone-50/50 dark:hover:bg-stone-800/20">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{item.icon}</span>
-                        <div>
-                          <div className="font-bold text-stone-900 dark:text-stone-100">{item.name}</div>
-                          {item.description && <div className="text-[11px] text-stone-400">{item.description}</div>}
-                        </div>
+        <DataTable
+          data={filteredItems}
+          keyExtractor={(item) => item.id}
+          isLoading={loading}
+          loadingLabel="Cargando inventario..."
+          emptyState="No se encontraron empaques registrados."
+          tableClassName="w-full text-left text-sm"
+          headerRowClassName="bg-stone-50 dark:bg-[#170F0D] border-b border-stone-200 dark:border-stone-800 text-stone-500 text-xs"
+          bodyClassName="divide-y divide-stone-100 dark:divide-stone-800/60"
+          rowClassName={() => 'hover:bg-stone-50/50 dark:hover:bg-stone-800/20'}
+          columns={
+            [
+              {
+                key: 'name',
+                header: 'Empaque',
+                render: (item) => (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{item.icon}</span>
+                    <div>
+                      <div className="font-bold text-stone-900 dark:text-stone-100">
+                        {item.name}
                       </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      {item.packageType === 'primario' ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                          Primario
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                          Secundario
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-xs text-stone-600 dark:text-stone-400 font-medium">
-                      {item.category}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono font-bold text-stone-900 dark:text-stone-100">
-                          {item.stock} {item.unit}
-                        </span>
-                        {item.status === 'agotado' && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">Agotado</span>
-                        )}
-                        {item.status === 'bajo' && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">Bajo</span>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-stone-400">Mín: {item.minStock} {item.unit}</div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => openAdjustmentModal(item, -10)}
-                          disabled={item.stock <= 0}
-                          title="Descontar / Registrar merma"
-                          className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer disabled:opacity-40"
-                        >
-                          <MinusCircle className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openAdjustmentModal(item, 10)}
-                          title="Ingresar compra / sobrante"
-                          className="p-1 rounded-md text-stone-400 hover:text-emerald-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                        >
-                          <PlusCircle className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-xs text-stone-600 dark:text-stone-300">
-                      <div>{formatMoney(item.costPrice)}</div>
-                      {item.packageType === 'secundario' && (
-                        <div className="text-[10px] text-amber-600 dark:text-amber-400 font-sans font-semibold">
-                          POS: {formatMoney(item.salePrice ?? 0)}
+                      {item.description && (
+                        <div className="text-[11px] text-stone-400">
+                          {item.description}
                         </div>
                       )}
-                    </td>
-                    <td className="py-3 px-4 text-xs text-stone-600 dark:text-stone-300">
-                      {item.supplier ? (
-                        <span className="flex items-center gap-1">
-                          {item.supplier.icon} {item.supplier.name}
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'packageType',
+                header: 'Tipo',
+                render: (item) =>
+                  item.packageType === 'primario' ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                      Primario
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                      Secundario
+                    </span>
+                  ),
+              },
+              {
+                key: 'category',
+                header: 'Categoría',
+                cellClassName:
+                  'py-3 px-4 text-xs text-stone-600 dark:text-stone-400 font-medium',
+                render: (item) => item.category,
+              },
+              {
+                key: 'stock',
+                header: 'Stock',
+                render: (item) => (
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-bold text-stone-900 dark:text-stone-100">
+                        {item.stock} {item.unit}
+                      </span>
+                      {item.status === 'agotado' && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
+                          Agotado
                         </span>
-                      ) : (
-                        <span className="text-stone-400 italic">No asignado</span>
                       )}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      {isAdmin ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingItem(item);
-                              setIsModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeletingItem(item)}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-stone-400 italic">Solo lectura</span>
+                      {item.status === 'bajo' && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
+                          Bajo
+                        </span>
                       )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                    <div className="text-[10px] text-stone-400">
+                      Mín: {item.minStock} {item.unit}
+                    </div>
+                  </>
+                ),
+              },
+              {
+                key: 'quickAdjust',
+                header: 'Ajuste Rápido',
+                render: (item) => (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openAdjustmentModal(item, -10)}
+                      disabled={item.stock <= 0}
+                      title="Descontar / Registrar merma"
+                      className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer disabled:opacity-40"
+                    >
+                      <MinusCircle className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openAdjustmentModal(item, 10)}
+                      title="Ingresar compra / sobrante"
+                      className="p-1 rounded-md text-stone-400 hover:text-emerald-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+                ),
+              },
+              {
+                key: 'price',
+                header: 'Costo / Venta POS',
+                cellClassName:
+                  'py-3 px-4 font-mono text-xs text-stone-600 dark:text-stone-300',
+                render: (item) => (
+                  <>
+                    <div>{formatMoney(item.costPrice)}</div>
+                    {item.packageType === 'secundario' && (
+                      <div className="text-[10px] text-amber-600 dark:text-amber-400 font-sans font-semibold">
+                        POS: {formatMoney(item.salePrice ?? 0)}
+                      </div>
+                    )}
+                  </>
+                ),
+              },
+              {
+                key: 'supplier',
+                header: 'Proveedor',
+                cellClassName:
+                  'py-3 px-4 text-xs text-stone-600 dark:text-stone-300',
+                render: (item) =>
+                  item.supplier ? (
+                    <span className="flex items-center gap-1">
+                      {item.supplier.icon} {item.supplier.name}
+                    </span>
+                  ) : (
+                    <span className="text-stone-400 italic">No asignado</span>
+                  ),
+              },
+              {
+                key: 'actions',
+                header: 'Acciones',
+                headerClassName: 'py-3 px-4 text-right',
+                cellClassName: 'py-3 px-4 text-right',
+                render: (item) =>
+                  isAdmin ? (
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingItem(item);
+                          setIsModalOpen(true);
+                        }}
+                        className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingItem(item)}
+                        className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-stone-400 italic">
+                      Solo lectura
+                    </span>
+                  ),
+              },
+            ] satisfies DataTableColumn<Packaging>[]
+          }
+        />
       </div>
 
       {/* Modales */}

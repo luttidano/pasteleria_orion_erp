@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import {
   X,
   CheckCircle2,
@@ -12,6 +11,7 @@ import {
 } from 'lucide-react';
 import { createIdempotencyKey } from '../../../lib/api';
 import { calculateGrossFromNet, calculateGrossTaxBreakdown } from '../../../utils/tax';
+import { Modal } from '../../common/Modal';
 import type {
   InventoryPurchasePaymentMethod,
   ShoppingItem,
@@ -176,9 +176,17 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-[100] bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-      <div className="relative bg-[#FAF5ED] dark:bg-[#16100E] rounded-[28px] max-w-lg w-full shadow-2xl border-2 border-[#DFCAA9] dark:border-[#35251F] max-h-[92vh] flex flex-col overflow-hidden animate-modal-pop my-auto">
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      closeDisabled={isSubmitting}
+      zIndexClassName="z-[100]"
+      maxWidthClassName="max-w-lg"
+      containerClassName="bg-[#FAF5ED] dark:bg-[#16100E] rounded-[28px] shadow-2xl border-2 border-[#DFCAA9] dark:border-[#35251F] animate-modal-pop"
+      bodyClassName="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4"
+      footerClassName="shrink-0 px-6 py-3.5 border-t border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7]/60 dark:bg-[#1A120F] flex items-center justify-between gap-3"
+      customHeader={
         <div className="relative px-6 py-4 border-b border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7] dark:bg-[#1F1512] shrink-0">
           <div className="flex items-center gap-3 pr-8">
             <div className="w-12 h-12 rounded-2xl bg-white dark:bg-[#2A1B16] border border-[#DFCAA9]/70 dark:border-[#422B22] flex items-center justify-center text-2xl shadow-xs shrink-0">
@@ -227,17 +235,45 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-[#7C695C] hover:text-[#1C120D] dark:text-[#9F8C7F] dark:hover:text-[#FBF4EB] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+            disabled={isSubmitting}
+            className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-[#7C695C] hover:text-[#1C120D] dark:text-[#9F8C7F] dark:hover:text-[#FBF4EB] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-50"
             title="Cerrar ventana"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+      }
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="px-4 py-2.5 rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] text-[#4A3B32] dark:text-[#D5C2B4] font-semibold text-xs sm:text-sm hover:bg-[#F3E7D7] dark:hover:bg-[#251A15] transition-colors cursor-pointer disabled:opacity-50"
+          >
+            Cancelar
+          </button>
 
+          <button
+            type="submit"
+            form="purchase-form"
+            disabled={isSubmitting || numericBought <= 0 || numericTotalCost <= 0}
+            className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] active:scale-[0.98] text-white font-bold text-sm shadow-btn transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            {isSubmitting ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4" />
+            )}
+            <span>✓ Registrar Compra</span>
+          </button>
+        </>
+      }
+    >
         <form
           onSubmit={handleSubmit}
           id="purchase-form"
-          className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4"
+          className="space-y-4"
         >
           {error && (
             <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/70 text-rose-800 dark:text-rose-200 text-xs flex items-center gap-2">
@@ -476,32 +512,6 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
             ) : null}
           </div>
         </form>
-
-        <div className="shrink-0 px-6 py-3.5 border-t border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7]/60 dark:bg-[#1A120F] flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border border-[#DFCAA9] dark:border-[#3D2C24] text-[#4A3B32] dark:text-[#D5C2B4] font-semibold text-xs sm:text-sm hover:bg-[#F3E7D7] dark:hover:bg-[#251A15] transition-colors cursor-pointer"
-          >
-            Cancelar
-          </button>
-
-          <button
-            type="submit"
-            form="purchase-form"
-            disabled={isSubmitting || numericBought <= 0 || numericTotalCost <= 0}
-            className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-[#8C1F25] hover:bg-[#74191E] active:scale-[0.98] text-white font-bold text-sm shadow-btn transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            {isSubmitting ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <CheckCircle2 className="w-4 h-4" />
-            )}
-            <span>✓ Registrar Compra</span>
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 };

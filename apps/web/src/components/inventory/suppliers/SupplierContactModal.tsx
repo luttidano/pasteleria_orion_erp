@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import {
   X,
   Phone,
@@ -23,6 +22,7 @@ import {
   getSupplyModality,
   isPhoneRegistered,
 } from '../../../services/supplierService';
+import { Modal } from '../../common/Modal';
 
 interface SupplierContactModalProps {
   isOpen: boolean;
@@ -77,11 +77,16 @@ export const SupplierContactModal: React.FC<SupplierContactModalProps> = ({
     window.location.href = callUrl;
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-[#FAF5ED] dark:bg-[#16100E] rounded-[26px] max-w-lg w-full shadow-2xl border border-[#DFCAA9] dark:border-[#35251F] overflow-hidden animate-modal-pop my-6">
-        {/* Encabezado con identidad del proveedor */}
-        <div className="relative px-6 py-6 border-b border-[#E8D7BE] dark:border-[#2C1D18] bg-linear-to-b from-[#F7EFE4] to-[#F1E3D1] dark:from-[#211612] dark:to-[#1A110E]">
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      maxWidthClassName="max-w-lg"
+      containerClassName="bg-[#FAF5ED] dark:bg-[#16100E] rounded-[26px] shadow-2xl border border-[#DFCAA9] dark:border-[#35251F] animate-modal-pop"
+      bodyClassName="p-6 space-y-5 overflow-y-auto flex-1"
+      footerClassName="px-6 py-3.5 border-t border-[#E8D7BE] dark:border-[#2C1D18] bg-[#F3E7D7]/60 dark:bg-[#1A110E] flex items-center justify-between"
+      customHeader={
+        <div className="relative px-6 py-6 border-b border-[#E8D7BE] dark:border-[#2C1D18] bg-linear-to-b from-[#F7EFE4] to-[#F1E3D1] dark:from-[#211612] dark:to-[#1A110E] shrink-0">
           <div className="flex flex-col items-center text-center">
             <div className="w-16 h-16 rounded-2xl bg-white dark:bg-[#2A1D18] border border-[#DFCAA9]/80 dark:border-[#3D2C24] flex items-center justify-center text-3xl shadow-sm mb-2.5">
               {supplier.icon || (isPresencial ? '🏬' : '🚚')}
@@ -92,7 +97,6 @@ export const SupplierContactModal: React.FC<SupplierContactModalProps> = ({
               </h3>
             </div>
 
-            {/* Badge de Modalidad */}
             <div className="mb-2">
               {isPresencial ? (
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 px-2.5 py-0.5 rounded-full border border-blue-200/80 dark:border-blue-900/60">
@@ -148,9 +152,31 @@ export const SupplierContactModal: React.FC<SupplierContactModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        {/* Contenido y Botones de Redirección Directa */}
-        <div className="p-6 space-y-5">
+      }
+      footer={
+        <>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onEdit(supplier);
+              }}
+              className="text-xs text-stone-500 hover:text-[#8C1F25] dark:hover:text-[#E25C64] underline underline-offset-4 cursor-pointer"
+            >
+              Editar información de este proveedor
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-auto px-4 py-2 rounded-xl bg-stone-200/80 dark:bg-[#251A15] hover:bg-stone-300 dark:hover:bg-[#30221C] text-stone-700 dark:text-stone-300 text-xs font-semibold cursor-pointer transition-colors"
+          >
+            Cerrar
+          </button>
+        </>
+      }
+    >
           {/* BOTONES PRINCIPALES DE ACCIÓN DIRECTA */}
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-2 text-center">
@@ -388,32 +414,6 @@ export const SupplierContactModal: React.FC<SupplierContactModalProps> = ({
               </div>
             </div>
           )}
-
-          {/* Pie de modal */}
-          <div className="pt-2 flex items-center justify-between">
-            {onEdit && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onEdit(supplier);
-                }}
-                className="text-xs text-stone-500 hover:text-[#8C1F25] dark:hover:text-[#E25C64] underline underline-offset-4 cursor-pointer"
-              >
-                Editar información de este proveedor
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="ml-auto px-4 py-2 rounded-xl bg-stone-200/80 dark:bg-[#251A15] hover:bg-stone-300 dark:hover:bg-[#30221C] text-stone-700 dark:text-stone-300 text-xs font-semibold cursor-pointer transition-colors"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
+    </Modal>
   );
 };

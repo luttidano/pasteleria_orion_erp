@@ -25,6 +25,59 @@ import { formatChileShortDate, formatMoney } from '../../utils/formatters';
 import { MonthPeriodActionModal } from './periods/MonthPeriodActionModal';
 import { AnnualClosingModal } from './periods/AnnualClosingModal';
 import { AnnualClosingReverseModal } from './periods/AnnualClosingReverseModal';
+import { DataTable, type DataTableColumn } from '../common/DataTable';
+
+type AnnualPreviewLine = AnnualClosingPreview['lines'][number];
+
+const ANNUAL_PREVIEW_COLUMNS: DataTableColumn<AnnualPreviewLine>[] = [
+  {
+    key: 'accountCode',
+    header: 'Código',
+    headerClassName: 'py-3 px-4',
+    cellClassName: 'py-2.5 px-4 font-mono font-bold',
+    render: (line) => line.accountCode,
+  },
+  {
+    key: 'accountName',
+    header: 'Cuenta Contable',
+    headerClassName: 'py-3 px-4',
+    cellClassName: 'py-2.5 px-4',
+    render: (line) => line.accountName,
+  },
+  {
+    key: 'accountType',
+    header: 'Tipo',
+    headerClassName: 'py-3 px-4',
+    cellClassName: 'py-2.5 px-4 uppercase text-[10px] text-stone-500',
+    render: (line) => line.accountType,
+  },
+  {
+    key: 'currentBalance',
+    header: 'Saldo Actual',
+    headerClassName: 'py-3 px-4 text-right',
+    cellClassName: 'py-2.5 px-4 text-right font-mono text-stone-500',
+    render: (line) =>
+      line.accountType === 'patrimonio'
+        ? 'Contrapartida'
+        : formatMoney(line.currentBalance),
+  },
+  {
+    key: 'debit',
+    header: 'DEBE (Cierre)',
+    headerClassName: 'py-3 px-4 text-right',
+    cellClassName:
+      'py-2.5 px-4 text-right font-mono font-bold text-stone-900 dark:text-white',
+    render: (line) => (line.debit > 0 ? formatMoney(line.debit) : '-'),
+  },
+  {
+    key: 'credit',
+    header: 'HABER (Cierre)',
+    headerClassName: 'py-3 px-4 text-right',
+    cellClassName:
+      'py-2.5 px-4 text-right font-mono font-bold text-stone-900 dark:text-white',
+    render: (line) => (line.credit > 0 ? formatMoney(line.credit) : '-'),
+  },
+];
 
 interface AccountingPeriodsTabProps {
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
@@ -632,60 +685,33 @@ export const AccountingPeriodsTab: React.FC<AccountingPeriodsTabProps> = ({ addT
             {/* Tabla previa del asiento de refundición */}
             {preview.lines.length > 0 && (
               <div className="overflow-x-auto rounded-2xl border border-stone-200/80 dark:border-[#35251F]">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-[#FAF5ED] dark:bg-[#201613] text-[10px] font-bold uppercase text-stone-700 dark:text-stone-300 border-b border-stone-200 dark:border-[#35251F]">
-                      <th className="py-3 px-4">Código</th>
-                      <th className="py-3 px-4">Cuenta Contable</th>
-                      <th className="py-3 px-4">Tipo</th>
-                      <th className="py-3 px-4 text-right">Saldo Actual</th>
-                      <th className="py-3 px-4 text-right">DEBE (Cierre)</th>
-                      <th className="py-3 px-4 text-right">HABER (Cierre)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100 dark:divide-[#281C17]">
-                    {preview.lines.map((line, idx) => (
-                      <tr
-                        key={`${line.accountId}-${idx}`}
-                        className={
-                          line.accountType === 'patrimonio'
-                            ? 'bg-purple-50/40 dark:bg-purple-950/20 font-semibold'
-                            : 'hover:bg-stone-50/50 dark:hover:bg-[#1C1411]/50'
-                        }
-                      >
-                        <td className="py-2.5 px-4 font-mono font-bold">{line.accountCode}</td>
-                        <td className="py-2.5 px-4">{line.accountName}</td>
-                        <td className="py-2.5 px-4 uppercase text-[10px] text-stone-500">
-                          {line.accountType}
+                <DataTable
+                  columns={ANNUAL_PREVIEW_COLUMNS}
+                  data={preview.lines}
+                  keyExtractor={(line, idx) => `${line.accountId}-${idx}`}
+                  tableClassName="w-full text-left text-xs border-collapse"
+                  headerRowClassName="bg-[#FAF5ED] dark:bg-[#201613] text-[10px] font-bold uppercase text-stone-700 dark:text-stone-300 border-b border-stone-200 dark:border-[#35251F]"
+                  rowClassName={(line) =>
+                    line.accountType === 'patrimonio'
+                      ? 'bg-purple-50/40 dark:bg-purple-950/20 font-semibold'
+                      : 'hover:bg-stone-50/50 dark:hover:bg-[#1C1411]/50'
+                  }
+                  footerContent={
+                    <tfoot>
+                      <tr className="bg-[#FAF5ED]/80 dark:bg-[#201613] font-mono font-bold text-xs border-t border-stone-200 dark:border-[#35251F]">
+                        <td colSpan={4} className="py-2.5 px-4 text-right">
+                          Totales Asiento de Cierre:
                         </td>
-                        <td className="py-2.5 px-4 text-right font-mono text-stone-500">
-                          {line.accountType === 'patrimonio'
-                            ? 'Contrapartida'
-                            : formatMoney(line.currentBalance)}
+                        <td className="py-2.5 px-4 text-right text-emerald-700 dark:text-emerald-400">
+                          {formatMoney(preview.lines.reduce((s, l) => s + l.debit, 0))}
                         </td>
-                        <td className="py-2.5 px-4 text-right font-mono font-bold text-stone-900 dark:text-white">
-                          {line.debit > 0 ? formatMoney(line.debit) : '-'}
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono font-bold text-stone-900 dark:text-white">
-                          {line.credit > 0 ? formatMoney(line.credit) : '-'}
+                        <td className="py-2.5 px-4 text-right text-emerald-700 dark:text-emerald-400">
+                          {formatMoney(preview.lines.reduce((s, l) => s + l.credit, 0))}
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-[#FAF5ED]/80 dark:bg-[#201613] font-mono font-bold text-xs border-t border-stone-200 dark:border-[#35251F]">
-                      <td colSpan={4} className="py-2.5 px-4 text-right">
-                        Totales Asiento de Cierre:
-                      </td>
-                      <td className="py-2.5 px-4 text-right text-emerald-700 dark:text-emerald-400">
-                        {formatMoney(preview.lines.reduce((s, l) => s + l.debit, 0))}
-                      </td>
-                      <td className="py-2.5 px-4 text-right text-emerald-700 dark:text-emerald-400">
-                        {formatMoney(preview.lines.reduce((s, l) => s + l.credit, 0))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
+                    </tfoot>
+                  }
+                />
               </div>
             )}
           </>

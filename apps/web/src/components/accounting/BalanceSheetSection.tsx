@@ -2,6 +2,7 @@ import React from 'react';
 import { Boxes, Building2, CreditCard, ShieldCheck } from 'lucide-react';
 import type { BalanceSheetData } from '../../types';
 import { formatMoney } from '../../utils/formatters';
+import { InventoryValuationCard } from './InventoryValuationCard';
 
 interface BalanceSheetSectionProps {
   balanceSheet: BalanceSheetData;
@@ -252,155 +253,34 @@ export const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ balanc
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Materias Primas */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200">
-              <span className="font-bold text-xs">
-                Harina e Insumos en Bodega (Materia Prima)
-              </span>
-              <span className="font-mono font-bold text-sm">
-                {formatMoney(inventoryValuation.rawMaterialsValue)}
-              </span>
-            </div>
+          <InventoryValuationCard
+            title="Harina e Insumos en Bodega (Materia Prima)"
+            totalValue={inventoryValuation.rawMaterialsValue}
+            items={inventoryValuation.topRawMaterials}
+            itemHeaderLabel="Insumo"
+            emptyLabel="Sin materias primas registradas."
+            headerClassName="bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200"
+          />
 
-            <div className="overflow-x-auto rounded-xl border border-stone-200 dark:border-stone-800">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-stone-50 dark:bg-[#1E1512] text-[10px] uppercase font-bold text-stone-500">
-                    <th className="py-2 px-3">Insumo</th>
-                    <th className="py-2 px-3 text-right">Stock</th>
-                    <th className="py-2 px-3 text-right">Costo Unit.</th>
-                    <th className="py-2 px-3 text-right">Valor Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-                  {inventoryValuation.topRawMaterials.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="py-4 text-center text-stone-400">
-                        Sin materias primas registradas.
-                      </td>
-                    </tr>
-                  ) : (
-                    inventoryValuation.topRawMaterials.map((ing) => (
-                      <tr key={ing.id} className="hover:bg-stone-50/50">
-                        <td className="py-2 px-3 font-medium text-stone-800 dark:text-stone-200">
-                          {ing.name}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                          {ing.stock} {ing.unit}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                          {formatMoney(ing.unitCost)}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono font-bold text-stone-900 dark:text-stone-100">
-                          {formatMoney(ing.totalValue)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <InventoryValuationCard
+            title="Cajas y Empaques (Stock)"
+            totalValue={inventoryValuation.packagingValue ?? 0}
+            items={inventoryValuation.topPackaging}
+            itemHeaderLabel="Empaque"
+            costHeaderLabel="Costo"
+            totalHeaderLabel="Total"
+            emptyLabel="Sin empaques registrados."
+            headerClassName="bg-orange-50 dark:bg-orange-950/20 text-orange-900 dark:text-orange-200"
+          />
 
-          {/* Empaques Secundarios */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-orange-50 dark:bg-orange-950/20 text-orange-900 dark:text-orange-200">
-              <span className="font-bold text-xs">Cajas y Empaques (Stock)</span>
-              <span className="font-mono font-bold text-sm">
-                {formatMoney(inventoryValuation.packagingValue ?? 0)}
-              </span>
-            </div>
-
-            <div className="overflow-x-auto rounded-xl border border-stone-200 dark:border-stone-800">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-stone-50 dark:bg-[#1E1512] text-[10px] uppercase font-bold text-stone-500">
-                    <th className="py-2 px-3">Empaque</th>
-                    <th className="py-2 px-3 text-right">Stock</th>
-                    <th className="py-2 px-3 text-right">Costo</th>
-                    <th className="py-2 px-3 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-                  {!inventoryValuation.topPackaging ||
-                  inventoryValuation.topPackaging.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="py-4 text-center text-stone-400">
-                        Sin empaques registrados.
-                      </td>
-                    </tr>
-                  ) : (
-                    inventoryValuation.topPackaging.map((pack) => (
-                      <tr key={pack.id} className="hover:bg-stone-50/50">
-                        <td className="py-2 px-3 font-medium text-stone-800 dark:text-stone-200">
-                          {pack.name}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                          {pack.stock} {pack.unit}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                          {formatMoney(pack.unitCost)}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono font-bold text-stone-900 dark:text-stone-100">
-                          {formatMoney(pack.totalValue)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Productos Terminados */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-200">
-              <span className="font-bold text-xs">Productos Terminados Listos para Venta</span>
-              <span className="font-mono font-bold text-sm">
-                {formatMoney(inventoryValuation.finishedProductsValue)}
-              </span>
-            </div>
-
-            <div className="overflow-x-auto rounded-xl border border-stone-200 dark:border-stone-800">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-stone-50 dark:bg-[#1E1512] text-[10px] uppercase font-bold text-stone-500">
-                    <th className="py-2 px-3">Producto</th>
-                    <th className="py-2 px-3 text-right">Stock</th>
-                    <th className="py-2 px-3 text-right">Costo Unit.</th>
-                    <th className="py-2 px-3 text-right">Valor Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-                  {inventoryValuation.topProducts.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="py-4 text-center text-stone-400">
-                        Sin productos en catálogo.
-                      </td>
-                    </tr>
-                  ) : (
-                    inventoryValuation.topProducts.map((prod) => (
-                      <tr key={prod.id} className="hover:bg-stone-50/50">
-                        <td className="py-2 px-3 font-medium text-stone-800 dark:text-stone-200">
-                          {prod.name}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                          {prod.stock} {prod.unit}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400">
-                          {formatMoney(prod.unitCost)}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono font-bold text-stone-900 dark:text-stone-100">
-                          {formatMoney(prod.totalValue)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <InventoryValuationCard
+            title="Productos Terminados Listos para Venta"
+            totalValue={inventoryValuation.finishedProductsValue}
+            items={inventoryValuation.topProducts}
+            itemHeaderLabel="Producto"
+            emptyLabel="Sin productos en catálogo."
+            headerClassName="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-200"
+          />
         </div>
       </div>
     </>

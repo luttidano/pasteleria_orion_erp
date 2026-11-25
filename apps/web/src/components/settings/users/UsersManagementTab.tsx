@@ -18,6 +18,7 @@ import { userService } from '../../../services/userService';
 import { formatChileShortDate } from '../../../utils/formatters';
 import { UserModal } from './UserModal';
 import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
+import { DataTable, type DataTableColumn } from '../../common/DataTable';
 
 interface UsersManagementTabProps {
   currentUser: User;
@@ -310,100 +311,110 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-stone-200/80 dark:border-[#2C1D18] bg-stone-50/70 dark:bg-[#1A120F] text-[11px] font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
-                  <th className="py-3 px-4">Colaborador</th>
-                  <th className="py-3 px-4">Rol & Permisos</th>
-                  <th className="py-3 px-4 hidden md:table-cell">Fecha Alta</th>
-                  <th className="py-3 px-4 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100 dark:divide-[#241713] text-xs">
-                {filteredUsers.map((profile) => {
-                  const isCurrent = profile.id === currentUser.id;
-                  return (
-                    <tr
-                      key={profile.id}
-                      className="hover:bg-stone-50/50 dark:hover:bg-[#1E1410]/50 transition-colors"
-                    >
-                      {/* Colaborador (Avatar, Nombre y Email) */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#8C1F25] to-[#B33939] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
-                            {getInitials(profile.name)}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-stone-900 dark:text-stone-100 truncate">
-                                {profile.name}
-                              </span>
-                              {isCurrent && (
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#8C1F25]/10 text-[#8C1F25] dark:text-[#FFAAB0] border border-[#8C1F25]/20">
-                                  Tú
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-stone-500 dark:text-stone-400 text-[11px] block truncate">
-                              {profile.email}
+          <DataTable
+            data={filteredUsers}
+            keyExtractor={(profile) => profile.id}
+            headerRowClassName="border-b border-stone-200/80 dark:border-[#2C1D18] bg-stone-50/70 dark:bg-[#1A120F] text-[11px] font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider"
+            bodyClassName="divide-y divide-stone-100 dark:divide-[#241713] text-xs"
+            rowClassName={() =>
+              'hover:bg-stone-50/50 dark:hover:bg-[#1E1410]/50 transition-colors'
+            }
+            columns={
+              [
+                {
+                  key: 'collaborator',
+                  header: 'Colaborador',
+                  headerClassName: 'py-3 px-4',
+                  cellClassName: 'py-3.5 px-4',
+                  render: (profile) => {
+                    const isCurrent = profile.id === currentUser.id;
+                    return (
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#8C1F25] to-[#B33939] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                          {getInitials(profile.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-stone-900 dark:text-stone-100 truncate">
+                              {profile.name}
                             </span>
+                            {isCurrent && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#8C1F25]/10 text-[#8C1F25] dark:text-[#FFAAB0] border border-[#8C1F25]/20">
+                                Tú
+                              </span>
+                            )}
                           </div>
+                          <span className="text-stone-500 dark:text-stone-400 text-[11px] block truncate">
+                            {profile.email}
+                          </span>
                         </div>
-                      </td>
-
-                      {/* Rol */}
-                      <td className="py-3.5 px-4">{getRoleBadge(profile.role)}</td>
-
-                      {/* Fecha de Registro */}
-                      <td className="py-3.5 px-4 hidden md:table-cell text-stone-500 dark:text-stone-400 font-medium">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-stone-400" />
-                          <span>{formatDate(profile.createdAt)}</span>
-                        </div>
-                      </td>
-
-                      {/* Acciones */}
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Botón Editar */}
+                      </div>
+                    );
+                  },
+                },
+                {
+                  key: 'role',
+                  header: 'Rol & Permisos',
+                  headerClassName: 'py-3 px-4',
+                  cellClassName: 'py-3.5 px-4',
+                  render: (profile) => getRoleBadge(profile.role),
+                },
+                {
+                  key: 'createdAt',
+                  header: 'Fecha Alta',
+                  headerClassName: 'py-3 px-4 hidden md:table-cell',
+                  cellClassName:
+                    'py-3.5 px-4 hidden md:table-cell text-stone-500 dark:text-stone-400 font-medium',
+                  render: (profile) => (
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-stone-400" />
+                      <span>{formatDate(profile.createdAt)}</span>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'actions',
+                  header: 'Acciones',
+                  headerClassName: 'py-3 px-4 text-right',
+                  cellClassName: 'py-3.5 px-4 text-right',
+                  render: (profile) => {
+                    const isCurrent = profile.id === currentUser.id;
+                    return (
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(profile)}
+                          className="p-1.5 rounded-lg text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#251814] transition-colors cursor-pointer"
+                          title="Editar datos y rol"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        {isCurrent ? (
                           <button
                             type="button"
-                            onClick={() => handleOpenEditModal(profile)}
-                            className="p-1.5 rounded-lg text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#251814] transition-colors cursor-pointer"
-                            title="Editar datos y rol"
+                            disabled
+                            className="p-1.5 rounded-lg text-stone-300 dark:text-stone-700 cursor-not-allowed opacity-50"
+                            title="No puedes revocar el acceso a tu propia cuenta"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Lock className="w-4 h-4" />
                           </button>
-
-                          {/* Botón Eliminar */}
-                          {isCurrent ? (
-                            <button
-                              type="button"
-                              disabled
-                              className="p-1.5 rounded-lg text-stone-300 dark:text-stone-700 cursor-not-allowed opacity-50"
-                              title="No puedes revocar el acceso a tu propia cuenta"
-                            >
-                              <Lock className="w-4 h-4" />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setUserToDelete(profile)}
-                              className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                              title="Revocar acceso de usuario"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setUserToDelete(profile)}
+                            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                            title="Revocar acceso de usuario"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  },
+                },
+              ] satisfies DataTableColumn<UserProfile>[]
+            }
+          />
         )}
       </div>
 

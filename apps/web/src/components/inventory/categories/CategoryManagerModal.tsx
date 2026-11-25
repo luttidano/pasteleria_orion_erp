@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import type { Category, CategoryType, ToastMessage } from '../../../types';
 import { categoryService } from '../../../services/categoryService';
 import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
+import { Modal } from '../../common/Modal';
 
 interface CategoryManagerModalProps {
   isOpen: boolean;
@@ -107,39 +107,31 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <>
-      {createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white dark:bg-[#16100E] rounded-3xl max-w-lg w-full p-6 border border-stone-200 dark:border-[#35251F] shadow-2xl space-y-5">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-stone-100 dark:border-[#2C1D18] pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-[#201612] border border-amber-200/80 dark:border-[#35251F] flex items-center justify-center text-xl">
-                  {defaultIcon}
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-[#2A1B16] dark:text-[#FDF5EE]">
-                    {isIngredient ? 'Categorías de Insumos' : 'Categorías de Recetas'}
-                  </h3>
-                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                    {isIngredient
-                      ? 'Gestiona las clasificaciones de tu despensa'
-                      : 'Gestiona las familias de tus fórmulas'}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded-lg hover:bg-stone-100 dark:hover:bg-[#201612] cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        closeDisabled={isDeleting}
+        title={isIngredient ? 'Categorías de Insumos' : 'Categorías de Recetas'}
+        subtitle={
+          isIngredient
+            ? 'Gestiona las clasificaciones de tu despensa'
+            : 'Gestiona las familias de tus fórmulas'
+        }
+        icon={<span className="text-xl">{defaultIcon}</span>}
+        iconWrapperClassName="bg-amber-50 dark:bg-[#201612] border border-amber-200/80 dark:border-[#35251F]"
+        maxWidthClassName="max-w-lg"
+        footer={
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-bold rounded-xl bg-stone-200 dark:bg-[#2C1D18] text-stone-700 dark:text-stone-300 hover:bg-stone-300 cursor-pointer"
+          >
+            Cerrar
+          </button>
+        }
+      >
             {/* Formulario para agregar nueva */}
             <form
               onSubmit={handleCreate}
@@ -216,21 +208,7 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
                 ))
               )}
             </div>
-
-            {/* Footer */}
-            <div className="pt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-xs font-bold rounded-xl bg-stone-200 dark:bg-[#2C1D18] text-stone-700 dark:text-stone-300 hover:bg-stone-300 cursor-pointer"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+      </Modal>
 
       <ConfirmDeleteModal
         isOpen={Boolean(categoryToDelete)}

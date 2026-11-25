@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Menu,
@@ -10,32 +10,70 @@ import {
   AlertTriangle,
   RefreshCw,
 } from 'lucide-react';
-import type { User, Ingredient, ToastMessage } from '../../types';
-import { inventoryStockService } from '../../services/inventoryStockService';
+import type { User, ToastMessage } from '../../types';
+import {
+  useInvalidateInventory,
+  useStockAlertsQuery,
+} from '../../hooks/queries/useInventoryQueries';
 import { Sidebar } from './Sidebar';
 import type { AdminSection } from './Sidebar';
-import { IngredientsView } from '../inventory/ingredients/IngredientsView';
-
-import { ProductsView } from '../inventory/products/ProductsView';
-import { RecipesView } from '../inventory/recipes/RecipesView';
-import { ShoppingListView } from '../inventory/shopping/ShoppingListView';
-import { SuppliersView } from '../inventory/suppliers/SuppliersView';
-import { PackagingView } from '../inventory/packaging/PackagingView';
-import { GeneralSuppliesView } from '../inventory/general-supplies/GeneralSuppliesView';
-import { PosView } from '../pos/PosView';
-import { AccountingView } from '../accounting/AccountingView';
 import { useTheme } from '../../context/ThemeContext';
-import { SettingsView } from '../settings/SettingsView';
 import type { ConnectionStatusSnapshot } from '../../lib/connectionStatus';
 import { usePwaInstall } from '../../lib/usePwaInstall';
 
+const IngredientsView = lazy(() =>
+  import('../inventory/ingredients/IngredientsView').then((m) => ({
+    default: m.IngredientsView,
+  })),
+);
+const ProductsView = lazy(() =>
+  import('../inventory/products/ProductsView').then((m) => ({
+    default: m.ProductsView,
+  })),
+);
+const RecipesView = lazy(() =>
+  import('../inventory/recipes/RecipesView').then((m) => ({
+    default: m.RecipesView,
+  })),
+);
+const ShoppingListView = lazy(() =>
+  import('../inventory/shopping/ShoppingListView').then((m) => ({
+    default: m.ShoppingListView,
+  })),
+);
+const SuppliersView = lazy(() =>
+  import('../inventory/suppliers/SuppliersView').then((m) => ({
+    default: m.SuppliersView,
+  })),
+);
+const PackagingView = lazy(() =>
+  import('../inventory/packaging/PackagingView').then((m) => ({
+    default: m.PackagingView,
+  })),
+);
+const GeneralSuppliesView = lazy(() =>
+  import('../inventory/general-supplies/GeneralSuppliesView').then((m) => ({
+    default: m.GeneralSuppliesView,
+  })),
+);
+const PosView = lazy(() =>
+  import('../pos/PosView').then((m) => ({ default: m.PosView })),
+);
+const AccountingView = lazy(() =>
+  import('../accounting/AccountingView').then((m) => ({
+    default: m.AccountingView,
+  })),
+);
+const SettingsView = lazy(() =>
+  import('../settings/SettingsView').then((m) => ({
+    default: m.SettingsView,
+  })),
+);
+
 interface AdminLayoutProps {
   user: User;
-  ingredients: Ingredient[];
   onLogout: () => void;
-  onRefresh: () => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
-  isLoading?: boolean;
   isOnline?: boolean;
   connectionStatus?: ConnectionStatusSnapshot;
   onCheckConnection?: () => void;
@@ -73,11 +111,8 @@ const DEFAULT_SECTION_FOR_ROLE: Record<string, AdminSection> = {
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   user,
-  ingredients,
   onLogout,
-  onRefresh,
   addToast,
-  isLoading = false,
   isOnline = true,
   connectionStatus,
   onCheckConnection,
@@ -112,36 +147,20 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { canInstall, promptInstall } = usePwaInstall();
 
-  const [stockAlerts, setStockAlerts] = useState<{ restockCount: number; outOfStockCount: number }>({
-    restockCount: 0,
-    outOfStockCount: 0,
-  });
+  const { data: stockAlertsSummary } = useStockAlertsQuery(user.role === 'admin');
+  const stockAlerts = useMemo(
+    () => ({
+      restockCount: stockAlertsSummary?.restockCount ?? 0,
+      outOfStockCount: stockAlertsSummary?.outOfStockCount ?? 0,
+    }),
+    [stockAlertsSummary],
+  );
+  const invalidateInventory = useInvalidateInventory();
 
   const refreshStockAlerts = useCallback(async () => {
-    if (user.role !== 'admin') {
-      setStockAlerts({ restockCount: 0, outOfStockCount: 0 });
-      return;
-    }
-    try {
-      const summary = await inventoryStockService.getAlertCounts();
-      setStockAlerts({
-        restockCount: summary.restockCount,
-        outOfStockCount: summary.outOfStockCount,
-      });
-    } catch (err) {
-      console.error('[AppLayout] Error cargando alertas de stock:', err);
-    }
-  }, [user.role]);
-
-  // Sincronizar alertas consolidadas de stock solo cuando el usuario es admin
-  useEffect(() => {
-    void refreshStockAlerts();
-  }, [refreshStockAlerts]);
-
-  const handleRefreshAll = useCallback(async () => {
-    await onRefresh();
-    await refreshStockAlerts();
-  }, [onRefresh, refreshStockAlerts]);
+    if (user.role !== 'admin') return;
+    await invalidateInventory();
+  }, [user.role, invalidateInventory]);
 
   const getHeaderTitle = (sec: AdminSection): string => {
     switch (sec) {
@@ -373,27 +392,32 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
         {/* Contenido según el Módulo y Sub-sección activa */}
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <Suspense
+            fallback={
+              <div className="bg-white dark:bg-[#16100E] p-12 rounded-[24px] border border-[#EADBCE] dark:border-[#35251F] text-center animate-pulse shadow-xs">
+                <div className="w-8 h-8 border-2 border-[#8C1F25]/25 border-t-[#8C1F25] rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-xs font-semibold text-stone-500 dark:text-stone-400">
+                  Cargando módulo...
+                </p>
+              </div>
+            }
+          >
           {/* MÓDULO 1: INVENTARIO */}
           {activeSection === 'despensa' && (
             <IngredientsView
               user={user}
-              ingredients={ingredients}
-              onRefresh={onRefresh}
               addToast={addToast}
               externalFilter="todos"
               onNavigateToShoppingList={
                 user.role === 'admin' ? () => handleSelectSection('compras') : undefined
               }
-              isLoading={isLoading}
             />
           )}
 
           {activeSection === 'recetas' && (
             <RecipesView
               user={user}
-              ingredients={ingredients}
               addToast={addToast}
-              onRefresh={onRefresh}
             />
           )}
 
@@ -406,11 +430,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           )}
 
           {activeSection === 'compras' && (
-            <ShoppingListView
-              ingredients={ingredients}
-              onRefresh={handleRefreshAll}
-              addToast={addToast}
-            />
+            <ShoppingListView addToast={addToast} />
           )}
 
           {activeSection === 'empaques' && (
@@ -437,7 +457,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           {(activeSection === 'pos-caja' ||
             activeSection === 'pos-historial' ||
             activeSection === 'pos-cierre') && (
-            <PosView section={activeSection} addToast={addToast} />
+            <PosView
+              section={activeSection}
+              addToast={addToast}
+              isOnline={
+                (connectionStatus?.health ?? (isOnline ? 'online' : 'offline')) ===
+                'online'
+              }
+            />
           )}
 
           {/* MÓDULO 3: CONTABILIDAD (SOLO ADMIN) */}
@@ -454,6 +481,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           {activeSection === 'ajustes' && (
             <SettingsView currentUser={user} addToast={addToast}/>
           )}
+          </Suspense>
         </main>
 
         {/* Footer */}

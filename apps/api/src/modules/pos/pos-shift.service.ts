@@ -184,7 +184,13 @@ export class PosShiftService {
     let outboxEventId: string | null = null;
     try {
       const txResult = await this.prisma.$transaction(async (tx) => {
-        let openShift = await tx.posShift.findFirst({
+        let openShift: {
+          id: string;
+          shiftNumber: bigint;
+          status: string;
+          openingCash: Prisma.Decimal | number | string;
+          openedAt: Date;
+        } | null = await tx.posShift.findFirst({
           where: { status: 'abierto' },
           orderBy: { openedAt: 'desc' },
         });
@@ -391,19 +397,30 @@ export class PosShiftService {
     openingCash = 0,
     unshiftedFrom?: Date,
   ) {
-    const existingOpen = await tx.posShift.findFirst({
-      where: { status: 'abierto' },
-      orderBy: { openedAt: 'desc' },
-    });
+    const lockedOpenShifts = await tx.$queryRaw<
+      Array<{
+        id: string;
+        shiftNumber: bigint;
+        status: string;
+        openingCash: Prisma.Decimal | number | string;
+        openedAt: Date;
+      }>
+    >`
+      SELECT
+        id,
+        shift_number AS "shiftNumber",
+        status,
+        opening_cash AS "openingCash",
+        opened_at AS "openedAt"
+      FROM public.pos_shift
+      WHERE status = 'abierto'
+      ORDER BY opened_at DESC
+      LIMIT 1
+      FOR UPDATE
+    `;
 
-    if (existingOpen) {
-      await tx.$queryRaw`
-        SELECT id
-        FROM public.pos_shift
-        WHERE id = ${existingOpen.id}::uuid
-        FOR UPDATE
-      `;
-      return existingOpen;
+    if (lockedOpenShifts?.[0]) {
+      return lockedOpenShifts[0];
     }
 
     const lastClosed = await tx.posShift.findFirst({

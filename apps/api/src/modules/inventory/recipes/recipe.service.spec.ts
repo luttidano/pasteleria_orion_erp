@@ -6,7 +6,10 @@ import { CategoryService } from '../categories/category.service';
 import { PrismaService } from '../../../database/prisma.service';
 import { StockMovementService } from '../stock/stock-movement.service';
 import { AccountingOutboxService } from '../../accounting/outbox/accounting-outbox.service';
-import { AccountingOutboxProcessorService } from '../../accounting/outbox/accounting-outbox-processor.service';
+import {
+  AccountingOutboxProcessorService,
+  OutboxDeferredError,
+} from '../../accounting/outbox/accounting-outbox-processor.service';
 
 describe('RecipeService (ACID produce y conversión estricta de unidades)', () => {
   let service: RecipeService;
@@ -27,6 +30,7 @@ describe('RecipeService (ACID produce y conversión estricta de unidades)', () =
       },
       stockMovement: {
         create: jest.fn().mockResolvedValue({ id: 'mov-rec-1' }),
+        createMany: jest.fn().mockResolvedValue({ count: 3 }),
       },
       accountingOutbox: {
         upsert: jest.fn().mockResolvedValue({ id: 'outbox-prod-1' }),
@@ -135,7 +139,13 @@ describe('RecipeService (ACID produce y conversión estricta de unidades)', () =
         }),
       }),
     );
-    expect(prisma.stockMovement.create).toHaveBeenCalledTimes(3); // 2 production_out + 1 production_in
+    expect(prisma.stockMovement.createMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({ movementType: 'production_out' }),
+        expect.objectContaining({ movementType: 'production_in' }),
+      ]),
+    });
+    expect(prisma.stockMovement.createMany.mock.calls[0][0].data).toHaveLength(3); // 2 production_out + 1 production_in
     expect(prisma.accountingOutbox.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
@@ -192,6 +202,46 @@ describe('RecipeService (ACID produce y conversión estricta de unidades)', () =
     expect(res.product.newStock).toBe(10);
     expect(res.accountingStatus).toBe('pending');
     expect(res.accountingWarning).toMatch(/pendiente/i);
+  });
+
+  it('no debe emitir accountingWarning al usuario cuando el outbox solo se difiere al worker por latencia', async () => {
+    const recipeId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    const ingId = '11111111-1111-4111-8111-111111111111';
+    const prodId = '33333333-3333-4333-8333-333333333333';
+
+    prisma.recipe.findUnique.mockResolvedValue({
+      id: recipeId,
+      name: 'Queque Lento',
+      yieldServings: 10,
+      ingredients: [
+        {
+          ingredientId: ingId,
+          quantity: 1,
+          unit: 'kg',
+          ingredients: { id: ingId, name: 'Harina', stock: 5, unit: 'kg', price: 1000 },
+        },
+      ],
+      products: [{ id: prodId, name: 'Queque Lento', stock: 0, unit: 'un', costPrice: 0 }],
+    });
+    prisma.ingredient.findMany.mockResolvedValue([
+      { id: ingId, name: 'Harina', stock: 5, unit: 'kg', price: 1000 },
+    ]);
+    prisma.ingredient.updateMany.mockResolvedValue({ count: 1 });
+    prisma.product.update.mockResolvedValue({
+      id: prodId,
+      name: 'Queque Lento',
+      stock: 10,
+      unit: 'un',
+      costPrice: 100,
+    });
+    outboxProcessor.processEvent.mockRejectedValueOnce(
+      new OutboxDeferredError(4500),
+    );
+
+    const res = await service.produce(recipeId, { quantity: 1, productId: prodId });
+    expect(res.success).toBe(true);
+    expect(res.accountingStatus).toBe('pending');
+    expect(res.accountingWarning).toBeNull();
   });
 
   it('debe lanzar ConflictException si updateMany falla por concurrencia (count 0)', async () => {

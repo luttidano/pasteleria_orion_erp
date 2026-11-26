@@ -405,12 +405,12 @@ describe('PosShiftService', () => {
     const mockTx = {
       $queryRaw: jest
         .fn()
+        .mockResolvedValueOnce([]) // SELECT ... WHERE status = 'abierto' FOR UPDATE no encuentra turno abierto
         .mockResolvedValueOnce([]) // ON CONFLICT (status) WHERE status = 'abierto' DO NOTHING genera 0 filas
         .mockResolvedValueOnce([{ id: winningShift.id }]), // SELECT FOR UPDATE
       posShift: {
         findFirst: jest
           .fn()
-          .mockResolvedValueOnce(null) // No hay turno abierto inicialmente
           .mockResolvedValueOnce(null) // Chequeo lastClosed
           .mockResolvedValueOnce(winningShift), // Raced: recupera el turno insertado por la transacción competidora
       },
@@ -418,7 +418,7 @@ describe('PosShiftService', () => {
 
     const result = await service.ensureActiveShiftInTx(mockTx as any, 'user-race-1', 5000);
     expect(result).toEqual(winningShift);
-    expect(mockTx.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(mockTx.$queryRaw).toHaveBeenCalledTimes(3);
   });
 
   describe('ClosePosShiftDto con ValidationPipe estricto', () => {

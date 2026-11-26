@@ -40,6 +40,7 @@ export const RecipesView: React.FC<RecipesViewProps> = ({
   const [filterMode, setFilterMode] = useState<'all' | 'canProduce' | 'missing'>('all');
   const [search, setSearch] = useState('');
   const [producingRecipe, setProducingRecipe] = useState<Recipe | null>(null);
+  const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [recipeToDelete, setRecipeToDelete] = useState<Recipe | null>(null);
   const [isDeletingRecipe, setIsDeletingRecipe] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -114,20 +115,31 @@ export const RecipesView: React.FC<RecipesViewProps> = ({
     void invalidateInventory();
   };
 
-  const handleCreateRecipe = async (data: RecipeFormData) => {
+  const handleSaveRecipe = async (data: RecipeFormData) => {
+    const payload = {
+      name: data.name,
+      description: data.description,
+      yieldServings: data.yieldServings,
+      category: data.category,
+      ingredients: data.ingredients,
+    };
+
     try {
-      await recipeService.create({
-        name: data.name,
-        description: data.description,
-        yieldServings: data.yieldServings,
-        category: data.category,
-        ingredients: data.ingredients,
-      });
-      addToast({
-        type: 'success',
-        title: 'Receta creada',
-        message: `"${data.name}" se guardó correctamente.`,
-      });
+      if (editingRecipe) {
+        await recipeService.update(editingRecipe.id, payload);
+        addToast({
+          type: 'success',
+          title: 'Receta actualizada',
+          message: `"${data.name}" se actualizó correctamente.`,
+        });
+      } else {
+        await recipeService.create(payload);
+        addToast({
+          type: 'success',
+          title: 'Receta creada',
+          message: `"${data.name}" se guardó correctamente.`,
+        });
+      }
       await loadRecipes();
     } catch (err: unknown) {
       addToast({
@@ -259,7 +271,10 @@ export const RecipesView: React.FC<RecipesViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => {
+                  setEditingRecipe(null);
+                  setIsModalOpen(true);
+                }}
                 className="px-3.5 py-2 bg-[#8C1F25] hover:bg-[#74191E] text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
@@ -296,6 +311,10 @@ export const RecipesView: React.FC<RecipesViewProps> = ({
               userRole={user.role}
               massUnit={massUnit}
               onProduce={(rec) => setProducingRecipe(rec)}
+              onEdit={(rec) => {
+                setEditingRecipe(rec);
+                setIsModalOpen(true);
+              }}
               onDelete={(rec) => setRecipeToDelete(rec)}
             />
           ))}
@@ -312,10 +331,14 @@ export const RecipesView: React.FC<RecipesViewProps> = ({
 
       <RecipeFormModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleCreateRecipe}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingRecipe(null);
+        }}
+        onSave={handleSaveRecipe}
         ingredients={ingredients}
         categories={categories}
+        editingRecipe={editingRecipe}
       />
 
       <CategoryManagerModal

@@ -29,6 +29,21 @@ import type {
   SyncedShiftRef,
 } from './accounting-outbox.types';
 
+export class OutboxDeferredError extends Error {
+  constructor(maxWaitMs: number) {
+    super(
+      `Sincronización contable diferida al worker en segundo plano (>${maxWaitMs}ms).`,
+    );
+    this.name = 'OutboxDeferredError';
+  }
+}
+
+export function isOutboxDeferredError(
+  error: unknown,
+): error is OutboxDeferredError {
+  return error instanceof OutboxDeferredError;
+}
+
 @Injectable()
 export class AccountingOutboxProcessorService {
   private readonly handlers: AccountingEventHandler[];
@@ -255,7 +270,7 @@ export class AccountingOutboxProcessorService {
    */
   async processEventBestEffort(
     outboxId: string,
-    maxWaitMs = 1500,
+    maxWaitMs = 4500,
   ): Promise<OutboxProcessResult> {
     if (maxWaitMs <= 0) {
       return this.processEvent(outboxId);
@@ -267,11 +282,7 @@ export class AccountingOutboxProcessorService {
 
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutHandle = setTimeout(() => {
-        reject(
-          new Error(
-            `Sincronización contable diferida al worker en segundo plano (>${maxWaitMs}ms).`,
-          ),
-        );
+        reject(new OutboxDeferredError(maxWaitMs));
       }, maxWaitMs);
       if (typeof timeoutHandle.unref === 'function') {
         timeoutHandle.unref();
@@ -337,7 +348,7 @@ export async function dispatchOutboxBestEffort(
   processor: Pick<AccountingOutboxProcessorService, 'processEvent'> &
     Partial<Pick<AccountingOutboxProcessorService, 'processEventBestEffort'>>,
   outboxId: string,
-  maxWaitMs = 1500,
+  maxWaitMs = 4500,
 ): Promise<OutboxProcessResult> {
   if (typeof processor.processEventBestEffort === 'function') {
     return processor.processEventBestEffort(outboxId, maxWaitMs);

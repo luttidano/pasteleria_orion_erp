@@ -11,6 +11,7 @@ import { PrismaService } from '../../../database/prisma.service';
 import { ProduceRecipeDto } from '../dto/produce-recipe.dto';
 import {
   computeWeightedAverageUnitCost,
+  type RecordStockMovementInput,
   StockMovementService,
 } from '../stock/stock-movement.service';
 import { processInventoryOutboxAfterCommit } from '../stock/inventory-adjustment.helper';
@@ -51,7 +52,8 @@ export class RecipeProductionService {
     };
 
     try {
-      txOutput = await this.prisma.$transaction(async (tx) => {
+      txOutput = await this.prisma.$transaction(
+        async (tx) => {
         const recipe = await tx.recipe.findUnique({
           where: { id },
           include: {
@@ -116,19 +118,19 @@ export class RecipeProductionService {
           FOR UPDATE
         `;
 
-        const lockedIngredients = await tx.ingredient.findMany({
-          where: { id: { in: sortedIngredientIds } },
-          select: { id: true, name: true, stock: true, unit: true, price: true },
-        });
-        const ingredientMap = new Map(lockedIngredients.map((i) => [i.id, i]));
-
-        const lockedProduct =
+        const [lockedIngredients, lockedProduct] = await Promise.all([
+          tx.ingredient.findMany({
+            where: { id: { in: sortedIngredientIds } },
+            select: { id: true, name: true, stock: true, unit: true, price: true },
+          }),
           typeof tx.product.findUnique === 'function'
-            ? await tx.product.findUnique({
+            ? tx.product.findUnique({
                 where: { id: targetProduct.id },
                 select: { id: true, stock: true, costPrice: true },
               })
-            : null;
+            : Promise.resolve(null),
+        ]);
+        const ingredientMap = new Map(lockedIngredients.map((i) => [i.id, i]));
 
         const requiredByIngredient = new Map<
           string,
@@ -198,20 +200,28 @@ export class RecipeProductionService {
           cost: number;
         }> = [];
 
-        for (const ingId of sortedIngredientIds) {
-          const req = requiredByIngredient.get(ingId)!;
-          const deductAmount = req.requiredQty;
+        const now = new Date();
+        const updateResults = await Promise.all(
+          sortedIngredientIds.map((ingId) => {
+            const req = requiredByIngredient.get(ingId)!;
+            return tx.ingredient.updateMany({
+              where: {
+                id: ingId,
+                stock: { gte: req.requiredQty },
+              },
+              data: {
+                stock: { decrement: req.requiredQty },
+                updatedAt: now,
+              },
+            });
+          }),
+        );
 
-          const updateResult = await tx.ingredient.updateMany({
-            where: {
-              id: ingId,
-              stock: { gte: deductAmount },
-            },
-            data: {
-              stock: { decrement: deductAmount },
-              updatedAt: new Date(),
-            },
-          });
+        const stockMovementsToRecord: RecordStockMovementInput[] = [];
+
+        sortedIngredientIds.forEach((ingId, idx) => {
+          const req = requiredByIngredient.get(ingId)!;
+          const updateResult = updateResults[idx];
 
           if (updateResult.count === 0) {
             throw new ConflictException(
@@ -219,6 +229,7 @@ export class RecipeProductionService {
             );
           }
 
+          const deductAmount = req.requiredQty;
           const expectedRemaining = Math.max(
             0,
             roundQuantity(req.availableStock - deductAmount),
@@ -234,24 +245,22 @@ export class RecipeProductionService {
             });
           }
 
-          if (this.stockMovementService) {
-            await this.stockMovementService.recordInTx(tx, {
-              itemType: 'ingredient',
-              itemId: ingId,
-              itemName: req.name,
-              movementType: 'production_out',
-              quantityDelta: -deductAmount,
-              unit: req.stockUnit,
-              stockBefore: req.availableStock,
-              stockAfter: expectedRemaining,
-              unitCost: req.unitCost,
-              totalCost: lineCost,
-              referenceType: 'recipe_production',
-              referenceId: productionId,
-              reason: `Producción receta "${recipe.name}" (${dto.quantity} tanda/s)`,
-              createdById: userId,
-            });
-          }
+          stockMovementsToRecord.push({
+            itemType: 'ingredient',
+            itemId: ingId,
+            itemName: req.name,
+            movementType: 'production_out',
+            quantityDelta: -deductAmount,
+            unit: req.stockUnit,
+            stockBefore: req.availableStock,
+            stockAfter: expectedRemaining,
+            unitCost: req.unitCost,
+            totalCost: lineCost,
+            referenceType: 'recipe_production',
+            referenceId: productionId,
+            reason: `Producción receta "${recipe.name}" (${dto.quantity} tanda/s)`,
+            createdById: userId,
+          });
 
           deductedIngredients.push({
             ingredientId: ingId,
@@ -261,7 +270,7 @@ export class RecipeProductionService {
             unit: req.stockUnit,
             cost: lineCost,
           });
-        }
+        });
 
         const unitsToAdd = roundQuantity(
           dto.producedUnits !== undefined && dto.producedUnits > 0
@@ -308,7 +317,7 @@ export class RecipeProductionService {
         const finalProdStock = roundQuantity(Number(updatedProduct.stock));
 
         if (this.stockMovementService) {
-          await this.stockMovementService.recordInTx(tx, {
+          stockMovementsToRecord.push({
             itemType: 'product',
             itemId: updatedProduct.id,
             itemName: updatedProduct.name,
@@ -324,6 +333,10 @@ export class RecipeProductionService {
             reason: `Elaboración receta "${recipe.name}"`,
             createdById: userId,
           });
+          await this.stockMovementService.recordManyInTx(
+            tx,
+            stockMovementsToRecord,
+          );
         }
 
         const outboxEvent = this.accountingOutboxService
@@ -363,7 +376,9 @@ export class RecipeProductionService {
             totalCost: totalProductionCost,
           },
         };
-      });
+        },
+        { timeout: 15000 },
+      );
     } catch (error) {
       rethrowPrismaError(error, {
         notFound: `Receta con ID "${id}" no encontrada.`,

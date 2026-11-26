@@ -1,6 +1,7 @@
 import React from 'react';
 import { Edit2, Minus, Plus as PlusIcon, Trash2 } from 'lucide-react';
 import type { Ingredient } from '../../../types';
+import { formatQuantity } from '../../../utils/formatters';
 import {
   getIngredientStockFlags,
   IngredientStockStatusBadge,
@@ -84,7 +85,7 @@ export const IngredientCardGrid: React.FC<IngredientCardGridProps> = ({
                           : 'text-stone-900 dark:text-white'
                       }`}
                     >
-                      {item.stock}
+                      {formatQuantity(item.stock)}
                     </span>{' '}
                     <span className="text-xs font-bold text-stone-600 dark:text-stone-400 uppercase">
                       {item.unit}
@@ -108,7 +109,7 @@ export const IngredientCardGrid: React.FC<IngredientCardGridProps> = ({
                 <div className="flex items-center justify-between text-[11px] text-stone-400 dark:text-stone-500 mt-1">
                   <span>Mínimo para avisar:</span>
                   <span className="font-semibold text-stone-700 dark:text-stone-300">
-                    {item.minStock} {item.unit}
+                    {formatQuantity(item.minStock)} {item.unit}
                   </span>
                 </div>
               </div>

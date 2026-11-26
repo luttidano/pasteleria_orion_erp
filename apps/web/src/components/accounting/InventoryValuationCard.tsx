@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import type { BalanceSheetData } from '../../types';
-import { formatMoney } from '../../utils/formatters';
+import { formatMoney, formatQuantity } from '../../utils/formatters';
 import { DataTable, type DataTableColumn } from '../common/DataTable';
 
 type InventoryValuationItem =
@@ -46,7 +46,7 @@ export const InventoryValuationCard: React.FC<InventoryValuationCardProps> = ({
         headerClassName: 'py-2 px-3 text-right',
         cellClassName:
           'py-2 px-3 text-right font-mono text-stone-600 dark:text-stone-400',
-        render: (item) => `${item.stock} ${item.unit}`,
+        render: (item) => `${formatQuantity(item.stock)} ${item.unit}`,
       },
       {
         key: 'unitCost',

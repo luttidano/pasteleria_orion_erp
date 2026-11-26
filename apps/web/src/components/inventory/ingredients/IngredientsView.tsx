@@ -1,6 +1,7 @@
 import React from 'react';
 import { Plus, Tag } from 'lucide-react';
 import type { ToastMessage, User } from '../../../types';
+import { formatQuantity } from '../../../utils/formatters';
 import { IngredientModal } from './IngredientModal';
 import { IngredientMetricsCards } from './IngredientMetricsCards';
 import { IngredientFiltersBar } from './IngredientFiltersBar';
@@ -242,7 +243,7 @@ export const IngredientsView: React.FC<IngredientsViewProps> = ({
             <>
               Cantidad registrada:{' '}
               <span className="font-bold">
-                {ingredientToDelete.stock} {ingredientToDelete.unit}
+                {formatQuantity(ingredientToDelete.stock)} {ingredientToDelete.unit}
               </span>
               . Si solo se agotó temporalmente, te recomendamos dejar su cantidad en 0 en lugar de eliminarlo.
             </>

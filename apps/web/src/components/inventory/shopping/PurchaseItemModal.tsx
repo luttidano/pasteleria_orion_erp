@@ -10,6 +10,7 @@ import {
   Receipt,
 } from 'lucide-react';
 import { createIdempotencyKey } from '../../../lib/api';
+import { formatQuantity, roundQuantity } from '../../../utils/formatters';
 import { calculateGrossFromNet, calculateGrossTaxBreakdown } from '../../../utils/tax';
 import { Modal } from '../../common/Modal';
 import type {
@@ -110,10 +111,10 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
 
   const numericBought = typeof quantityBought === 'number' ? quantityBought : 0;
   const numericTotalCost = typeof totalCost === 'number' ? totalCost : 0;
-  const resultingStock = Math.max(0, currentStock + numericBought);
+  const resultingStock = roundQuantity(Math.max(0, currentStock + numericBought));
   const willBeSufficient = resultingStock > minStock;
   const willRemainLow = resultingStock <= minStock;
-  const remainingDeficit = Math.max(0, minStock - resultingStock);
+  const remainingDeficit = roundQuantity(Math.max(0, minStock - resultingStock));
 
   const { netAmount, vatAmount } = calculateGrossTaxBreakdown(numericTotalCost, {
     isExempt: !hasInvoice,
@@ -495,7 +496,7 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
                 <div>
                   <strong className="font-bold">¡Stock quedará suficiente!</strong>
                   <p className="mt-0.5 text-emerald-800 dark:text-emerald-300 text-[11px]">
-                    Subirá a <strong>{resultingStock} {unit}</strong> (supera el mínimo de {minStock} {unit}). Saldrá automáticamente de la lista de compras.
+                    Subirá a <strong>{formatQuantity(resultingStock)} {unit}</strong> (supera el mínimo de {formatQuantity(minStock)} {unit}). Saldrá automáticamente de la lista de compras.
                   </p>
                 </div>
               </div>
@@ -505,7 +506,7 @@ const PurchaseItemModalContent: React.FC<PurchaseItemModalContentProps> = ({
                 <div>
                   <strong className="font-bold">Compra parcial permitida</strong>
                   <p className="mt-0.5 text-amber-800 dark:text-amber-300 text-[11px]">
-                    El nuevo stock será <strong>{resultingStock} {unit}</strong>. Faltante restante: {remainingDeficit} {unit}.
+                    El nuevo stock será <strong>{formatQuantity(resultingStock)} {unit}</strong>. Faltante restante: {formatQuantity(remainingDeficit)} {unit}.
                   </p>
                 </div>
               </div>

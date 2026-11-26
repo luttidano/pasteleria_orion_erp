@@ -6,7 +6,9 @@ export function roundMoney(value: number): number {
 }
 
 export function roundQuantity(value: number): number {
-  return Math.round((value + Number.EPSILON) * 1000) / 1000;
+  if (!Number.isFinite(value)) return 0;
+  const rounded = Math.round((value + Number.EPSILON) * 1000) / 1000;
+  return rounded === 0 ? 0 : rounded;
 }
 
 export function roundPercentage(value: number): number {

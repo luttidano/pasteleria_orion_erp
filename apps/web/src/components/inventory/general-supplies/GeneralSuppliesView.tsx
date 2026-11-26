@@ -20,7 +20,7 @@ import {
   generalSupplyService,
   type SaveGeneralSupplyPayload,
 } from '../../../services/generalSupplyService';
-import { formatMoney } from '../../../utils/formatters';
+import { formatMoney, formatQuantity } from '../../../utils/formatters';
 import { GeneralSupplyModal } from './GeneralSupplyModal';
 import { StockAdjustmentModal, type StockAdjustmentTarget } from '../StockAdjustmentModal';
 import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
@@ -394,7 +394,7 @@ export const GeneralSuppliesView: React.FC<GeneralSuppliesViewProps> = ({
                   <>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-mono font-bold text-stone-900 dark:text-stone-100">
-                        {item.stock} {item.unit}
+                        {formatQuantity(item.stock)} {item.unit}
                       </span>
                       {item.status === 'agotado' && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300">
@@ -408,7 +408,7 @@ export const GeneralSuppliesView: React.FC<GeneralSuppliesViewProps> = ({
                       )}
                     </div>
                     <div className="text-[10px] text-stone-400">
-                      Mín: {item.minStock} {item.unit}
+                      Mín: {formatQuantity(item.minStock)} {item.unit}
                       {item.stock <= item.minStock && ' • En Lista de Compras'}
                     </div>
                   </>

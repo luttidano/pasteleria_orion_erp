@@ -10,6 +10,7 @@ import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.
 import {
   AccountingOutboxProcessorService,
   dispatchOutboxBestEffort,
+  isOutboxDeferredError,
 } from '../accounting/outbox/accounting-outbox-processor.service';
 import { CreateSupplierInvoiceDto } from './dto/create-supplier-invoice.dto';
 import { RecordSupplierPaymentDto } from './dto/record-supplier-payment.dto';
@@ -367,15 +368,17 @@ export class PurchasesService {
       );
       accountingEntryId = processResult.entryId ?? null;
     } catch (accError) {
-      const errorMsg =
-        accError instanceof Error
-          ? accError.message
-          : 'Error al contabilizar pago de proveedor';
-      accountingWarning = `Abono registrado en Cuentas por Pagar. La sincronización contable quedó diferida: ${errorMsg}`;
-      console.warn(
-        `[PurchasesService] Abono a factura ${txResult.payment.invoiceId} guardado, pero falló la contabilización:`,
-        errorMsg,
-      );
+      if (!isOutboxDeferredError(accError)) {
+        const errorMsg =
+          accError instanceof Error
+            ? accError.message
+            : 'Error al contabilizar pago de proveedor';
+        accountingWarning = `Abono registrado en Cuentas por Pagar. La sincronización contable quedó diferida: ${errorMsg}`;
+        console.warn(
+          `[PurchasesService] Abono a factura ${txResult.payment.invoiceId} guardado, pero falló la contabilización:`,
+          errorMsg,
+        );
+      }
     }
 
     return {

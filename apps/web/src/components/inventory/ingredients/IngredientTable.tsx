@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Edit2, Trash2 } from 'lucide-react';
 import type { Ingredient } from '../../../types';
+import { formatQuantity } from '../../../utils/formatters';
 import { DataTable, type DataTableColumn } from '../../common/DataTable';
 import { IngredientStockStatusBadge } from './IngredientStockStatusBadge';
 
@@ -69,7 +70,7 @@ export const IngredientTable: React.FC<IngredientTableProps> = ({
                 -
               </button>
               <span className="font-extrabold text-base font-sans min-w-[70px] text-center text-stone-900 dark:text-white">
-                {item.stock} {item.unit}
+                {formatQuantity(item.stock)} {item.unit}
               </span>
               <button
                 type="button"
@@ -80,7 +81,7 @@ export const IngredientTable: React.FC<IngredientTableProps> = ({
               </button>
             </div>
             <div className="text-[10px] text-stone-400 dark:text-stone-500 mt-0.5">
-              Mínimo: {item.minStock} {item.unit}
+              Mínimo: {formatQuantity(item.minStock)} {item.unit}
             </div>
           </>
         ),

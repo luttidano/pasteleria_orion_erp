@@ -9,6 +9,8 @@ describe('money.util & stock-status.util', () => {
   it('debe redondear correctamente montos monetarios y cantidades', () => {
     expect(roundMoney(100.005)).toBe(100.01);
     expect(roundQuantity(1.23456)).toBe(1.235);
+    expect(roundQuantity(8.8 - 0.2)).toBe(8.6);
+    expect(roundQuantity(-0.00001)).toBe(0);
   });
 
   it('debe aplicar la regla de cobro de bolsas ($100) vs otros empaques ($0) respetando salePrice explícito', () => {

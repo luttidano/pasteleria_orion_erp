@@ -11,6 +11,7 @@ import { ProduceRecipeDto } from '../dto/produce-recipe.dto';
 import { CategoryService } from '../categories/category.service';
 import { RecipeProductionService } from './recipe-production.service';
 import { toBaseUnits } from '../../../common/utils/unit-converter';
+import { roundQuantity } from '../../../common/utils/money.util';
 import { rethrowPrismaError } from '../../../common/utils/prisma-error.util';
 
 @Injectable()
@@ -36,9 +37,9 @@ export class RecipeService {
 
     const formattedIngredients = (recipe.ingredients || []).map((ri: any) => {
       const ing = ri.ingredients || ri.ingredient || {};
-      const stock = Number(ing.stock ?? 0);
+      const stock = roundQuantity(Number(ing.stock ?? 0));
       const stockUnit = ing.unit || 'kg';
-      const quantity = Number(ri.quantity);
+      const quantity = roundQuantity(Number(ri.quantity));
       const unit = ri.unit;
 
       const reqNormalized = toBaseUnits(quantity, unit);
@@ -95,7 +96,7 @@ export class RecipeService {
     const products = (recipe.products || []).map((p: any) => ({
       id: p.id,
       name: p.name,
-      stock: Number(p.stock ?? 0),
+      stock: roundQuantity(Number(p.stock ?? 0)),
       unit: p.unit || 'un',
       salePrice: p.salePrice ? Number(p.salePrice) : 0,
       productType: p.productType,

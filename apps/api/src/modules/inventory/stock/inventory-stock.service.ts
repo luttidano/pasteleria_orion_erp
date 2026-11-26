@@ -11,7 +11,10 @@ import {
   resolveSecondaryPackagingPrice,
   roundMoney,
 } from '../../../common/utils/money.util';
-import { StockMovementService } from './stock-movement.service';
+import {
+  StockMovementService,
+  type RecordStockMovementInput,
+} from './stock-movement.service';
 
 export interface SaleStockRequestItem {
   productId?: string | null;
@@ -128,55 +131,101 @@ export class InventoryStockService {
     const sortedProductIds = Array.from(productTotals.keys()).sort();
     const sortedPackagingIds = Array.from(packagingTotals.keys()).sort();
 
-    // Adquirir bloqueos pesimistas en orden lexicográfico por UUID para prevenir deadlocks
-    if (sortedProductIds.length > 0) {
-      await tx.$queryRaw`
-        SELECT id
-        FROM public.product
-        WHERE id IN (${Prisma.join(sortedProductIds.map((id) => Prisma.sql`${id}::uuid`))})
-        ORDER BY id
-        FOR UPDATE
-      `;
-    }
+    type LockedProductRow = {
+      id: string;
+      name: string;
+      stock: Prisma.Decimal | number | string;
+      unit: string | null;
+      salePrice: Prisma.Decimal | number | string;
+      costPrice: Prisma.Decimal | number | string | null;
+    };
 
-    if (sortedPackagingIds.length > 0) {
-      await tx.$queryRaw`
-        SELECT id
-        FROM public.packaging
-        WHERE id IN (${Prisma.join(sortedPackagingIds.map((id) => Prisma.sql`${id}::uuid`))})
-        ORDER BY id
-        FOR UPDATE
-      `;
-    }
+    type LockedPackagingRow = {
+      id: string;
+      name: string;
+      packageType: string;
+      stock: Prisma.Decimal | number | string;
+      unit: string | null;
+      costPrice: Prisma.Decimal | number | string | null;
+      salePrice: Prisma.Decimal | number | string;
+    };
 
-    const [products, packagings] = await Promise.all([
+    // Adquirir bloqueos pesimistas en orden lexicográfico por UUID y leer columnas en un solo viaje
+    const [lockedProducts, lockedPackagings] = await Promise.all([
       sortedProductIds.length > 0
-        ? tx.product.findMany({
-            where: { id: { in: sortedProductIds } },
-            select: {
-              id: true,
-              name: true,
-              stock: true,
-              unit: true,
-              salePrice: true,
-              costPrice: true,
-            },
-          })
+        ? tx.$queryRaw<LockedProductRow[]>`
+            SELECT
+              id,
+              name,
+              stock,
+              unit,
+              sale_price AS "salePrice",
+              cost_price AS "costPrice"
+            FROM public.product
+            WHERE id IN (${Prisma.join(sortedProductIds.map((id) => Prisma.sql`${id}::uuid`))})
+            ORDER BY id
+            FOR UPDATE
+          `
         : Promise.resolve([]),
       sortedPackagingIds.length > 0
-        ? tx.packaging.findMany({
-            where: { id: { in: sortedPackagingIds } },
-            select: {
-              id: true,
-              name: true,
-              packageType: true,
-              stock: true,
-              unit: true,
-              costPrice: true,
-              salePrice: true,
-            },
-          })
+        ? tx.$queryRaw<LockedPackagingRow[]>`
+            SELECT
+              id,
+              name,
+              package_type AS "packageType",
+              stock,
+              unit,
+              cost_price AS "costPrice",
+              sale_price AS "salePrice"
+            FROM public.packaging
+            WHERE id IN (${Prisma.join(sortedPackagingIds.map((id) => Prisma.sql`${id}::uuid`))})
+            ORDER BY id
+            FOR UPDATE
+          `
         : Promise.resolve([]),
+    ]);
+
+    const hasProductDataFromLock =
+      Array.isArray(lockedProducts) &&
+      lockedProducts.length > 0 &&
+      typeof lockedProducts[0]?.name === 'string';
+    const hasPackagingDataFromLock =
+      Array.isArray(lockedPackagings) &&
+      lockedPackagings.length > 0 &&
+      typeof lockedPackagings[0]?.name === 'string';
+
+    const [products, packagings] = await Promise.all([
+      sortedProductIds.length === 0
+        ? Promise.resolve([])
+        : hasProductDataFromLock
+          ? Promise.resolve(lockedProducts)
+          : tx.product.findMany({
+              where: { id: { in: sortedProductIds } },
+              select: {
+                id: true,
+                name: true,
+                stock: true,
+                unit: true,
+                salePrice: true,
+                costPrice: true,
+              },
+            }),
+      sortedPackagingIds.length === 0
+        ? Promise.resolve([])
+        : hasPackagingDataFromLock
+          ? Promise.resolve(lockedPackagings)
+          : tx.packaging.findMany({
+              where: { id: { in: sortedPackagingIds } },
+              select: {
+                id: true,
+                name: true,
+                packageType: true,
+                stock: true,
+                unit: true,
+                costPrice: true,
+                salePrice: true,
+              },
+            }),
     ]);
 
     const productMap = new Map(products.map((p) => [p.id, p]));
@@ -229,7 +278,9 @@ export class InventoryStockService {
       }
     }
 
-    // Descuento condicional atómico garantizado bajo restricción CHECK (stock >= 0) + Kardex
+    // Descuento condicional atómico garantizado bajo restricción CHECK (stock >= 0) + Kardex en lote
+    const stockMovementsToRecord: RecordStockMovementInput[] = [];
+
     for (const productId of sortedProductIds) {
       const requiredQty = productTotals.get(productId)!;
       const product = productMap.get(productId)!;
@@ -254,7 +305,7 @@ export class InventoryStockService {
       }
 
       if (this.stockMovementService) {
-        await this.stockMovementService.recordInTx(tx, {
+        stockMovementsToRecord.push({
           itemType: 'product',
           itemId: product.id,
           itemName: product.name,
@@ -299,7 +350,7 @@ export class InventoryStockService {
       }
 
       if (this.stockMovementService) {
-        await this.stockMovementService.recordInTx(tx, {
+        stockMovementsToRecord.push({
           itemType: 'packaging',
           itemId: pkg.id,
           itemName: pkg.name,
@@ -317,6 +368,19 @@ export class InventoryStockService {
             : 'Venta POS',
           createdById: context?.createdById,
         });
+      }
+    }
+
+    if (this.stockMovementService && stockMovementsToRecord.length > 0) {
+      if (typeof this.stockMovementService.recordManyInTx === 'function') {
+        await this.stockMovementService.recordManyInTx(
+          tx,
+          stockMovementsToRecord,
+        );
+      } else {
+        for (const entry of stockMovementsToRecord) {
+          await this.stockMovementService.recordInTx(tx, entry);
+        }
       }
     }
 

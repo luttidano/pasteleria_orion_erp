@@ -14,6 +14,7 @@ import type { AccountingOutboxService } from '../../accounting/outbox/accounting
 import {
   AccountingOutboxProcessorService,
   dispatchOutboxBestEffort,
+  isOutboxDeferredError,
 } from '../../accounting/outbox/accounting-outbox-processor.service';
 import { calculateTaxBreakdownFromGross } from '../../accounting/tax/tax-calculator.service';
 import { AdjustStockDto } from '../dto/adjust-stock.dto';
@@ -263,6 +264,13 @@ export async function processInventoryOutboxAfterCommit(
       accountingWarning: null,
     };
   } catch (error) {
+    if (isOutboxDeferredError(error)) {
+      return {
+        accountingStatus: 'pending',
+        accountingWarning: null,
+      };
+    }
+
     const errorMsg =
       error instanceof Error
         ? error.message

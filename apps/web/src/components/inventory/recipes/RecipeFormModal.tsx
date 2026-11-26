@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Plus } from 'lucide-react';
-import type { Category, Ingredient } from '../../../types';
+import type { Category, Ingredient, Recipe } from '../../../types';
 import { Modal } from '../../common/Modal';
 
 export interface RecipeFormData {
@@ -17,6 +17,7 @@ interface RecipeFormModalProps {
   onSave: (data: RecipeFormData) => Promise<void>;
   ingredients: Ingredient[];
   categories: Category[];
+  editingRecipe?: Recipe | null;
 }
 
 export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
@@ -25,6 +26,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
   onSave,
   ingredients,
   categories,
+  editingRecipe = null,
 }) => {
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
@@ -35,19 +37,43 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
   >([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const isEditing = Boolean(editingRecipe);
+
   useEffect(() => {
-    if (categories.length > 0 && !formCategory) {
-      setFormCategory(categories[0].name);
+    if (!isOpen) return;
+
+    const defaultCategory = categories[0]?.name || 'Pastelería Fina';
+    if (editingRecipe) {
+      setFormName(editingRecipe.name || '');
+      setFormDescription(editingRecipe.description || '');
+      setFormServings(Math.max(1, Math.round(Number(editingRecipe.yieldServings) || 1)));
+      setFormCategory(editingRecipe.category || defaultCategory);
+      setSelectedIngredients(
+        (editingRecipe.ingredients || []).map((item) => ({
+          ingredientId: item.ingredientId,
+          quantity: Number(item.quantity),
+          unit: item.unit || 'g',
+        })),
+      );
+    } else {
+      setFormName('');
+      setFormDescription('');
+      setFormServings(1);
+      setFormCategory(defaultCategory);
+      setSelectedIngredients([]);
     }
-  }, [categories, formCategory]);
+  }, [isOpen, editingRecipe, categories]);
 
   if (!isOpen) return null;
 
   const handleAddIngredientRow = () => {
     if (ingredients.length === 0) return;
+    const usedIds = new Set(selectedIngredients.map((item) => item.ingredientId));
+    const nextIngredient =
+      ingredients.find((ing) => !usedIds.has(ing.id)) ?? ingredients[0];
     setSelectedIngredients((prev) => [
       ...prev,
-      { ingredientId: ingredients[0].id, quantity: 100, unit: 'g' },
+      { ingredientId: nextIngredient.id, quantity: 100, unit: 'g' },
     ]);
   };
 
@@ -60,29 +86,31 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
     try {
       setIsSubmitting(true);
       await onSave({
-        name: formName,
-        description: formDescription,
-        yieldServings: Number(formServings),
+        name: formName.trim(),
+        description: formDescription.trim(),
+        yieldServings: Math.max(1, Math.round(Number(formServings) || 1)),
         category: formCategory,
-        ingredients: selectedIngredients,
+        ingredients: selectedIngredients.map((item) => ({
+          ingredientId: item.ingredientId,
+          quantity: Number(item.quantity),
+          unit: item.unit,
+        })),
       });
-      // Limpiar formulario al guardar con éxito
-      setFormName('');
-      setFormDescription('');
-      setFormServings(1);
-      setSelectedIngredients([]);
       onClose();
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const hasCustomCategory =
+    Boolean(formCategory) && !categories.some((c) => c.name === formCategory);
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       closeDisabled={isSubmitting}
-      title="Nueva Receta"
+      title={isEditing ? 'Editar Receta' : 'Nueva Receta'}
       icon={<BookOpen className="w-5 h-5" />}
       maxWidthClassName="max-w-lg"
       containerClassName="bg-white dark:bg-[#16100E] rounded-2xl border border-stone-200 dark:border-[#35251F] shadow-xl"
@@ -99,10 +127,14 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
           <button
             type="submit"
             form="recipe-form-modal"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !formName.trim() || selectedIngredients.length === 0}
             className="px-4 py-2 text-xs rounded-xl bg-[#8C1F25] hover:bg-[#74191E] text-white font-bold cursor-pointer disabled:opacity-50"
           >
-            {isSubmitting ? 'Guardando...' : 'Guardar Receta'}
+            {isSubmitting
+              ? 'Guardando...'
+              : isEditing
+                ? 'Guardar Cambios'
+                : 'Guardar Receta'}
           </button>
         </>
       }
@@ -129,6 +161,9 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
                   onChange={(e) => setFormCategory(e.target.value)}
                   className="w-full mt-1 p-2 text-xs rounded-xl border border-stone-200 dark:border-[#35251F] bg-stone-50 dark:bg-[#201612] text-stone-800 dark:text-stone-200"
                 >
+                  {hasCustomCategory && (
+                    <option value={formCategory}>🏷️ {formCategory}</option>
+                  )}
                   {categories.map((c) => (
                     <option key={c.id} value={c.name}>
                       {c.icon || '🏷️'} {c.name}
@@ -150,6 +185,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
               <input
                 type="number"
                 min="1"
+                step="1"
                 value={formServings}
                 onChange={(e) => setFormServings(Number(e.target.value))}
                 className="w-full mt-1 p-2 text-xs rounded-xl border border-stone-200 dark:border-[#35251F] bg-stone-50 dark:bg-[#201612]"
@@ -205,7 +241,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
 
                   <input
                     type="number"
-                    min="0.01"
+                    min="0.001"
                     step="any"
                     value={item.quantity}
                     onChange={(e) => {

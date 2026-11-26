@@ -26,7 +26,7 @@ export class AppController {
       await Promise.race([
         this.prisma.$queryRaw`SELECT 1`,
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Database healthcheck timeout 5s)')), 5000),
+          setTimeout(() => reject(new Error('Database healthcheck timeout (8s)')), 8000),
         ),
       ]);
       this.prisma.isAvailable = true;

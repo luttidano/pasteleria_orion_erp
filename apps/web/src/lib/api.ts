@@ -1,5 +1,6 @@
 import { authService } from '../services/authService';
 import {
+  checkServerHealth,
   reportApiNetworkError,
   reportApiServerError,
   reportApiSuccess,
@@ -7,8 +8,22 @@ import {
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '') + '/api';
 const REQUEST_TIMEOUT_MS = 6000;
+const MUTATION_TIMEOUT_MS = 15000;
 const SAFE_IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const KEYED_MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+export interface ApiFetchOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
+class RequestTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(
+      `La operación excedió el tiempo de espera (${Math.round(timeoutMs / 1000)}s). Verifica el estado antes de reintentar.`,
+    );
+    this.name = 'RequestTimeoutError';
+  }
+}
 
 export function createIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -21,9 +36,11 @@ async function fetchWithTimeout(
   url: string,
   options: RequestInit,
   headers: Record<string, string>,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
   const externalSignal = options.signal;
+  let didTimeout = false;
 
   if (externalSignal?.aborted) {
     controller.abort(externalSignal.reason);
@@ -32,7 +49,11 @@ async function fetchWithTimeout(
   const onExternalAbort = () => controller.abort(externalSignal?.reason);
   externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
 
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => {
+    didTimeout = true;
+    controller.abort(new RequestTimeoutError(timeoutMs));
+  }, timeoutMs);
+
   try {
     return await fetch(url, {
       cache: 'no-store',
@@ -40,6 +61,11 @@ async function fetchWithTimeout(
       signal: controller.signal,
       headers,
     });
+  } catch (err) {
+    if (didTimeout && !externalSignal?.aborted) {
+      throw new RequestTimeoutError(timeoutMs);
+    }
+    throw err;
   } finally {
     clearTimeout(timeoutId);
     externalSignal?.removeEventListener('abort', onExternalAbort);
@@ -51,8 +77,15 @@ async function fetchWithTimeout(
  */
 export async function apiFetch<T>(
   endpoint: string,
-  options: RequestInit = {},
+  options: ApiFetchOptions = {},
 ): Promise<T> {
+  const { timeoutMs, ...fetchOptions } = options;
+  const method = (fetchOptions.method || 'GET').toUpperCase();
+  const effectiveTimeoutMs =
+    timeoutMs ??
+    (KEYED_MUTATION_METHODS.has(method)
+      ? MUTATION_TIMEOUT_MS
+      : REQUEST_TIMEOUT_MS);
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
   // 1. Obtener el token JWT activo garantizando hidratación de sesión
@@ -72,10 +105,9 @@ export async function apiFetch<T>(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`,
-    ...((options.headers as Record<string, string>) || {}),
+    ...((fetchOptions.headers as Record<string, string>) || {}),
   };
 
-  const method = (options.method || 'GET').toUpperCase();
   const hasIdempotencyHeader = Object.keys(headers).some(
     (key) => key.toLowerCase() === 'idempotency-key',
   );
@@ -90,22 +122,33 @@ export async function apiFetch<T>(
 
   while (true) {
     try {
-      response = await fetchWithTimeout(url, options, headers);
+      response = await fetchWithTimeout(
+        url,
+        fetchOptions,
+        headers,
+        effectiveTimeoutMs,
+      );
       break;
     } catch (networkErr) {
-      if (options.signal?.aborted) {
+      if (fetchOptions.signal?.aborted) {
         throw networkErr;
       }
 
+      const isTimeout = networkErr instanceof RequestTimeoutError;
       attempt++;
-      if (attempt <= maxRetries) {
+      if (!isTimeout && attempt <= maxRetries) {
         // Reintentar solo métodos seguros/idempotentes si el backend aún está iniciando
         await new Promise((r) => setTimeout(r, 600));
         continue;
       }
-      reportApiNetworkError(
-        networkErr instanceof Error ? networkErr.message : 'Fallo de red al contactar API.',
-      );
+
+      if (isTimeout) {
+        void checkServerHealth();
+      } else {
+        reportApiNetworkError(
+          networkErr instanceof Error ? networkErr.message : 'Fallo de red al contactar API.',
+        );
+      }
       throw networkErr;
     }
   }
@@ -117,12 +160,21 @@ export async function apiFetch<T>(
     if (refreshedToken) {
       headers['Authorization'] = `Bearer ${refreshedToken}`;
       try {
-        response = await fetchWithTimeout(url, options, headers);
+        response = await fetchWithTimeout(
+          url,
+          fetchOptions,
+          headers,
+          effectiveTimeoutMs,
+        );
       } catch (networkErr) {
-        if (!options.signal?.aborted) {
-          reportApiNetworkError(
-            networkErr instanceof Error ? networkErr.message : 'Fallo de red al contactar API.',
-          );
+        if (!fetchOptions.signal?.aborted) {
+          if (networkErr instanceof RequestTimeoutError) {
+            void checkServerHealth();
+          } else {
+            reportApiNetworkError(
+              networkErr instanceof Error ? networkErr.message : 'Fallo de red al contactar API.',
+            );
+          }
         }
         throw networkErr;
       }

@@ -204,5 +204,117 @@ describe('InventoryStockService (precios autoritativos y concurrencia ACID)', ()
       ]),
     ).rejects.toThrow(ConflictException);
   });
+
+  it('debe registrar todos los movimientos de Kardex en un solo lote mediante recordManyInTx', async () => {
+    const prodId = '11111111-1111-4111-8111-111111111111';
+    const pkgId = '22222222-2222-4222-8222-222222222222';
+    const mockMovementService: any = {
+      recordInTx: jest.fn(),
+      recordManyInTx: jest.fn().mockResolvedValue(2),
+    };
+    const stockServiceWithKardex = new InventoryStockService(
+      mockPrisma,
+      mockMovementService,
+    );
+
+    const mockTx: any = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      product: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: prodId,
+            name: 'Torta Tres Leches',
+            stock: 5,
+            unit: 'un',
+            salePrice: 18000,
+            costPrice: 7000,
+          },
+        ]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      packaging: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: pkgId,
+            name: 'Bolsa Kraft Mediana',
+            packageType: 'secundario',
+            stock: 10,
+            unit: 'un',
+            costPrice: 50,
+            salePrice: 100,
+          },
+        ]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+
+    await stockServiceWithKardex.reserveAndDeductForSaleInTx(
+      mockTx,
+      [
+        { productId: prodId, quantity: 1 },
+        { packagingId: pkgId, quantity: 2 },
+      ],
+      { saleId: 'sale-batch-1', ticketNumber: 'TK-1' },
+    );
+
+    expect(mockMovementService.recordInTx).not.toHaveBeenCalled();
+    expect(mockMovementService.recordManyInTx).toHaveBeenCalledTimes(1);
+    expect(mockMovementService.recordManyInTx).toHaveBeenCalledWith(
+      mockTx,
+      expect.arrayContaining([
+        expect.objectContaining({ itemType: 'product', itemId: prodId }),
+        expect.objectContaining({ itemType: 'packaging', itemId: pkgId }),
+      ]),
+    );
+  });
+
+  it('debe reutilizar las filas retornadas por FOR UPDATE sin ejecutar findMany redundantes', async () => {
+    const prodId = '11111111-1111-4111-8111-111111111111';
+    const pkgId = '22222222-2222-4222-8222-222222222222';
+    const mockTx: any = {
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: prodId,
+            name: 'Torta Manjar',
+            stock: 6,
+            unit: 'un',
+            salePrice: 14000,
+            costPrice: 5500,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: pkgId,
+            name: 'Bolsa Kraft Pequeña',
+            packageType: 'secundario',
+            stock: 20,
+            unit: 'un',
+            costPrice: 30,
+            salePrice: 100,
+          },
+        ]),
+      product: {
+        findMany: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      packaging: {
+        findMany: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+
+    const lines = await service.reserveAndDeductForSaleInTx(mockTx, [
+      { productId: prodId, quantity: 1 },
+      { packagingId: pkgId, quantity: 1 },
+    ]);
+
+    expect(mockTx.product.findMany).not.toHaveBeenCalled();
+    expect(mockTx.packaging.findMany).not.toHaveBeenCalled();
+    expect(lines).toHaveLength(2);
+    expect(lines[0].unitPrice).toBe(14000);
+    expect(lines[1].unitPrice).toBe(100);
+  });
 });
 

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import type { AdjustStockPayload, Packaging, ToastMessage, User } from '../../../types';
 import { packagingService } from '../../../services/packagingService';
-import { formatMoney } from '../../../utils/formatters';
+import { formatMoney, formatQuantity } from '../../../utils/formatters';
 import { PackagingModal } from './PackagingModal';
 import { StockAdjustmentModal, type StockAdjustmentTarget } from '../StockAdjustmentModal';
 import { ConfirmDeleteModal } from '../../common/ConfirmDeleteModal';
@@ -346,7 +346,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({
                   <>
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono font-bold text-stone-900 dark:text-stone-100">
-                        {item.stock} {item.unit}
+                        {formatQuantity(item.stock)} {item.unit}
                       </span>
                       {item.status === 'agotado' && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
@@ -360,7 +360,7 @@ export const PackagingView: React.FC<PackagingViewProps> = ({
                       )}
                     </div>
                     <div className="text-[10px] text-stone-400">
-                      Mín: {item.minStock} {item.unit}
+                      Mín: {formatQuantity(item.minStock)} {item.unit}
                     </div>
                   </>
                 ),

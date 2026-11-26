@@ -17,6 +17,7 @@ import {
   resolveInventoryAdjustmentDecision,
 } from '../stock/inventory-adjustment.helper';
 import { rethrowPrismaError } from '../../../common/utils/prisma-error.util';
+import { roundQuantity } from '../../../common/utils/money.util';
 import {
   computeStockStatus,
   StockStatus,
@@ -37,8 +38,8 @@ export class IngredientService {
   ) {}
 
   private mapIngredient(item: any) {
-    const stock = Number(item.stock);
-    const minStock = Number(item.minStock ?? item.min_stock ?? 0);
+    const stock = roundQuantity(Number(item.stock ?? 0));
+    const minStock = roundQuantity(Number(item.minStock ?? item.min_stock ?? 0));
     return {
       id: item.id,
       name: item.name,
@@ -93,8 +94,8 @@ export class IngredientService {
           data: {
             name: dto.name,
             categoryId: categoryId || null,
-            stock: dto.stock,
-            minStock: dto.minStock,
+            stock: roundQuantity(Number(dto.stock)),
+            minStock: roundQuantity(Number(dto.minStock)),
             unit: dto.unit,
             price: dto.price ?? 0,
             icon: dto.icon,
@@ -128,7 +129,9 @@ export class IngredientService {
         const updateData: Record<string, any> = {};
         if (dto.name !== undefined) updateData.name = dto.name;
         if (categoryId !== undefined) updateData.categoryId = categoryId;
-        if (dto.minStock !== undefined) updateData.minStock = dto.minStock;
+        if (dto.minStock !== undefined) {
+          updateData.minStock = roundQuantity(Number(dto.minStock));
+        }
         if (dto.unit !== undefined) updateData.unit = dto.unit;
         if (dto.price !== undefined) updateData.price = dto.price;
         if (dto.icon !== undefined) updateData.icon = dto.icon;

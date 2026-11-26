@@ -20,8 +20,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     const pool = new Pool({
       connectionString,
       max: 10,
-      idleTimeoutMillis: 20000, // Descarta conexiones inactivas tras 20s antes del timeout de Supabase
-      connectionTimeoutMillis: 5000,
+      idleTimeoutMillis: 45000, // Mantiene conexiones tibias sin reabrir TCP/SSL en cada vista
+      connectionTimeoutMillis: 10000,
       keepAlive: true,
       keepAliveInitialDelayMillis: 10000,
     });
@@ -56,7 +56,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       await Promise.race([
         this.$queryRaw`SELECT 1`,
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Prisma connection timeout (3s)')), 3000),
+          setTimeout(() => reject(new Error('Prisma connection timeout (8s)')), 8000),
         ),
       ]);
       this.isAvailable = true;
@@ -98,9 +98,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       return super.$transaction(arg, options);
     }
 
+    const txOptions = {
+      ...options,
+      maxWait: options?.maxWait ?? 10000,
+      timeout: options?.timeout ?? 15000,
+    };
+
     const store = getIdempotencyContext();
     if (!store || store.committedInTx) {
-      return super.$transaction(arg, options);
+      return super.$transaction(arg, txOptions);
     }
 
     const result = await super.$transaction(async (tx) => {
@@ -120,7 +126,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         });
       }
       return fnResult;
-    }, options);
+    }, txOptions);
 
     store.committedInTx = true;
     return result;

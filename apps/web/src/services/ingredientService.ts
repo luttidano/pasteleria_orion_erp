@@ -1,5 +1,6 @@
 import type { AdjustStockPayload, Ingredient } from '../types';
 import { apiFetch } from '../lib/api';
+import { roundQuantity } from '../utils/formatters';
 
 interface ApiIngredient {
   id: string;
@@ -29,8 +30,8 @@ function mapApiToIngredient(item: ApiIngredient): IngredientAdjustmentResult {
     id: item.id,
     name: item.name,
     category: item.category,
-    stock: Number(item.stock),
-    minStock: Number(item.minStock),
+    stock: roundQuantity(Number(item.stock)),
+    minStock: roundQuantity(Number(item.minStock)),
     unit: item.unit,
     price: item.price !== null && item.price !== undefined ? Number(item.price) : undefined,
     icon: item.icon || '📦',

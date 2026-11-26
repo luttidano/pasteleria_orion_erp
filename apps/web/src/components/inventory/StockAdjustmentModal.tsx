@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { AlertTriangle, CheckCircle2, ClipboardEdit } from 'lucide-react';
 import { createIdempotencyKey } from '../../lib/api';
+import { formatQuantity } from '../../utils/formatters';
 import { calculateGrossFromNet } from '../../utils/tax';
 import { Modal } from '../common/Modal';
 import type {
@@ -184,14 +185,14 @@ const StockAdjustmentModalContent: React.FC<StockAdjustmentModalContentProps> = 
         <>
           Stock actual:{' '}
           <b>
-            {target.currentStock} {target.unit}
+            {formatQuantity(target.currentStock)} {target.unit}
           </b>
           {numericQty > 0 && (
             <>
               {' '}
               → Nuevo:{' '}
               <b>
-                {Math.max(0, resultingStock)} {target.unit}
+                {formatQuantity(Math.max(0, resultingStock))} {target.unit}
               </b>
             </>
           )}

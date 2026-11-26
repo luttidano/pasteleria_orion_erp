@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  ServiceUnavailableException,
   ValidationPipe,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -84,7 +85,16 @@ describe('PosSaleService', () => {
       };
 
       const mockTx = {
-        $queryRaw: jest.fn().mockResolvedValue([]),
+        $queryRaw: jest
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              id: 'shift-active-1',
+              shiftNumber: 1n,
+              status: 'abierto',
+            },
+          ]),
         product: {
           findMany: jest.fn().mockResolvedValue([
             {
@@ -201,6 +211,7 @@ describe('PosSaleService', () => {
           }),
         }),
       );
+      await new Promise<void>((resolve) => setImmediate(resolve));
       expect(outboxProcessor.processEvent).toHaveBeenCalledWith('outbox-sale-1');
       expect(prisma.posSale.updateMany).toHaveBeenCalledWith({
         where: { id: 'sale-uuid-1', accountingStatus: { not: 'posted' } },
@@ -208,6 +219,8 @@ describe('PosSaleService', () => {
       });
 
       expect(result.id).toBe('sale-uuid-1');
+      expect(result.accountingStatus).toBe('pending');
+      expect(result.accountingWarning).toBeNull();
       expect(result.items[0].productId).toBe(manufacturedProductId);
     });
 
@@ -229,7 +242,16 @@ describe('PosSaleService', () => {
       };
 
       const mockTx = {
-        $queryRaw: jest.fn().mockResolvedValue([]),
+        $queryRaw: jest
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              id: 'shift-active-1',
+              shiftNumber: 1n,
+              status: 'abierto',
+            },
+          ]),
         product: {
           findMany: jest.fn().mockResolvedValue([
             {
@@ -309,6 +331,7 @@ describe('PosSaleService', () => {
           }),
         }),
       );
+      await new Promise<void>((resolve) => setImmediate(resolve));
       expect(outboxProcessor.processEvent).toHaveBeenCalledWith('outbox-sale-auth');
     });
 
@@ -326,7 +349,16 @@ describe('PosSaleService', () => {
       };
 
       const mockTx = {
-        $queryRaw: jest.fn().mockResolvedValue([]),
+        $queryRaw: jest
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              id: 'shift-active-1',
+              shiftNumber: 1n,
+              status: 'abierto',
+            },
+          ]),
         product: {
           findMany: jest.fn().mockResolvedValue([
             {
@@ -367,7 +399,16 @@ describe('PosSaleService', () => {
       };
 
       const mockTx = {
-        $queryRaw: jest.fn().mockResolvedValue([]),
+        $queryRaw: jest
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              id: 'shift-active-1',
+              shiftNumber: 1n,
+              status: 'abierto',
+            },
+          ]),
         product: { findMany: jest.fn(), updateMany: jest.fn() },
         packaging: {
           findMany: jest.fn().mockResolvedValue([
@@ -464,6 +505,7 @@ describe('PosSaleService', () => {
         $queryRaw: jest
           .fn()
           .mockResolvedValueOnce([]) // product FOR UPDATE
+          .mockResolvedValueOnce([]) // open pos_shift FOR UPDATE
           .mockResolvedValueOnce([{ id: 'shift-open-2' }]), // INSERT INTO pos_shift RETURNING id
         product: {
           findMany: jest.fn().mockResolvedValue([
@@ -479,7 +521,6 @@ describe('PosSaleService', () => {
         posShift: {
           findFirst: jest
             .fn()
-            .mockResolvedValueOnce(null)
             .mockResolvedValueOnce({ id: 'prev-closed-shift' }),
           findUnique: jest.fn().mockResolvedValue({
             id: 'shift-open-2',
@@ -535,6 +576,8 @@ describe('PosSaleService', () => {
         $queryRaw: jest
           .fn()
           .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([]),
         product: {
           findMany: jest.fn().mockResolvedValue([
@@ -545,7 +588,6 @@ describe('PosSaleService', () => {
         posShift: {
           findFirst: jest
             .fn()
-            .mockResolvedValueOnce(null)
             .mockResolvedValueOnce({ id: 'prev-closed-shift' })
             .mockResolvedValueOnce(racedShift),
           findUnique: jest.fn(),
@@ -595,7 +637,16 @@ describe('PosSaleService', () => {
       const productId = '88888888-8888-4888-a888-888888888888';
       let upsertCount = 0;
       const mockTx = {
-        $queryRaw: jest.fn().mockResolvedValue([]),
+        $queryRaw: jest
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              id: 'shift-active-1',
+              shiftNumber: 1n,
+              status: 'abierto',
+            },
+          ]),
         product: {
           findMany: jest.fn().mockResolvedValue([
             {
@@ -652,6 +703,10 @@ describe('PosSaleService', () => {
         },
       };
 
+      const warnSpy = jest
+        .spyOn(console, 'warn')
+        .mockImplementation(() => undefined);
+
       prisma.$transaction.mockImplementation(async (cb: any) => cb(mockTx));
       outboxProcessor.processEvent
         .mockResolvedValueOnce({
@@ -669,6 +724,8 @@ describe('PosSaleService', () => {
         items: [{ productId, quantity: 1 }],
       });
 
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
       expect(mockTx.accountingOutbox.upsert).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
@@ -677,8 +734,41 @@ describe('PosSaleService', () => {
           }),
         }),
       );
-      expect(result.accountingStatus).toBe('posted');
-      expect(result.accountingWarning).toMatch(/Costo de venta pendiente/i);
+      expect(outboxProcessor.processEvent).toHaveBeenCalledWith('outbox-income-1');
+      expect(outboxProcessor.processEvent).toHaveBeenCalledWith('outbox-cogs-1');
+      expect(result.accountingStatus).toBe('pending');
+      expect(result.accountingWarning).toBeNull();
+      warnSpy.mockRestore();
+    });
+
+    it('debe configurar timeout ampliado en $transaction y traducir P2028 a ServiceUnavailableException', async () => {
+      const warnSpy = jest
+        .spyOn(console, 'warn')
+        .mockImplementation(() => undefined);
+
+      prisma.$transaction.mockRejectedValueOnce({
+        code: 'P2028',
+        message: 'Transaction already closed',
+      });
+
+      await expect(
+        service.createSale({
+          paymentMethod: 'efectivo',
+          items: [
+            {
+              productId: '11111111-1111-4111-8111-111111111111',
+              quantity: 1,
+            },
+          ],
+        }),
+      ).rejects.toThrow(ServiceUnavailableException);
+
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+        maxWait: 10000,
+        timeout: 15000,
+      });
+
+      warnSpy.mockRestore();
     });
   });
 

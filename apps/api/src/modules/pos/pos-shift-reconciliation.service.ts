@@ -4,6 +4,7 @@ import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.
 import {
   AccountingOutboxProcessorService,
   dispatchOutboxBestEffort,
+  isOutboxDeferredError,
 } from '../accounting/outbox/accounting-outbox-processor.service';
 import { PosAccountingStatusService } from './pos-accounting-status.service';
 import {
@@ -107,19 +108,25 @@ export class PosShiftReconciliationService {
         }
       } catch (accError) {
         accountingStatus = 'pending';
-        const errorMsg =
-          accError instanceof Error
-            ? accError.message
-            : 'Error al registrar diferencia de caja en contabilidad.';
-        accountingWarning = `Turno cerrado en caja. El ajuste contable por diferencia quedó pendiente: ${errorMsg}`;
-        console.warn(
-          `[PosShiftService] Turno #${Number(params.shiftNumber)} cerrado, ajuste contable pendiente:`,
-          errorMsg,
-        );
+        if (isOutboxDeferredError(accError)) {
+          await this.posAccountingStatusService
+            .markShiftPending(params.shiftId, accError.message)
+            .catch(() => undefined);
+        } else {
+          const errorMsg =
+            accError instanceof Error
+              ? accError.message
+              : 'Error al registrar diferencia de caja en contabilidad.';
+          accountingWarning = `Turno cerrado en caja. El ajuste contable por diferencia quedó pendiente: ${errorMsg}`;
+          console.warn(
+            `[PosShiftService] Turno #${Number(params.shiftNumber)} cerrado, ajuste contable pendiente:`,
+            errorMsg,
+          );
 
-        await this.posAccountingStatusService
-          .markShiftPending(params.shiftId, accountingWarning)
-          .catch(() => undefined);
+          await this.posAccountingStatusService
+            .markShiftPending(params.shiftId, accountingWarning)
+            .catch(() => undefined);
+        }
       }
     }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, ChefHat, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChefHat, Pencil, Trash2 } from 'lucide-react';
 import type { Recipe, UserRole } from '../../../types';
 
 interface RecipeCardItemProps {
@@ -7,6 +7,7 @@ interface RecipeCardItemProps {
   userRole: UserRole;
   massUnit: 'g' | 'kg';
   onProduce: (recipe: Recipe) => void;
+  onEdit: (recipe: Recipe) => void;
   onDelete: (recipe: Recipe) => void;
 }
 
@@ -37,6 +38,7 @@ export const RecipeCardItem: React.FC<RecipeCardItemProps> = ({
   userRole,
   massUnit,
   onProduce,
+  onEdit,
   onDelete,
 }) => {
   const isAdmin = userRole === 'admin';
@@ -66,14 +68,26 @@ export const RecipeCardItem: React.FC<RecipeCardItemProps> = ({
             )}
           </div>
           {isAdmin && (
-            <button
-              type="button"
-              onClick={() => onDelete(recipe)}
-              className="p-1.5 text-stone-400 hover:text-rose-500 rounded-lg hover:bg-stone-50 dark:hover:bg-[#201612] cursor-pointer"
-              title="Eliminar"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => onEdit(recipe)}
+                className="p-1.5 text-stone-400 hover:text-[#8C1F25] dark:hover:text-[#E07A5F] rounded-lg hover:bg-stone-50 dark:hover:bg-[#201612] cursor-pointer"
+                title="Editar receta"
+                aria-label={`Editar ${recipe.name}`}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(recipe)}
+                className="p-1.5 text-stone-400 hover:text-rose-500 rounded-lg hover:bg-stone-50 dark:hover:bg-[#201612] cursor-pointer"
+                title="Eliminar"
+                aria-label={`Eliminar ${recipe.name}`}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
 

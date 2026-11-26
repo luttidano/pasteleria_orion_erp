@@ -61,6 +61,23 @@ function formatUtcDateIso(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+export function roundQuantity(value: number, maxDecimals = 3): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  const factor = Math.pow(10, Math.max(0, Math.min(6, Math.trunc(maxDecimals))));
+  const rounded = Math.round((numeric + Number.EPSILON) * factor) / factor;
+  return rounded === 0 ? 0 : rounded;
+}
+
+export function formatQuantity(
+  value: number | string | null | undefined,
+  maxDecimals = 3,
+): string {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric)) return '0';
+  return String(roundQuantity(numeric, maxDecimals));
+}
+
 export function formatAmount(value: number | null | undefined): string {
   const numeric = Number(value ?? 0);
   if (!Number.isFinite(numeric)) return '0';

@@ -15,7 +15,11 @@ import {
   useIngredientsQuery,
   useInvalidateInventory,
 } from '../../../../hooks/queries/useInventoryQueries';
-import { STORE_TIMEZONE } from '../../../../utils/formatters';
+import {
+  formatQuantity,
+  roundQuantity,
+  STORE_TIMEZONE,
+} from '../../../../utils/formatters';
 import type { ConfirmPurchaseDetails } from '../PurchaseItemModal';
 import { formatShoppingListForWhatsApp } from '../utils/shoppingWhatsApp';
 import type { ShoppingCounts } from '../components/ShoppingListFiltersBar';
@@ -201,7 +205,7 @@ export function useShoppingList({ addToast }: UseShoppingListParams) {
     idempotencyKey?: string,
   ) => {
     try {
-      let newStock = item.stock + quantityBought;
+      let newStock = roundQuantity(item.stock + quantityBought);
       let accountingWarning: string | null | undefined;
       const purchasePayload = {
         delta: quantityBought,
@@ -275,14 +279,14 @@ export function useShoppingList({ addToast }: UseShoppingListParams) {
         addToast({
           type: 'success',
           title: '✓ Compra registrada y contabilizada',
-          message: `Se sumaron ${quantityBought} ${unit} de "${item.name}". ¡Stock ahora suficiente (${newStock} ${unit})! Sale de la lista.`,
+          message: `Se sumaron ${formatQuantity(quantityBought)} ${unit} de "${item.name}". ¡Stock ahora suficiente (${formatQuantity(newStock)} ${unit})! Sale de la lista.`,
         });
       } else {
-        const stillMissing = Math.max(0, item.minStock - newStock);
+        const stillMissing = roundQuantity(Math.max(0, item.minStock - newStock));
         addToast({
           type: 'info',
           title: '✓ Compra parcial anotada y contabilizada',
-          message: `Se sumaron ${quantityBought} ${unit} de "${item.name}". Nuevo stock: ${newStock} ${unit} (faltan ${stillMissing} ${unit} para el mínimo).`,
+          message: `Se sumaron ${formatQuantity(quantityBought)} ${unit} de "${item.name}". Nuevo stock: ${formatQuantity(newStock)} ${unit} (faltan ${formatQuantity(stillMissing)} ${unit} para el mínimo).`,
         });
       }
     } catch (err: unknown) {

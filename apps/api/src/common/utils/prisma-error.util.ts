@@ -4,6 +4,7 @@ import {
   HttpException,
   InternalServerErrorException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 
 export interface PrismaErrorMessages {
@@ -12,6 +13,7 @@ export interface PrismaErrorMessages {
   foreignKeyStatus?: 'bad_request' | 'conflict';
   notFound?: string;
   checkConstraint?: string;
+  transactionTimeout?: string;
   fallback?: string;
 }
 
@@ -92,6 +94,17 @@ export function rethrowPrismaError(
     throw new ConflictException(
       messages?.checkConstraint ??
         'La operación viola una restricción de integridad o stock disponible.',
+    );
+  }
+
+  if (code === 'P2028') {
+    console.warn(
+      '[PrismaError] Transacción expirada (P2028):',
+      error instanceof Error ? error.message : String(error),
+    );
+    throw new ServiceUnavailableException(
+      messages?.transactionTimeout ??
+        'La base de datos tardó demasiado en responder y la operación fue cancelada sin aplicar cambios. Intenta nuevamente.',
     );
   }
 

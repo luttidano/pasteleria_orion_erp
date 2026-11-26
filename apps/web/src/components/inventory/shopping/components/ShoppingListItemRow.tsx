@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import type { ShoppingItem } from '../../../../types';
+import { formatQuantity, roundQuantity } from '../../../../utils/formatters';
 
 interface ShoppingListItemRowProps {
   item: ShoppingItem;
@@ -12,7 +13,7 @@ export const ShoppingListItemRow: React.FC<ShoppingListItemRowProps> = ({
   onSelectPurchase,
 }) => {
   const isOutOfStock = item.stock <= 0;
-  const deficit = Math.max(0, item.minStock - item.stock);
+  const deficit = roundQuantity(Math.max(0, item.minStock - item.stock));
   const unit = item.unit || 'un';
 
   return (
@@ -48,7 +49,7 @@ export const ShoppingListItemRow: React.FC<ShoppingListItemRowProps> = ({
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
-                ⚠️ QUEDA POCO ({item.stock} de {item.minStock} {unit})
+                ⚠️ QUEDA POCO ({formatQuantity(item.stock)} de {formatQuantity(item.minStock)} {unit})
               </span>
             )}
 
@@ -114,7 +115,7 @@ export const ShoppingListItemRow: React.FC<ShoppingListItemRowProps> = ({
             Faltan por comprar
           </span>
           <span className="text-lg sm:text-xl font-black font-sans block">
-            {deficit} <span className="text-xs font-bold uppercase">{unit}</span>
+            {formatQuantity(deficit)} <span className="text-xs font-bold uppercase">{unit}</span>
           </span>
         </div>
 

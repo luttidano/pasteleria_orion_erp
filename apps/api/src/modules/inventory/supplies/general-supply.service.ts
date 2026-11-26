@@ -17,6 +17,7 @@ import {
   resolveInventoryAdjustmentDecision,
 } from '../stock/inventory-adjustment.helper';
 import { rethrowPrismaError } from '../../../common/utils/prisma-error.util';
+import { roundQuantity } from '../../../common/utils/money.util';
 import {
   computeStockStatus,
   StockStatus,
@@ -37,8 +38,8 @@ export class GeneralSupplyService {
   ) {}
 
   private mapGeneralSupply(item: any) {
-    const stock = Number(item.stock ?? 0);
-    const minStock = Number(item.minStock ?? item.min_stock ?? 0);
+    const stock = roundQuantity(Number(item.stock ?? 0));
+    const minStock = roundQuantity(Number(item.minStock ?? item.min_stock ?? 0));
 
     const supplier = item.supplier
       ? {
@@ -120,8 +121,8 @@ export class GeneralSupplyService {
         data: {
           name: dto.name.trim(),
           category: dto.category.trim(),
-          stock: dto.stock,
-          minStock: dto.minStock,
+          stock: roundQuantity(Number(dto.stock)),
+          minStock: roundQuantity(Number(dto.minStock)),
           unit: dto.unit?.trim() || 'un',
           costPrice: dto.costPrice ?? 0,
           supplierId: dto.supplierId || null,
@@ -152,7 +153,9 @@ export class GeneralSupplyService {
         data: {
           ...(dto.name !== undefined && { name: dto.name.trim() }),
           ...(dto.category !== undefined && { category: dto.category.trim() }),
-          ...(dto.minStock !== undefined && { minStock: dto.minStock }),
+          ...(dto.minStock !== undefined && {
+            minStock: roundQuantity(Number(dto.minStock)),
+          }),
           ...(dto.unit !== undefined && { unit: dto.unit.trim() || 'un' }),
           ...(dto.costPrice !== undefined && { costPrice: dto.costPrice }),
           ...(dto.supplierId !== undefined && {

@@ -9,10 +9,7 @@ import { randomUUID } from 'crypto';
 import type { PosSaleRecord } from '@repo/types';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { AccountingOutboxService } from '../accounting/outbox/accounting-outbox.service';
-import {
-  AccountingOutboxProcessorService,
-  dispatchOutboxBestEffort,
-} from '../accounting/outbox/accounting-outbox-processor.service';
+import { AccountingOutboxProcessorService } from '../accounting/outbox/accounting-outbox-processor.service';
 import { TaxCalculatorService } from '../accounting/tax/tax-calculator.service';
 import { InventoryStockService } from '../inventory/stock/inventory-stock.service';
 import { PrismaService } from '../../database/prisma.service';
@@ -155,7 +152,7 @@ export class PosSaleService {
           outboxEventId: outboxEvent?.id ?? null,
           cogsOutboxEventId: cogsEvent?.id ?? null,
         };
-      });
+      }, { maxWait: 10000, timeout: 15000 });
 
       sale = txResult.sale;
       outboxEventId = txResult.outboxEventId;
@@ -170,43 +167,65 @@ export class PosSaleService {
     }
 
     const authoritativeTotal = roundMoney(Number(sale.total));
-    let accountingStatus: 'posted' | 'pending' = 'posted';
-    let accountingWarning: string | null = null;
-
     const accountingEntryCreated = authoritativeTotal > 0;
-    if (accountingEntryCreated && outboxEventId) {
+    const accountingStatus: 'posted' | 'pending' = accountingEntryCreated
+      ? 'pending'
+      : 'posted';
+
+    if ((accountingEntryCreated && outboxEventId) || cogsOutboxEventId) {
+      void this.dispatchSaleAccountingInBackground({
+        saleId: sale.id,
+        ticketNumber: sale.ticketNumber,
+        outboxEventId: accountingEntryCreated ? outboxEventId : null,
+        cogsOutboxEventId,
+      });
+    }
+
+    return {
+      ...mapSaleRecord(sale),
+      accountingStatus,
+      accountingWarning: null,
+      accountingEntryCreated,
+    };
+  }
+
+  /**
+   * Procesa los asientos de ingreso y COGS inmediatamente tras el commit en segundo plano
+   * para no retener la respuesta HTTP del cajero esperando múltiples round-trips contables.
+   */
+  private async dispatchSaleAccountingInBackground(params: {
+    saleId: string;
+    ticketNumber: string;
+    outboxEventId: string | null;
+    cogsOutboxEventId: string | null;
+  }): Promise<void> {
+    if (params.outboxEventId) {
       try {
-        await dispatchOutboxBestEffort(
-          this.accountingOutboxProcessor,
-          outboxEventId,
-        );
+        await this.accountingOutboxProcessor.processEvent(params.outboxEventId);
         await this.posAccountingStatusService
-          .markSalePosted(sale.id)
+          .markSalePosted(params.saleId)
           .catch(() => undefined);
       } catch (accError) {
-        accountingStatus = 'pending';
         const errorMsg =
           accError instanceof Error
             ? accError.message
             : 'Error al registrar en contabilidad';
-        accountingWarning = `Venta registrada en caja. La sincronización contable quedó pendiente: ${errorMsg}`;
         console.warn(
-          `[PosSaleService] Venta ${sale.ticketNumber} guardada, pero falló la contabilización:`,
+          `[PosSaleService] Venta ${params.ticketNumber} guardada, contabilización quedó pendiente en outbox:`,
           errorMsg,
         );
-
         await this.posAccountingStatusService
-          .markSalePending(sale.id, errorMsg)
+          .markSalePending(params.saleId, errorMsg)
           .catch(() => undefined);
       }
     }
 
-    if (cogsOutboxEventId) {
+    if (params.cogsOutboxEventId) {
       try {
-        const cogsProcessResult = await dispatchOutboxBestEffort(
-          this.accountingOutboxProcessor,
-          cogsOutboxEventId,
-        );
+        const cogsProcessResult =
+          await this.accountingOutboxProcessor.processEvent(
+            params.cogsOutboxEventId,
+          );
         if (cogsProcessResult?.recoveredItemCosts?.length) {
           await this.posAccountingStatusService
             .applyRecoveredItemCosts(cogsProcessResult.recoveredItemCosts)
@@ -218,21 +237,11 @@ export class PosSaleService {
             ? cogsError.message
             : 'Error al contabilizar el costo de venta';
         console.warn(
-          `[PosSaleService] Venta ${sale.ticketNumber} guardada, pero quedó pendiente el costo de venta (COGS):`,
+          `[PosSaleService] Venta ${params.ticketNumber} guardada, COGS quedó pendiente en outbox:`,
           cogsMsg,
         );
-        accountingWarning = accountingWarning
-          ? `${accountingWarning} | Costo de venta pendiente: ${cogsMsg}`
-          : `Venta registrada. Costo de venta pendiente en Contabilidad: ${cogsMsg}`;
       }
     }
-
-    return {
-      ...mapSaleRecord(sale),
-      accountingStatus,
-      accountingWarning,
-      accountingEntryCreated,
-    };
   }
 
   /**
